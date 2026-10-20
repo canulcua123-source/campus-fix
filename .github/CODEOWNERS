@@ -1,11 +1,14 @@
 # Dueños de código: GitHub pide su revisión automáticamente en los PR que tocan estas rutas.
-# Reemplaza los @usuario por los de tu equipo y descomenta. Un usuario inexistente
-# hace que GitHub marque el archivo como inválido.
-#
-# *                         @lider-equipo
-# /backend/                 @responsable-backend
-# /backend/scripts/init_db.py @responsable-bd @lider-equipo
-# /frontend/                @responsable-frontend
-# /postman/                 @responsable-backend
-# /.github/                 @lider-equipo
-# /AGENTS.md                @lider-equipo
+# La última regla que coincide gana. Roles en README.md → «Equipo».
+
+*                                 @canulcua123-source
+/backend/                         @raiden3893
+/backend/scripts/init_db.py       @raiden3893 @canulcua123-source
+/frontend/                        @Genokiller05
+/frontend/src/styles/             @canulcua123-source @Genokiller05
+/frontend/src/components/ui/      @canulcua123-source @Genokiller05
+/postman/                         @Nanashi31
+/backend/tests/                   @Nanashi31 @raiden3893
+/.github/                         @Nanashi31 @canulcua123-source
+/docs/                            @canulcua123-source
+/AGENTS.md                        @canulcua123-source
