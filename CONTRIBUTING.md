@@ -122,7 +122,7 @@ Consejos: si `package-lock.json` choca, toma la versión de dev (`git checkout -
 | Check | Qué valida | Cómo reproducir en local |
 |-------|-----------|--------------------------|
 | `ci-ok` | Resume backend, frontend y postman (los que apliquen según rutas cambiadas). | Ver filas siguientes. |
-| ↳ backend | `ruff check` + `pytest tests -q` con Mongo 8 y Redis 7. | `docker compose up -d` y `cd backend && .venv/bin/ruff check . && .venv/bin/pytest tests -q` |
+| ↳ backend | `ruff check` + `pytest tests -q` con Mongo 7.0 (mongo:8 no arranca en kernels Linux ≥ 6.19) y Redis 7. | `docker compose up -d` y `cd backend && .venv/bin/ruff check . && .venv/bin/pytest tests -q` |
 | ↳ frontend | `npm run lint` + `npm run build` (incluye `tsc -b`). | `cd frontend && npm ci && npm run lint && npm run build` |
 | ↳ postman | `postman/*.json` es JSON válido. | `python3 -m json.tool postman/<archivo>.json` |
 | `branch-flow` | Nombre de rama y que `main` solo reciba de `dev`. | Revisa el nombre: `git branch --show-current`. |
