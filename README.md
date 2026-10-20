@@ -117,7 +117,7 @@ Las insignias **siempre** llevan texto (nunca solo color) y usan **fondo claro +
 
 ## Puesta en marcha (local)
 
-Requisitos: Python 3.12+, Node 22+, Docker, Git.
+Requisitos: Python 3.12+, Node 22+, Docker, Git. Las versiones exactas están en `.python-version` y `.nvmrc` (las mismas que usa el CI); con `pyenv` y `nvm` se activan solas al entrar a la carpeta.
 
 ```bash
 git clone https://github.com/canulcua123-source/campus-fix.git && cd campus-fix
