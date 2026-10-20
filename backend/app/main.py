@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core import db
 from app.core.config import settings
-from app.core.limiter import limiter
+from app.core.limiter import limite_general, limiter
 from app.routers import analitica, auth, categorias, ia, incidencias, roles, usuarios
 
 
@@ -22,16 +22,43 @@ async def lifespan(app: FastAPI):
     await db.cerrar()
 
 
-app = FastAPI(title="UTM Desk API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="UTM Desk API", version="0.1.0", lifespan=lifespan, dependencies=[Depends(limite_general)])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# CORS explícito: solo el dominio del frontend, solo los métodos y cabeceras que usa la PWA.
+# Sin credenciales: la sesión viaja en el header Authorization, no en cookies.
+# (CORS solo protege a los navegadores; curl o un script no lo respetan: la protección real es el JWT + límites.)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_lista,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+    max_age=600,
 )
+
+RUTAS_DOCS = ("/docs", "/redoc", "/openapi.json")
+CABECERAS_SEGURIDAD = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Resource-Policy": "same-site",
+}
+
+
+@app.middleware("http")
+async def _cabeceras_seguridad(request: Request, call_next):
+    respuesta = await call_next(request)
+    for nombre, valor in CABECERAS_SEGURIDAD.items():
+        respuesta.headers.setdefault(nombre, valor)
+    if not request.url.path.startswith(RUTAS_DOCS):
+        # La API solo devuelve JSON: nada que ejecutar ni incrustar. /docs carga Swagger desde un CDN.
+        respuesta.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+        # Respuestas con datos de usuarios: ni el navegador, ni el service worker, ni un proxy deben guardarlas.
+        respuesta.headers["Cache-Control"] = "no-store"
+    return respuesta
 
 
 MAX_BODY = {"/ia/analizar-imagen": 6 * 1024 * 1024}

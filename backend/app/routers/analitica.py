@@ -1,15 +1,18 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
+from app.core.config import settings
 from app.core.db import get_db
+from app.core.limiter import limiter
 from app.core.security import filtro_alcance, require_permiso
 
 router = APIRouter(prefix="/analitica", tags=["analitica"])
 
 
 @router.get("/edificios")
-async def por_edificio(usuario: Annotated[dict, Depends(require_permiso("analitica:ver"))]):
+@limiter.limit(lambda: settings.limite_consulta_pesada)
+async def por_edificio(request: Request, usuario: Annotated[dict, Depends(require_permiso("analitica:ver"))]):
     # Pipeline 1 (CU-06): eficiencia por edificio sobre incidencias resueltas o cerradas.
     pipeline = [
         {"$match": {"estado": {"$in": ["resuelta", "cerrada"]}, "fecha_resolucion": {"$type": "date"}, **filtro_alcance(usuario)}},
@@ -32,7 +35,8 @@ async def por_edificio(usuario: Annotated[dict, Depends(require_permiso("analiti
 
 
 @router.get("/tags")
-async def top_tags(usuario: Annotated[dict, Depends(require_permiso("analitica:ver"))]):
+@limiter.limit(lambda: settings.limite_consulta_pesada)
+async def top_tags(request: Request, usuario: Annotated[dict, Depends(require_permiso("analitica:ver"))]):
     pipeline = [
         {"$match": filtro_alcance(usuario)},
         {"$unwind": "$tags"},
