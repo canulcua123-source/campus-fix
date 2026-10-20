@@ -51,7 +51,8 @@ jobs:
         working-directory: backend
     services:
       mongo:
-        image: mongo:8
+        # mongo:8 no arranca en kernels Linux >= 6.19 (SERVER-121912), que ya usan algunos runners de GitHub.
+        image: mongo:7.0
         ports: ["27017:27017"]
         options: >-
           --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)'"

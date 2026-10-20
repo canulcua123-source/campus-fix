@@ -168,7 +168,7 @@ campus-fix/
 ├── AGENTS.md / CLAUDE.md        # reglas para quien programa con IA
 ├── CONTRIBUTING.md              # flujo de ramas, commits y PR
 ├── .github/                     # CI, plantillas de issue/PR, CODEOWNERS
-├── docker-compose.yml           # mongo:8 + redis:7
+├── docker-compose.yml           # mongo:7.0 + redis:7
 ├── docs/
 │   ├── reglas/                  # GIT, UX-UI, API, FRONT-BACK, CREAR-API, BASE-DE-DATOS
 │   ├── TAREAS.md                # backlog con criterios y matriz de conflictos

@@ -1,11 +1,13 @@
 # Servicios locales de desarrollo. En producción: MongoDB Atlas M0 + Upstash Redis.
 services:
   mongo:
-    image: mongo:8
+    # mongo:8 no arranca en kernels Linux >= 6.19 (SERVER-121912). Atlas sí usa 8 y es compatible con este código.
+    # Volumen propio de 7.0: los datos creados con 8.x no se pueden abrir con 7.0 (no se reutiliza mongo_data).
+    image: mongo:7.0
     ports: ["27017:27017"]
-    volumes: ["mongo_data:/data/db"]
+    volumes: ["mongo7_data:/data/db"]
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
 volumes:
-  mongo_data:
+  mongo7_data:
