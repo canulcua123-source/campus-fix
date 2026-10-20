@@ -54,10 +54,11 @@ jobs:
         image: mongo:8
         ports: ["27017:27017"]
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping: 1}).ok'"
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+          --health-start-period 40s
       redis:
         image: redis:7-alpine
         ports: ["6379:6379"]
@@ -66,6 +67,7 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+          --health-start-period 10s
     # Valores FICTICIOS solo para CI. El conftest e2e además fuerza localhost y la BD `utm_desk_test`.
     env:
       MONGODB_URI: mongodb://localhost:27017
