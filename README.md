@@ -159,6 +159,16 @@ npm run dev                             # http://localhost:5173
 
 Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`).
 
+### Producción detrás del balanceador del hosting
+
+El hosting (Render, Koyeb, etc.) pone un proxy/balanceador delante de la API. Arráncala así para que los límites por IP vean la IP real del cliente y no la del proxy:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"   # solo si el puerto NO es público fuera del proxy
+```
+
+La API no guarda estado en memoria (sesión en el JWT, contadores en Redis), así que se pueden levantar varias instancias detrás del balanceador sin cambiar código. `CORS_ORIGINS` debe listar el dominio real del frontend (nunca `*`).
+
 ---
 
 ## Estructura

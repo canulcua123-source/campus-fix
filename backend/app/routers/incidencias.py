@@ -150,7 +150,9 @@ async def listar_incidencias(
 
 
 @router.get("/buscar")
+@limiter.limit(lambda: settings.limite_consulta_pesada)
 async def buscar(
+    request: Request,
     q: Annotated[str, Query(min_length=2, max_length=100)],
     usuario: Annotated[dict, Depends(require_permiso("incidencias:buscar"))],
 ):

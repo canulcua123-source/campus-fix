@@ -1,3 +1,5 @@
+from fastapi import HTTPException
+from limits import parse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
@@ -22,4 +24,15 @@ def clave_usuario(request: Request) -> str:
 
 # Contadores en Redis: se comparten entre workers y sobreviven reinicios.
 # Detrás de un proxy, uvicorn debe arrancar con --proxy-headers y --forwarded-allow-ips=<IP del proxy>.
-limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url)
+limiter = Limiter(key_func=clave_usuario, storage_uri=settings.redis_url)
+
+
+async def limite_general(request: Request) -> None:
+    """Límite global por usuario (o IP sin token) para TODOS los endpoints; se registra en FastAPI(dependencies=...).
+
+    No se usa SlowAPIMiddleware/default_limits: no reconoce las rutas de los routers incluidos y las dejaría sin límite.
+    """
+    if request.url.path == "/health":
+        return
+    if not limiter.limiter.hit(parse(settings.limite_general), "general", clave_usuario(request)):
+        raise HTTPException(429, "Demasiadas peticiones; espera un momento")
