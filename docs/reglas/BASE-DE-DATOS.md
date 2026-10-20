@@ -1,6 +1,6 @@
 # BASE DE DATOS · Reglas de MongoDB
 
-MongoDB Atlas M0 (512 MB, sin respaldos automáticos) en producción y `mongo:8` en Docker para desarrollo. Base: secciones 9 y RNF-13, RNF-17, RNF-22 de la documentación del proyecto.
+MongoDB Atlas M0 (512 MB, sin respaldos automáticos) en producción y `mongo:7.0` en Docker para desarrollo y CI (`mongo:8` no arranca en kernels Linux ≥ 6.19, [SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)). Base: secciones 9 y RNF-13, RNF-17, RNF-22 de la documentación del proyecto.
 
 Archivos clave: `backend/scripts/init_db.py` (`esquema_incidencias`, `asegurar_coleccion`, `crear_indices`, `sembrar_base`, `sembrar_demo`), `backend/app/core/db.py` (`get_db`, cliente con `tz_aware=True`), `backend/scripts/limpiar_huerfanos.py`, `backend/tests/e2e/conftest.py` (guard de base local).
 
