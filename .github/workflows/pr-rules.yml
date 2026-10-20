@@ -1,0 +1,75 @@
+# Reglas del PR: título Conventional Commits, `Closes #N` y rama al día con la base.
+name: pr-rules
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-rules-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-rules:
+    name: pr-rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Título en Conventional Commits
+        uses: amannn/action-semantic-pull-request@v5.5.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            test
+            chore
+            refactor
+            perf
+            ci
+            build
+            style
+            revert
+          requireScope: false
+          # El asunto empieza en minúscula: "feat(api): agrega filtro por estado"
+          subjectPattern: ^[a-záéíóúñ0-9].+$
+          subjectPatternError: |
+            El asunto "{subject}" del título "{title}" debe empezar en minúscula.
+            Formato: <tipo>(<ámbito>): <descripción>   p. ej.  feat(api): agrega filtro por estado
+
+      - name: El cuerpo enlaza un issue (Closes #N)
+        # Los PR de release dev -> main agrupan varios issues: no se exige.
+        if: github.event.pull_request.base.ref != 'main'
+        env:
+          CUERPO: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s' "$CUERPO" | grep -Eiq '(closes|fixes|resolves) #[0-9]+'; then
+            echo "Issue enlazado."
+          else
+            echo "::error::El cuerpo del PR debe incluir 'Closes #<número de issue>' (1 PR = 1 issue). Edita la descripción del PR."
+            exit 1
+          fi
+
+      - name: La rama está al día con la base
+        # Señal temprana. La garantía real es la protección "require branches to be up to date"
+        # (strict) en dev, que bloquea el merge aunque este check se haya corrido antes de que dev avanzara.
+        # En main no aplica: main solo recibe merge commits desde dev (ver CONTRIBUTING.md).
+        if: github.event.pull_request.base.ref == 'dev'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          atras=$(gh api "repos/$REPO/compare/$BASE...$HEAD_SHA" --jq '.behind_by')
+          if [ "$atras" -gt 0 ]; then
+            echo "::error::Tu rama va $atras commit(s) atrás de '$BASE'. Ejecuta: git fetch origin && git rebase origin/$BASE && git push --force-with-lease"
+            exit 1
+          fi
+          echo "Rama al día con $BASE."

@@ -1,0 +1,67 @@
+name: Tarea
+description: Trabajo planeado (funcionalidad, mejora, documentación, pruebas).
+title: "[Tarea]: "
+labels: ["tarea"]
+body:
+  - type: dropdown
+    id: rol
+    attributes:
+      label: Rol responsable
+      options:
+        - Backend / API
+        - Base de datos
+        - Frontend / UX
+        - QA / Pruebas
+        - DevOps / CI
+        - Documentación
+    validations:
+      required: true
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripción
+      description: Qué se necesita y por qué (contexto para quien lo programe o para la IA).
+    validations:
+      required: true
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptación
+      description: Uno por línea, verificables.
+      value: |
+        - [ ] 
+        - [ ] 
+    validations:
+      required: true
+  - type: textarea
+    id: pruebas
+    attributes:
+      label: Pruebas requeridas
+      description: Qué pruebas deben agregarse (pytest e2e, casos 400/401/403/404/409, build/lint del front, Postman).
+    validations:
+      required: true
+  - type: checkboxes
+    id: terminado
+    attributes:
+      label: Definición de terminado
+      options:
+        - label: Criterios de aceptación cumplidos
+        - label: Pruebas nuevas y existentes en verde en CI (`ci-ok`)
+        - label: Contrato de API actualizado en `postman/` y `docs/` (si aplica)
+        - label: PR revisado y aprobado por 1 compañero y mergeado a `dev`
+  - type: input
+    id: dependencias
+    attributes:
+      label: Dependencias
+      description: Issues que deben terminarse antes (p. ej. #12, #15) o "ninguna".
+  - type: dropdown
+    id: estimacion
+    attributes:
+      label: Estimación
+      options:
+        - XS (< 1 h)
+        - S (medio día)
+        - M (1 día)
+        - L (2-3 días; considera dividirla)
+    validations:
+      required: true

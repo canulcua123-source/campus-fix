@@ -1,0 +1,47 @@
+# Flujo de ramas: main solo recibe PR desde dev; dev solo desde ramas con nombre válido.
+name: branch-flow
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+concurrency:
+  group: branch-flow-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  branch-flow:
+    name: branch-flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validar rama origen/destino
+        # Se usan variables de entorno (no ${{ }} dentro del script) para evitar inyección por nombre de rama.
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          patron='^(feat|fix|docs|test|chore|refactor|ci)/[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$'
+          echo "PR: $HEAD_REPO:$HEAD  ->  $BASE"
+          case "$BASE" in
+            main)
+              if [ "$HEAD" != "dev" ] || [ "$HEAD_REPO" != "$REPO" ]; then
+                echo "::error::A 'main' solo se llega con un PR desde 'dev' de este repositorio (recibido: '$HEAD'). Cambia la base del PR a 'dev'."
+                exit 1
+              fi
+              ;;
+            dev)
+              if ! printf '%s' "$HEAD" | grep -Eq "$patron"; then
+                echo "::error::La rama '$HEAD' no sigue el patrón <tipo>/<issue>-<slug> (tipos: feat, fix, docs, test, chore, refactor, ci). Ejemplo: feat/12-login-con-correo. Renómbrala: git branch -m <nuevo-nombre> && git push -u origin <nuevo-nombre> (y abre un PR nuevo)."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Base '$BASE': sin reglas de flujo (PR apilado sobre otra rama)."
+              ;;
+          esac
+          echo "Flujo de ramas correcto."

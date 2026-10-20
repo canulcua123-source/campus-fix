@@ -1,0 +1,14 @@
+# Configuración de gitleaks (CI: seguridad.yml · local: pre-commit).
+# Usa las reglas por defecto y solo excluye valores FICTICIOS de pruebas.
+title = "utm-desk"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Pruebas: JWT_SECRET y contraseñas ficticias (el conftest e2e fuerza Mongo/Redis locales). Nunca pongas secretos reales aquí."
+paths = ['''^backend/tests/''']
+
+[[allowlists]]
+description = "Plantillas de entorno sin valores reales"
+paths = ['''(^|/)\.env\.example$''']

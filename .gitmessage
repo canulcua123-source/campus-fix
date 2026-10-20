@@ -1,0 +1,12 @@
+# <tipo>(<ámbito>): <descripción en minúscula, imperativo, sin punto final>
+#
+# Tipos:   feat | fix | docs | test | chore | refactor | perf | ci | build | style | revert
+# Ámbitos: api | front | db | auth | ia | analitica | postman | ci | docs
+# Ejemplo: feat(api): agrega filtro por estado en GET /incidencias
+#
+# Cuerpo (opcional): qué y por qué, no cómo. Líneas de máx. 72 caracteres.
+#
+# Pie: issue que cierra y, si rompes compatibilidad, BREAKING CHANGE: <detalle>
+# Closes #
+#
+# Activar esta plantilla:  git config commit.template .gitmessage

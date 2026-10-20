@@ -1,0 +1,209 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+
+/* Tokens (tokens.css) expuestos como utilidades Tailwind: bg-brand, text-ink, border-line... */
+@theme inline {
+  --color-brand: var(--color-primary);
+  --color-on-brand: var(--color-on-primary);
+  --color-accent: var(--color-secondary);
+  --color-canvas: var(--color-bg);
+  --color-panel: var(--color-surface);
+  --color-panel-2: var(--color-surface-2);
+  --color-line: var(--color-border);
+  --color-ink: var(--color-text);
+  --color-muted: var(--color-text-muted);
+  --color-ok: var(--color-success);
+  --color-warn: var(--color-warning);
+  --color-bad: var(--color-danger);
+  --color-note: var(--color-info);
+  --font-sans: var(--font-sans);
+  --radius-card: 14px;
+  --radius-input: 10px;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+/* Evita el zoom de iOS al enfocar campos */
+input,
+select,
+textarea {
+  font-size: 16px;
+  min-height: var(--tap-min);
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0 12px;
+  width: 100%;
+}
+textarea {
+  padding: 10px 12px;
+}
+button {
+  min-height: var(--tap-min);
+  cursor: pointer;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 16px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap-min);
+  padding: 0 18px;
+  border-radius: var(--radius-input);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+  border: 0;
+}
+.btn-secundario {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+.campo-error {
+  color: var(--color-danger);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.etiqueta {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin: 12px 0 4px;
+}
+
+/* Cromo de navegación: no seleccionable */
+.nav-chrome {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.tabbar {
+  position: fixed;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding-bottom: var(--safe-bottom);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  z-index: 40;
+}
+.tabbar a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-min);
+  min-height: 52px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.tabbar a[aria-current='page'] {
+  color: var(--color-primary);
+}
+.tabbar .reportar {
+  width: 58px;
+  height: 58px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+}
+.titulo-pagina {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+.app-main {
+  padding: calc(16px + var(--safe-top)) 16px calc(84px + var(--safe-bottom));
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* iOS: tab bar translúcida y títulos grandes */
+:root[data-platform='ios'] .tabbar {
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+:root[data-platform='ios'] .titulo-pagina {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 16px;
+}
+
+/* Android: barra superior elevada y FAB */
+:root[data-platform='android'] .topbar {
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+:root[data-platform='android'] .tabbar .reportar {
+  border-radius: 18px;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.3);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: calc(10px + var(--safe-top)) 16px 10px;
+  display: none;
+  align-items: center;
+  font-weight: 700;
+}
+:root[data-platform='android'] .topbar {
+  display: flex;
+}
+
+@media (min-width: 1024px) {
+  .tabbar {
+    display: none;
+  }
+  .app-main {
+    padding-bottom: 24px;
+  }
+  :root[data-platform='android'] .topbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

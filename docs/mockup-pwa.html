@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UTM Desk · Mockup PWA</title>
+<style>
+:root{
+  --primary:#1D4ED8; --primary-ink:#1E3A8A; --on-primary:#FFFFFF; --secondary:#0F766E;
+  --bg:#F2F2F7; --surface:#FFFFFF; --surface-2:#F8FAFC; --border:#E5E7EB;
+  --text:#0F172A; --muted:#475569; --canvas:#E9EAF0;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text",Roboto,"Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --primary:#60A5FA; --primary-ink:#93C5FD; --on-primary:#0B1220; --secondary:#2DD4BF;
+    --bg:#0B0F17; --surface:#151B26; --surface-2:#1E2633; --border:#2A3342;
+    --text:#F1F5F9; --muted:#94A3B8; --canvas:#05070B;
+  }
+}
+:root[data-theme="dark"]{
+  --primary:#60A5FA; --primary-ink:#93C5FD; --on-primary:#0B1220; --secondary:#2DD4BF;
+  --bg:#0B0F17; --surface:#151B26; --surface-2:#1E2633; --border:#2A3342;
+  --text:#F1F5F9; --muted:#94A3B8; --canvas:#05070B;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);font-family:var(--font);color:var(--text)}
+header.doc{max-width:1800px;margin:0 auto;padding:32px 16px 8px;display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:end}
+header.doc h1{margin:0;font-size:28px}
+header.doc p{margin:4px 0 0;color:var(--muted)}
+.toggle{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:10px 16px;font:inherit;cursor:pointer;min-height:44px}
+.row{max-width:1800px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;gap:40px;justify-content:center}
+.screen{display:flex;flex-direction:column;gap:10px;align-items:center}
+.screen>.label{font-size:14px;font-weight:600;color:var(--muted)}
+.phone{width:390px;max-width:calc(100vw - 32px);height:844px;border-radius:44px;border:10px solid #111827;background:var(--bg);position:relative;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.18)}
+.scroll{flex:1;overflow:auto;padding-bottom:100px}
+.top{padding:48px 20px 8px}
+.top .hi{font-size:15px;color:var(--muted)}
+.big{margin:2px 0 0;font-size:34px;font-weight:700;letter-spacing:-.5px}
+.bar{display:flex;align-items:center;gap:8px;padding:44px 12px 8px;border-bottom:1px solid var(--border);background:var(--surface)}
+.bar h2{margin:0;font-size:17px;font-weight:600;flex:1;text-align:center}
+.icon-btn{width:44px;height:44px;border:0;background:none;color:var(--primary);display:flex;align-items:center;justify-content:center;border-radius:12px;cursor:pointer}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px 20px}
+.kpi{background:var(--surface);border-radius:14px;padding:12px}
+.kpi b{display:block;font-size:26px}
+.kpi span{font-size:13px;color:var(--muted)}
+.section{display:flex;justify-content:space-between;align-items:baseline;padding:10px 20px 4px}
+.section h3{margin:0;font-size:20px}
+.section a{color:var(--primary);text-decoration:none;font-size:15px}
+.list{display:flex;flex-direction:column;gap:10px;padding:8px 20px}
+.card{background:var(--surface);border-radius:14px;padding:14px;display:flex;gap:12px;color:var(--text);text-decoration:none}
+.thumb{width:52px;height:52px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.card .t{font-size:16px;font-weight:600}
+.card .s{font-size:13px;color:var(--muted);margin:3px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px}
+.e-abierta{background:#DBEAFE;color:#1D4ED8}.e-proceso{background:#FEF3C7;color:#92400E}.e-espera{background:#EDE9FE;color:#5B21B6}.e-resuelta{background:#DCFCE7;color:#166534}.e-cerrada{background:#E2E8F0;color:#334155}
+.p-baja{background:#E2E8F0;color:#334155}.p-media{background:#E0F2FE;color:#075985}.p-alta{background:#FFEDD5;color:#9A3412}.p-critica{background:#FEE2E2;color:#B91C1C}
+.c-red{background:#CFFAFE;color:#155E75}.c-inf{background:#FEF3C7;color:#92400E}.c-aca{background:#FCE7F3;color:#9D174D}
+.ia{background:#CCFBF1;color:#115E59}
+nav.tabs{position:absolute;left:0;right:0;bottom:0;height:86px;padding:6px 10px 26px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center}
+nav.tabs button{border:0;background:none;color:var(--muted);font:inherit;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:44px;cursor:pointer}
+nav.tabs button.on{color:var(--primary)}
+.fab{justify-self:center;width:60px;height:60px;margin-top:-26px;border-radius:999px;border:0;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(29,78,216,.35);cursor:pointer}
+.photo{margin:16px 20px 0;height:230px;border-radius:16px;background:linear-gradient(160deg,#334155,#0F172A);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.photo .lamp{width:120px;height:26px;border-radius:6px;background:#9CA3AF;box-shadow:0 0 0 6px #6B7280 inset}
+.photo .tag{position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:6px 10px;border-radius:999px}
+.ai-box{margin:14px 20px 0;padding:14px;border-radius:14px;background:var(--surface);border:1.5px solid var(--secondary);display:flex;gap:10px;align-items:flex-start}
+.ai-box b{display:block;font-size:15px}
+.ai-box span{font-size:13px;color:var(--muted)}
+form.f{padding:6px 20px 0;display:flex;flex-direction:column;gap:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--muted);display:flex;gap:6px;align-items:center}
+.field input,.field select,.field textarea{font:inherit;font-size:16px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;min-height:44px;width:100%}
+.field textarea{min-height:72px;resize:none}
+.field.err input{border-color:#DC2626}
+.field .msg{font-size:12px;color:#B91C1C;display:flex;gap:4px;align-items:center}
+.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;background:var(--surface-2);border-radius:10px;padding:3px}
+.seg button{border:0;border-radius:8px;background:none;color:var(--text);font:inherit;font-size:13px;min-height:36px}
+.seg button.on{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.cta{margin:16px 20px 0;min-height:52px;border:0;border-radius:14px;background:var(--primary);color:var(--on-primary);font:inherit;font-size:17px;font-weight:600;width:calc(100% - 40px);cursor:pointer}
+.hero{padding:16px 20px;background:var(--surface);display:flex;flex-direction:column;gap:6px}
+.hero .code{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hero h2{margin:0;font-size:22px}
+.gallery{display:flex;gap:8px;padding:12px 20px;overflow:auto}
+.gallery div{width:96px;height:96px;flex-shrink:0;border-radius:12px;background:linear-gradient(160deg,#475569,#1E293B)}
+.gallery .add{background:var(--surface);border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--primary)}
+.group{margin:8px 20px;background:var(--surface);border-radius:14px}
+.group .it{display:flex;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);font-size:15px}
+.group .it:last-child{border-bottom:0}
+.group .it span{color:var(--muted)}
+.tl{list-style:none;margin:0;padding:6px 20px 0}
+.tl li{position:relative;padding:0 0 16px 26px}
+.tl li::before{content:"";position:absolute;left:6px;top:6px;width:10px;height:10px;border-radius:999px;background:var(--primary)}
+.tl li::after{content:"";position:absolute;left:10px;top:18px;bottom:0;width:2px;background:var(--border)}
+.tl li:last-child::after{display:none}
+.tl b{font-size:15px}.tl p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.filters{display:flex;gap:8px;padding:10px 20px;overflow:auto}
+.filters button{flex-shrink:0;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;min-height:40px}
+.filters button.on{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.prio-bar{width:4px;border-radius:4px;flex-shrink:0}
+/* dashboard */
+.desk{width:1280px;max-width:calc(100vw - 32px);border-radius:16px;overflow:hidden;background:var(--bg);display:flex;flex-wrap:wrap;box-shadow:0 20px 50px rgba(0,0,0,.18);border:1px solid var(--border)}
+.side{flex:0 0 232px;background:var(--surface);border-right:1px solid var(--border);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;gap:10px;align-items:center;padding:4px 8px 16px;font-weight:700;font-size:17px}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+.side a{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;color:var(--muted);text-decoration:none;font-size:15px}
+.side a.on{background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary);font-weight:600}
+.main{flex:999 1 600px;min-width:0;padding:24px 28px;display:flex;flex-direction:column;gap:18px}
+.main-top{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
+.main-top h2{margin:0;font-size:26px}
+.main-top .sub{color:var(--muted);font-size:14px}
+.kpi4{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.kpi4 .kpi b{font-size:30px}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.panel{background:var(--surface);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.panel h3{margin:0;font-size:16px}
+.panel .hint{font-size:12px;color:var(--muted)}
+.hbar{display:grid;grid-template-columns:110px 1fr 56px;gap:10px;align-items:center;font-size:13px}
+.hbar .track{height:14px;border-radius:7px;background:var(--surface-2);overflow:hidden}
+.hbar .fill{height:100%;border-radius:7px;background:var(--primary)}
+.hbar .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--border)}
+td{padding:10px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.notes{max-width:1800px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.note{background:var(--surface);border-radius:14px;padding:16px;font-size:14px;line-height:1.45}
+.note b{display:block;margin-bottom:6px}
+h2.zone{max-width:1800px;margin:24px auto 0;padding:0 16px;font-size:20px}
+</style>
+</head>
+<body>
+<header class="doc">
+  <div>
+    <h1>UTM Desk · Mockup de la PWA</h1>
+    <p>Pantallas clave en iPhone/Android y el dashboard de escritorio. Colores y medidas de la documentación (sección 6).</p>
+  </div>
+  <button class="toggle" id="tema" aria-label="Cambiar tema claro u oscuro">Tema: automático</button>
+</header>
+
+<h2 class="zone">En el celular</h2>
+<div class="row">
+
+  <!-- 1 INICIO -->
+  <div class="screen">
+    <div class="label">1 · Inicio (reportante)</div>
+    <div class="phone">
+      <div class="scroll">
+        <div class="top"><div class="hi">Hola, Ana</div><h1 class="big">Mis reportes</h1></div>
+        <div class="kpis">
+          <div class="kpi"><b style="color:#1D4ED8">2</b><span>Abiertas</span></div>
+          <div class="kpi"><b style="color:#B45309">1</b><span>En proceso</span></div>
+          <div class="kpi"><b style="color:#15803D">5</b><span>Resueltas</span></div>
+        </div>
+        <div class="section"><h3>Recientes</h3><a href="#">Ver todos</a></div>
+        <div class="list">
+          <a class="card" href="#">
+            <div class="thumb c-inf"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+            <div><div class="t">Luminaria fundida en pasillo B</div><div class="s">INC-2026-1020-INF-0001 · Edificio B</div>
+              <div class="chips"><span class="chip e-proceso">En proceso</span><span class="chip p-media">Media</span></div></div>
+          </a>
+          <a class="card" href="#">
+            <div class="thumb c-red"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0"/><circle cx="12" cy="19" r="1"/></svg></div>
+            <div><div class="t">Wi-Fi intermitente en aula 204</div><div class="s">INC-2026-1019-RED-0004 · Edificio C</div>
+              <div class="chips"><span class="chip e-abierta">Abierta</span><span class="chip p-alta">Alta</span></div></div>
+          </a>
+          <a class="card" href="#">
+            <div class="thumb c-aca"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l9-3 9 3-9 3-9-3z"/><path d="M7 8v5c0 1.5 2.2 3 5 3s5-1.5 5-3V8"/></svg></div>
+            <div><div class="t">No puedo subir actas en el portal</div><div class="s">INC-2026-1017-ACA-0002 · Edificio A</div>
+              <div class="chips"><span class="chip e-resuelta">Resuelta</span><span class="chip p-critica">Crítica</span></div></div>
+          </a>
+        </div>
+      </div>
+      <nav class="tabs" aria-label="Navegación">
+        <button class="on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+        <button><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Reportes</button>
+        <button class="fab" aria-label="Reportar con foto"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-3h6l2 3h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+        <button><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>Avisos</button>
+        <button><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Perfil</button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- 2 REPORTAR CON IA -->
+  <div class="screen">
+    <div class="label">2 · Reportar con foto + IA</div>
+    <div class="phone">
+      <div class="bar">
+        <button class="icon-btn" aria-label="Cancelar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <h2>Nuevo reporte</h2><span style="width:44px"></span>
+      </div>
+      <div class="scroll">
+        <div class="photo"><div class="lamp"></div><span class="tag">Foto 1 de 1 · 1.2 MB</span></div>
+        <div class="ai-box">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--secondary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/></svg>
+          <div><b>La IA llenó el reporte</b><span>Revisa los campos marcados antes de enviar · confianza 87 %</span></div>
+        </div>
+        <form class="f" onsubmit="return false">
+          <div class="field"><label for="cat">Categoría <span class="chip ia">Sugerido por IA</span></label>
+            <div class="seg" role="radiogroup" aria-label="Categoría"><button type="button">Cómputo</button><button type="button" class="on">Infraestructura</button><button type="button">Académico</button><button type="button">Otra</button></div></div>
+          <div class="field"><label for="tit">Título <span class="chip ia">Sugerido por IA</span></label><input id="tit" value="Luminaria fundida en pasillo B"></div>
+          <div class="field"><label for="tipo">Tipo de daño</label><select id="tipo"><option>Luminaria</option><option>Filtración</option><option>Eléctrico</option></select></div>
+          <div class="field err"><label for="aula">Aula</label><input id="aula" value="" placeholder="Ej. 204" aria-invalid="true" aria-describedby="aula-msg">
+            <div class="msg" id="aula-msg"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>Indica el edificio y el aula</div></div>
+          <div class="field"><label>Prioridad <span class="chip ia">Sugerido por IA</span></label>
+            <div class="seg"><button type="button">Baja</button><button type="button" class="on">Media</button><button type="button">Alta</button><button type="button">Crítica</button></div></div>
+        </form>
+        <button class="cta">Enviar reporte</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 DETALLE -->
+  <div class="screen">
+    <div class="label">3 · Detalle y bitácora</div>
+    <div class="phone">
+      <div class="bar">
+        <button class="icon-btn" aria-label="Regresar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <h2>Detalle</h2><button class="icon-btn" aria-label="Más opciones"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="scroll">
+        <div class="hero">
+          <div class="code">INC-2026-1020-INF-0001</div>
+          <h2>Luminaria fundida en pasillo B</h2>
+          <div class="chips"><span class="chip e-proceso">En proceso</span><span class="chip p-media">Media</span><span class="chip c-inf">Infraestructura</span></div>
+        </div>
+        <div class="gallery" aria-label="Evidencias"><div></div><div></div><span class="add" style="width:96px;height:96px;border-radius:12px;flex-shrink:0;background:var(--surface);border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--primary)" aria-label="Agregar evidencia"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></div>
+        <div class="group">
+          <div class="it">Edificio<span>Edificio B · Pasillo norte</span></div>
+          <div class="it">Tipo de daño<span>Luminaria</span></div>
+          <div class="it">Riesgo<span>Bajo</span></div>
+          <div class="it">Técnico<span>Luis Pech</span></div>
+          <div class="it">Horas invertidas<span>1.5 h</span></div>
+        </div>
+        <div class="section"><h3>Bitácora</h3></div>
+        <ol class="tl">
+          <li><b>En proceso</b><p>Luis Pech · hoy 11:10 · 1 h<br>Se solicitó lámpara LED 18 W al almacén.</p></li>
+          <li><b>Asignada</b><p>Coord. Infraestructura · hoy 10:20</p></li>
+          <li><b>Abierta</b><p>Ana López · hoy 09:40 · reporte con foto</p></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 BANDEJA TECNICO -->
+  <div class="screen">
+    <div class="label">4 · Bandeja del técnico</div>
+    <div class="phone">
+      <div class="scroll">
+        <div class="top"><div class="hi">Infraestructura</div><h1 class="big">Bandeja</h1></div>
+        <div class="filters" role="toolbar" aria-label="Filtros"><button class="on">Asignadas · 4</button><button>Sin asignar · 3</button><button>En espera</button><button>Resueltas</button></div>
+        <div class="list">
+          <div class="card"><span class="prio-bar" style="background:#DC2626"></span>
+            <div><div class="t">Filtración en techo del laboratorio</div><div class="s">INF-0003 · Edificio A · hace 40 min</div>
+              <div class="chips"><span class="chip p-critica">Crítica</span><span class="chip e-abierta">Abierta</span></div></div></div>
+          <div class="card"><span class="prio-bar" style="background:#EA580C"></span>
+            <div><div class="t">Aire acondicionado sin enfriar</div><div class="s">INF-0002 · Edificio D · hace 2 h</div>
+              <div class="chips"><span class="chip p-alta">Alta</span><span class="chip e-proceso">En proceso</span></div></div></div>
+          <div class="card"><span class="prio-bar" style="background:#0284C7"></span>
+            <div><div class="t">Luminaria fundida en pasillo B</div><div class="s">INF-0001 · Edificio B · hace 3 h</div>
+              <div class="chips"><span class="chip p-media">Media</span><span class="chip e-proceso">En proceso</span></div></div></div>
+          <div class="card"><span class="prio-bar" style="background:#64748B"></span>
+            <div><div class="t">Cerradura dañada en aula 101</div><div class="s">INF-0009 · Edificio A · ayer</div>
+              <div class="chips"><span class="chip p-baja">Baja</span><span class="chip e-espera">En espera</span></div></div></div>
+        </div>
+      </div>
+      <nav class="tabs" aria-label="Navegación">
+        <button class="on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/></svg>Bandeja</button>
+        <button><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Buscar</button>
+        <button class="fab" aria-label="Reportar con foto"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l2-3h6l2 3h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+        <button><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>Avisos</button>
+        <button><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Perfil</button>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<h2 class="zone">En la computadora</h2>
+<div class="row">
+  <div class="screen">
+    <div class="label">5 · Dashboard (coordinador / directivo)</div>
+    <div class="desk">
+      <aside class="side" aria-label="Menú">
+        <div class="brand"><span class="logo">UD</span>UTM Desk</div>
+        <a href="#" class="on">Dashboard</a><a href="#">Incidencias</a><a href="#">Técnicos</a><a href="#">Usuarios y roles</a><a href="#">Categorías</a>
+      </aside>
+      <main class="main">
+        <div class="main-top"><div><h2>Dashboard</h2><div class="sub">Infraestructura · últimos 30 días</div></div>
+          <div class="seg" style="width:320px"><button class="on">30 días</button><button>Trimestre</button><button>Semestre</button><button>Año</button></div></div>
+        <div class="kpi4">
+          <div class="kpi"><b>18</b><span>Abiertas</span></div>
+          <div class="kpi"><b style="color:#B45309">7</b><span>En proceso</span></div>
+          <div class="kpi"><b style="color:#B91C1C">3</b><span>Críticas</span></div>
+          <div class="kpi"><b style="color:#15803D">16 h</b><span>Tiempo medio de resolución</span></div>
+        </div>
+        <div class="panels">
+          <section class="panel"><h3>Horas promedio de resolución por edificio</h3><span class="hint">Pipeline 1 · incidencias resueltas o cerradas</span>
+            <div class="hbar"><span>Edificio D</span><div class="track"><div class="fill" style="width:92%"></div></div><span class="v">31.4 h</span></div>
+            <div class="hbar"><span>Edificio A</span><div class="track"><div class="fill" style="width:64%"></div></div><span class="v">21.8 h</span></div>
+            <div class="hbar"><span>Edificio C</span><div class="track"><div class="fill" style="width:45%"></div></div><span class="v">15.2 h</span></div>
+            <div class="hbar"><span>Edificio B</span><div class="track"><div class="fill" style="width:30%"></div></div><span class="v">10.1 h</span></div>
+            <div class="hbar"><span>Biblioteca</span><div class="track"><div class="fill" style="width:18%"></div></div><span class="v">6.0 h</span></div>
+          </section>
+          <section class="panel"><h3>Fallas más frecuentes</h3><span class="hint">Pipeline 2 · top etiquetas</span>
+            <div class="hbar"><span>luminaria</span><div class="track"><div class="fill" style="width:100%;background:var(--secondary)"></div></div><span class="v">12</span></div>
+            <div class="hbar"><span>aire_acond.</span><div class="track"><div class="fill" style="width:75%;background:var(--secondary)"></div></div><span class="v">9</span></div>
+            <div class="hbar"><span>filtracion</span><div class="track"><div class="fill" style="width:58%;background:var(--secondary)"></div></div><span class="v">7</span></div>
+            <div class="hbar"><span>cerradura</span><div class="track"><div class="fill" style="width:33%;background:var(--secondary)"></div></div><span class="v">4</span></div>
+            <div class="hbar"><span>electrico</span><div class="track"><div class="fill" style="width:25%;background:var(--secondary)"></div></div><span class="v">3</span></div>
+          </section>
+        </div>
+        <section class="panel"><h3>Incidencias recientes</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Folio</th><th>Título</th><th>Edificio</th><th>Prioridad</th><th>Estado</th><th>Técnico</th></tr></thead>
+            <tbody>
+              <tr><td>INF-0003</td><td>Filtración en techo del laboratorio</td><td>Edificio A</td><td><span class="chip p-critica">Crítica</span></td><td><span class="chip e-abierta">Abierta</span></td><td>Sin asignar</td></tr>
+              <tr><td>INF-0002</td><td>Aire acondicionado sin enfriar</td><td>Edificio D</td><td><span class="chip p-alta">Alta</span></td><td><span class="chip e-proceso">En proceso</span></td><td>Luis Pech</td></tr>
+              <tr><td>INF-0001</td><td>Luminaria fundida en pasillo B</td><td>Edificio B</td><td><span class="chip p-media">Media</span></td><td><span class="chip e-proceso">En proceso</span></td><td>Luis Pech</td></tr>
+              <tr><td>INF-0009</td><td>Cerradura dañada en aula 101</td><td>Edificio A</td><td><span class="chip p-baja">Baja</span></td><td><span class="chip e-espera">En espera</span></td><td>Marta Uc</td></tr>
+            </tbody>
+          </table></div>
+        </section>
+      </main>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <div class="note"><b>Se siente nativa</b>Fuente del sistema (San Francisco en iPhone, Roboto en Android), títulos grandes, barra inferior translúcida y botón central de cámara.</div>
+  <div class="note"><b>Colores con significado</b>Estado y prioridad siempre llevan texto además del color, para personas con daltonismo.</div>
+  <div class="note"><b>Validaciones</b>El error aparece al salir del campo, debajo y en rojo, con un mensaje claro. Ejemplo en el campo "Aula" de la pantalla 2.</div>
+  <div class="note"><b>IA</b>Los campos que sugirió la IA se marcan en verde azulado; el usuario revisa antes de enviar.</div>
+</div>
+
+<script>
+(function(){
+  var b=document.getElementById('tema'),r=document.documentElement,modos=['automático','claro','oscuro'],i=0;
+  try{var g=localStorage.getItem('utm-tema');if(g){i=modos.indexOf(g);if(i<0)i=0;}}catch(e){}
+  function aplicar(){var m=modos[i];if(m==='claro')r.setAttribute('data-theme','light');else if(m==='oscuro')r.setAttribute('data-theme','dark');else r.removeAttribute('data-theme');b.textContent='Tema: '+m;try{localStorage.setItem('utm-tema',m);}catch(e){}}
+  b.addEventListener('click',function(){i=(i+1)%modos.length;aplicar();});aplicar();
+  document.querySelectorAll('.seg').forEach(function(s){s.addEventListener('click',function(e){if(e.target.tagName!=='BUTTON')return;s.querySelectorAll('button').forEach(function(x){x.classList.remove('on')});e.target.classList.add('on');});});
+  document.querySelectorAll('.filters').forEach(function(s){s.addEventListener('click',function(e){if(e.target.tagName!=='BUTTON')return;s.querySelectorAll('button').forEach(function(x){x.classList.remove('on')});e.target.classList.add('on');});});
+})();
+</script>
+</body>
+</html>

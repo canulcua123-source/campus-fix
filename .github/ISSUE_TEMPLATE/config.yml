@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Reglas del proyecto
+    url: https://github.com/canulcua123-source/campus-fix/blob/dev/CONTRIBUTING.md
+    about: Flujo de ramas, commits y PR. Léelo antes de abrir un issue.

@@ -1,0 +1,40 @@
+# Configuración de Ruff (lint + formato) para el backend.
+# CI: `ruff check backend`  ·  pre-commit: ruff + ruff-format.
+line-length = 120
+target-version = "py312"   # CI usa Python 3.12: ruff marca sintaxis más nueva como error
+extend-exclude = [".venv"]
+
+[lint]
+select = [
+  "E",   # pycodestyle (errores)
+  "F",   # pyflakes (nombres sin usar, imports rotos)
+  "I",   # orden de imports (isort)
+  "B",   # bugbear (errores comunes)
+  "UP",  # pyupgrade (sintaxis moderna)
+  "S",   # bandit (seguridad básica)
+]
+ignore = [
+  # La longitud de línea la resuelve `ruff format`; quedan cadenas largas (prompts, mensajes) que no conviene partir.
+  "E501",
+  # --- Deuda técnica de estilo (código previo a esta config). Se quitan de aquí en un PR
+  # --- `chore(backend): ruff --fix` que solo corra `ruff check --fix && ruff format` sin cambiar lógica.
+  "UP017",  # timezone.utc -> datetime.UTC (equivalentes; solo estilo)
+  "I001",   # orden de imports (solo estilo, autocorregible)
+]
+
+[lint.per-file-ignores]
+# Pruebas: assert es la herramienta; contraseñas/secretos y aleatorios de prueba son ficticios.
+"tests/**" = ["S101", "S105", "S106", "S107", "S311"]
+# Valor por defecto de desarrollo; en producción JWT_SECRET siempre viene del entorno (.env / variables del host).
+"app/core/config.py" = ["S105"]
+# Token inválido -> se cae a limitar por IP a propósito (no es un error que deba registrarse).
+"app/core/limiter.py" = ["S110"]
+# assert a nivel de módulo: invariante del catálogo de permisos que debe romper al importar si no coincide.
+"app/schemas/rol.py" = ["S101"]
+# Datos demo con semilla fija (random.Random(42)): no es criptografía.
+"scripts/init_db.py" = ["S311"]
+# Deuda: `raise HTTPException` dentro de except sin `from` (B904) y variable de reintento sin usar (B007).
+"app/core/security.py" = ["B904"]
+"app/routers/roles.py" = ["B904"]
+"app/routers/usuarios.py" = ["B904"]
+"app/routers/incidencias.py" = ["B007"]

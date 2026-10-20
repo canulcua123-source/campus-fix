@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pymongo>=4.13
+pydantic>=2.12
+pydantic-settings
+pyjwt
+pwdlib[argon2]
+redis
+boto3
+slowapi
+anthropic
+python-multipart
+email-validator

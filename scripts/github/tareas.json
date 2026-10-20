@@ -1,0 +1,2878 @@
+{
+  "proyecto": "UTM Desk NoSQL Cloud",
+  "epicas": {
+    "devops-ci": "DevOps/CI",
+    "bd-atlas": "BD/Atlas",
+    "backend": "Backend",
+    "ia": "IA",
+    "frontend": "Frontend",
+    "qa": "QA",
+    "revision-acceso": "Revisión de acceso",
+    "docs-defensa": "Documentación/Defensa"
+  },
+  "roles": {
+    "lider": "Líder / arquitecto",
+    "dba": "DBA MongoDB",
+    "backend": "Backend",
+    "frontend": "Frontend / UX",
+    "qa-devops": "QA / DevOps"
+  },
+  "dod_comun": [
+    "CI verde (lint + pruebas backend + build/pruebas frontend)",
+    "PR hacia `dev` aprobado por al menos 1 compañero, con `Closes #<issue>`",
+    "Pruebas requeridas de esta tarea escritas y pasando",
+    "Contrato sincronizado: OpenAPI (/docs), colección Postman y esquemas Zod actualizados si cambió la API",
+    "Capturas (móvil y escritorio) en el PR si la tarea toca UI",
+    "Sin secretos en el repo; variables nuevas documentadas en README y `.env.example`"
+  ],
+  "tareas": [
+    {
+      "id": "T-001",
+      "titulo": "CI en GitHub Actions: lint y pruebas de backend y frontend",
+      "epica": "devops-ci",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 6,
+      "depende": [],
+      "cubre": [
+        "RNF-19"
+      ],
+      "descripcion": "Crear el pipeline de integración continua que corre en cada PR hacia `dev` y `main`. Backend: Ruff + pytest (incluye las 208 pruebas e2e) con servicios `mongo` y `redis` en el job. Frontend: `npm ci`, `npm run lint` (oxlint), `tsc -b` y `vite build`.",
+      "archivos": [
+        ".github/workflows/ci.yml",
+        "backend/pytest.ini",
+        "backend/requirements-dev.txt"
+      ],
+      "criterios": [
+        "El workflow se dispara en `pull_request` hacia `dev`/`main` y en `push` a `dev`",
+        "Job backend levanta MongoDB 7 y Redis 7 como services y corre `pytest -q` sin depender de Atlas ni B2",
+        "Job frontend corre lint, typecheck y build; falla si hay errores",
+        "Caché de pip y npm configurada; el pipeline completo tarda < 8 min",
+        "Badge de estado de CI en el README"
+      ],
+      "pruebas": [
+        "Abrir un PR de prueba con un error de lint intencional y verificar que el check falla",
+        "Las 208 pruebas e2e existentes pasan en CI (`backend/tests/e2e/*`)"
+      ],
+      "dod_extra": [
+        "Sección 'CI' en README con cómo reproducir localmente"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-002",
+      "titulo": "Flujo de trabajo del equipo: rama dev, plantillas de issue/PR y protección de ramas",
+      "epica": "devops-ci",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 3,
+      "depende": [],
+      "cubre": [
+        "RNF-19"
+      ],
+      "descripcion": "AGENTS.md, CONTRIBUTING.md y las plantillas ya existen. Falta: reemplazar placeholders del repo, generar CODEOWNERS desde la tabla de propiedad de este documento, verificar la protección de `dev`/`main` y cargar el backlog en GitHub.",
+      "archivos": [
+        ".github/ISSUE_TEMPLATE/config.yml",
+        ".github/CODEOWNERS",
+        "CONTRIBUTING.md"
+      ],
+      "criterios": [
+        "Rama `dev` es la base por defecto; `main` y `dev` exigen PR, 1 aprobación y CI verde",
+        "`.github/ISSUE_TEMPLATE/config.yml`: placeholder `OWNER/REPO` reemplazado por `canulcua123-source/campus-fix`",
+        "`.github/CODEOWNERS` creado a partir de la sección «CODEOWNERS» de `docs/TAREAS.md`, con los placeholders `@rol-*` sustituidos por usuarios reales",
+        "Issues, labels y milestones Fase 1/Fase 2 cargados con `scripts/github/crear-issues.py --ejecutar --repo canulcua123-source/campus-fix`",
+        "CONTRIBUTING.md y AGENTS.md enlazan a `docs/TAREAS.md`"
+      ],
+      "pruebas": [
+        "Manual: intentar push directo a `dev` y verificar que se rechaza",
+        "Manual: abrir un PR y verificar que se precarga la plantilla"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-003",
+      "titulo": "Deuda de Ruff (B904/B007) y PR aislado de `ruff format`",
+      "epica": "devops-ci",
+      "rol": "qa-devops",
+      "prioridad": "Debería",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 3,
+      "depende": [],
+      "cubre": [
+        "RNF-19"
+      ],
+      "descripcion": "Corregir B904 (`raise ... from`) y B007 en un PR; en otro PR aislado aplicar `ruff format` a todo `backend/` sin cambios funcionales. Mergear el de formato el día 1 de la semana 1, antes de que se abran otras ramas de backend, y avisar al equipo para que rebaseen.",
+      "archivos": [
+        "backend/"
+      ],
+      "criterios": [
+        "`ruff check .` sin B904/B007",
+        "PR de formato sin cambios de lógica (diff solo de espacios/comillas)",
+        "Aviso al equipo publicado tras el merge"
+      ],
+      "pruebas": [
+        "CI: ruff y las 208 pruebas e2e en verde después de ambos PRs"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-004",
+      "titulo": "Desplegar la API en Render o Koyeb conectada a Atlas, Upstash y B2",
+      "epica": "devops-ci",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [
+        "T-001",
+        "T-007"
+      ],
+      "cubre": [
+        "RNF-14",
+        "RNF-20",
+        "RNF-21"
+      ],
+      "descripcion": "Crear `backend/Dockerfile` (uvicorn, usuario no root) y el servicio en Render/Koyeb (plan gratuito). Variables de entorno desde el panel, nunca en el repo. Health check en `/health`. Deploy automático al hacer merge a `main`.",
+      "archivos": [
+        "backend/Dockerfile",
+        "backend/.dockerignore",
+        "render.yaml",
+        "README.md"
+      ],
+      "criterios": [
+        "La API responde `GET /health` 200 en la URL pública con HTTPS",
+        "`/docs` (OpenAPI) accesible en producción",
+        "Variables: MONGODB_URI (usuario Atlas de permisos mínimos), REDIS_URL, JWT_SECRET, credenciales B2 y de IA configuradas solo en el panel",
+        "El arranque en frío está documentado (tiempo aproximado y cómo 'despertar' antes de la demo)",
+        "Deploy automático desde `main` funcionando"
+      ],
+      "pruebas": [
+        "Postman: ejecutar la carpeta 'Auth' y 'Incidencias' contra el environment `UTM-Desk.prod` y obtener 200/201",
+        "Manual: `docker build` y `docker run` local con `.env` arrancan sin errores"
+      ],
+      "dod_extra": [
+        "Environment `postman/UTM-Desk.prod.postman_environment.json` sin secretos"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-005",
+      "titulo": "Desplegar la PWA en Cloudflare Pages",
+      "epica": "devops-ci",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 4,
+      "depende": [
+        "T-001"
+      ],
+      "cubre": [
+        "RF-GEN-04",
+        "RNF-03",
+        "RNF-15"
+      ],
+      "descripcion": "Conectar el repo a Cloudflare Pages (directorio `frontend`, build `npm run build`, salida `dist`). Configurar `VITE_API_URL` de producción, fallback SPA y cabeceras de seguridad y caché del service worker.",
+      "archivos": [
+        "frontend/public/_redirects",
+        "frontend/public/_headers",
+        "frontend/.env.example",
+        "README.md"
+      ],
+      "criterios": [
+        "La PWA carga por HTTPS en `*.pages.dev` (o dominio propio)",
+        "Rutas profundas (ej. `/incidencias/123`) no dan 404 al recargar",
+        "`sw.js` y `manifest.webmanifest` se sirven con `Cache-Control: no-cache`; assets con hash con caché larga",
+        "Cabeceras CSP, `X-Content-Type-Options` y `Referrer-Policy` presentes",
+        "Previews automáticos por PR habilitados"
+      ],
+      "pruebas": [
+        "Manual: recargar una ruta profunda en producción y verificar que carga",
+        "Lighthouse en producción: categoría PWA sin errores de instalabilidad"
+      ],
+      "dod_extra": [
+        "URL de producción en README"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-006",
+      "titulo": "CORS de producción en la API y en el bucket B2",
+      "epica": "devops-ci",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 3,
+      "depende": [
+        "T-004",
+        "T-005"
+      ],
+      "cubre": [
+        "RNF-15"
+      ],
+      "descripcion": "Limitar `CORS_ORIGINS` de la API al dominio de la PWA (sin `*`) y configurar las reglas CORS del bucket B2 para permitir solo PUT/GET desde ese origen con las cabeceras de las URLs firmadas.",
+      "archivos": [
+        "backend/app/core/config.py",
+        "backend/app/main.py",
+        "docs/infra/b2-cors.json",
+        "README.md"
+      ],
+      "criterios": [
+        "La API rechaza preflight de orígenes no listados",
+        "El bucket acepta PUT firmado desde el dominio de la PWA y lo rechaza desde otro origen",
+        "Credenciales permitidas solo si el refresh token en cookie lo requiere (T-014)",
+        "La configuración del bucket queda versionada en `docs/infra/b2-cors.json`"
+      ],
+      "pruebas": [
+        "e2e: extender `backend/tests/e2e/test_zz_cors_ratelimit.py` con `test_cors_rechaza_origen_no_listado` y `test_cors_permite_origen_pwa`",
+        "Manual: subir una evidencia desde la PWA en producción (red del navegador sin errores CORS)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-007",
+      "titulo": "Aplicar validador $jsonSchema e índices nuevos en Atlas M0",
+      "epica": "bd-atlas",
+      "rol": "dba",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 3,
+      "depende": [
+        "T-008",
+        "T-068"
+      ],
+      "cubre": [
+        "RF-SIS-02",
+        "RF-SIS-06",
+        "CU-01",
+        "CU-05",
+        "CU-07",
+        "RNF-17"
+      ],
+      "descripcion": "Solo el responsable de BD. Ejecutar `backend/scripts/init_db.py` contra Atlas para aplicar el validador vigente (`collMod`) y crear índices: compuesto {categoria, estado, ubicacion.edificio}, TTL {fecha_resolucion} 60 días y texto {titulo, descripcion} ponderado en español. Hacer respaldo previo (T-010 manual) y pedir confirmación al equipo antes de tocar Atlas.",
+      "archivos": [
+        "backend/scripts/init_db.py",
+        "docs/bd/indices.md"
+      ],
+      "criterios": [
+        "Respaldo `mongodump` previo guardado fuera del repo",
+        "`db.getCollectionInfos()` muestra el validador nuevo con `validationLevel: strict`",
+        "`db.incidencias_campus.getIndexes()` lista los 3 índices obligatorios con sus opciones exactas",
+        "Un insert con `detalle_especifico` inválido es rechazado por Atlas",
+        "Captura de pantalla de índices en Atlas guardada para el documento final"
+      ],
+      "pruebas": [
+        "Manual: `explain()` de una búsqueda `$text` usa el índice de texto",
+        "Manual: insert inválido desde mongosh devuelve `Document failed validation`",
+        "Postman: `POST /incidencias` con detalle inválido → 400"
+      ],
+      "dod_extra": [
+        "`docs/bd/indices.md` con salida de `getIndexes()`"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-008",
+      "titulo": "$jsonSchema para usuarios/roles/categorias y alineación de documentos (seed admin, historial)",
+      "epica": "bd-atlas",
+      "rol": "dba",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 6,
+      "depende": [],
+      "cubre": [
+        "RF-SIS-02",
+        "RNF-17"
+      ],
+      "descripcion": "Inconsistencias: solo `incidencias_campus` tiene validador; el admin sembrado no tiene `schema_version` y usa `fecha_creacion` en vez de `fecha_alta`; las entradas de `historial_seguimiento` usan `usuario_id` sin `estado_anterior` mientras la doc §9.2 muestra `estado_anterior`/`estado_nuevo`. Decidir y alinear (código o doc) antes de aplicar en Atlas.",
+      "archivos": [
+        "backend/scripts/init_db.py",
+        "backend/app/routers/incidencias.py",
+        "docs/reglas/BASE-DE-DATOS.md",
+        "backend/tests/e2e/test_seguimiento.py"
+      ],
+      "criterios": [
+        "Validadores `$jsonSchema` para `usuarios`, `roles` y `categorias` (validationLevel strict)",
+        "Seed admin con `schema_version` y `fecha_alta`",
+        "Historial con la forma decidida (doc §9.2 actualizada si cambia)",
+        "Script idempotente: correr init_db dos veces no falla"
+      ],
+      "pruebas": [
+        "e2e: `test_usuario_invalido_rechazado_por_validador`, `test_historial_tiene_estado_anterior` (si se adopta)",
+        "Manual: `init_db.py` dos veces en Mongo local sin errores"
+      ],
+      "dod_extra": [
+        "Solo el DBA edita `init_db.py`"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-009",
+      "titulo": "Datos sintéticos 20-30 incidencias que cumplan el PDF + verificador automático",
+      "epica": "bd-atlas",
+      "rol": "dba",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 10,
+      "depende": [
+        "T-007"
+      ],
+      "cubre": [
+        "CU-01",
+        "CU-02",
+        "CU-03",
+        "CU-04",
+        "CU-06",
+        "CU-07"
+      ],
+      "descripcion": "Ajustar `sembrar_demo` en `init_db.py` para generar 20-30 incidencias balanceadas entre las 3 categorías, con polimorfismo real, y crear `backend/scripts/verificar_demo.py` que compruebe cada requisito del PDF (sección 4.1). Regenerar la demo en Atlas.",
+      "archivos": [
+        "backend/scripts/init_db.py",
+        "backend/scripts/verificar_demo.py",
+        "backend/tests/test_demo.py"
+      ],
+      "criterios": [
+        "20 a 30 incidencias, balanceadas (diferencia máx. 2) entre computo_redes, infraestructura y academico",
+        "≥ 4 edificios, 4 prioridades (baja, media, alta, critica) y 5 estados presentes",
+        "≥ 8 con `fecha_resolucion` (tipo Date) y ≥ 15 con `evidencias_adjuntas` no vacías",
+        "Incidencias recurrentes: ≥ 1 aula con 3+ incidencias",
+        "`detalle_especifico` sin campos nulos de relleno; tags, historial_seguimiento, reportante{} y ubicacion{} presentes",
+        "`verificar_demo.py` imprime ✔/✘ por requisito y sale con código 1 si alguno falla"
+      ],
+      "pruebas": [
+        "Unitaria: `backend/tests/test_demo.py::test_demo_cumple_requisitos_pdf` ejecuta el generador con semilla fija contra mongomock/Mongo local y valida con el verificador",
+        "Manual: `python scripts/verificar_demo.py` contra Atlas → todo ✔"
+      ],
+      "dod_extra": [
+        "Salida de `verificar_demo.py` pegada en el PR"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-010",
+      "titulo": "Respaldos con mongodump (M0 no tiene respaldos automáticos)",
+      "epica": "bd-atlas",
+      "rol": "dba",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 4,
+      "depende": [
+        "T-007"
+      ],
+      "cubre": [
+        "RNF-22"
+      ],
+      "descripcion": "Script `backend/scripts/respaldo.sh` (mongodump --archive --gzip con fecha) y procedimiento de restauración. Opcional: workflow programado semanal que sube el archivo como artifact privado de Actions (retención 14 días).",
+      "archivos": [
+        "backend/scripts/respaldo.sh",
+        ".github/workflows/respaldo.yml",
+        "docs/bd/respaldo.md"
+      ],
+      "criterios": [
+        "El respaldo genera `utm_desk_AAAAMMDD.archive.gz`",
+        "La restauración con `mongorestore --nsFrom/--nsTo` a una base de prueba funciona",
+        "El URI se lee de un secret, nunca aparece en logs",
+        "Procedimiento documentado paso a paso"
+      ],
+      "pruebas": [
+        "Manual: respaldar Atlas, restaurar en Mongo local y comparar conteos por colección"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-011",
+      "titulo": "Pipelines F2: fallas crónicas por aula, carga por técnico y tendencia mensual",
+      "epica": "bd-atlas",
+      "rol": "dba",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-009"
+      ],
+      "cubre": [
+        "RF-COO-06",
+        "RF-COO-07",
+        "RF-TEC-08",
+        "RF-DIR-06",
+        "CU-06"
+      ],
+      "descripcion": "Agregar a `routers/analitica.py` los endpoints `GET /analitica/aulas-cronicas` (≥3 incidencias en 30 días), `GET /analitica/carga-tecnicos` (abiertas y horas) y `GET /analitica/tendencia` (por mes y categoría), respetando alcance del rol y caché Redis de 5 min.",
+      "archivos": [
+        "backend/app/routers/analitica.py",
+        "backend/app/schemas/analitica.py",
+        "backend/tests/e2e/test_analitica_ia.py",
+        "postman/UTM-Desk.postman_collection.json"
+      ],
+      "criterios": [
+        "Cada pipeline empieza con `$match` que usa el índice compuesto (verificado con `explain`)",
+        "Coordinador solo ve su área; directivo ve todo; reportante recibe 403",
+        "Resultados cacheados 5 min en Redis; si Redis cae, se calcula sin caché",
+        "Respuestas con esquema Pydantic documentado en OpenAPI"
+      ],
+      "pruebas": [
+        "e2e: `test_aulas_cronicas_detecta_3_en_30_dias`, `test_carga_tecnicos_suma_horas`, `test_tendencia_por_mes`, `test_analitica_f2_403_reportante`",
+        "Postman: 3 requests nuevos con tests de status y forma del JSON"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-012",
+      "titulo": "Catálogo de aulas (id opaco) + generador de QR + ruta /reportar?aula=",
+      "epica": "bd-atlas",
+      "rol": "dba",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 8,
+      "depende": [],
+      "requiere_aprobacion": true,
+      "cubre": [
+        "RF-ADM-04",
+        "RF-REP-01"
+      ],
+      "descripcion": "⚑ pendiente de aprobación del PO (cambia reglas de negocio o de BD). Colección `aulas` (id opaco, edificio, piso, aula) creada en `init_db.py`, script generador de QR y ruta `/reportar?aula=` en la PWA que fija la ubicación. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T17 de §6.",
+      "archivos": [
+        "backend/scripts/init_db.py",
+        "backend/scripts/generar_qr_aulas.py",
+        "backend/app/core/ubicacion.py",
+        "backend/tests/test_ubicacion.py",
+        "frontend/src/pages/Reportar.tsx"
+      ],
+      "criterios": [
+        "Escanear el QR abre «Reportar con IA» con la ubicación fijada",
+        "Id inexistente ⇒ selector de ubicación",
+        "Colección `aulas` creada en `init_db.py` (validador e índice)"
+      ],
+      "pruebas": [
+        "Pytest: `test_resolver_ubicacion_id_valido`, `test_resolver_ubicacion_id_invalido`",
+        "Vitest: ruta `/reportar?aula=` con id válido/inválido"
+      ],
+      "dod_extra": []
+    },
+    {
+      "id": "T-013",
+      "titulo": "Script maestro consolidado y export JSON para el entregable",
+      "epica": "bd-atlas",
+      "rol": "dba",
+      "prioridad": "Debe",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 4,
+      "depende": [
+        "T-009"
+      ],
+      "cubre": [
+        "Entregable Fase 2: Script consolidado / JSON exportado"
+      ],
+      "descripcion": "Generar `entrega/script_maestro.js` (mongosh) que crea colecciones con validador, índices, inserta los datos demo y ejecuta ejemplos de $set/$inc/$push/$addToSet/$pull, $text y los 2 pipelines. Exportar la colección poblada con `mongoexport --jsonArray`.",
+      "archivos": [
+        "entrega/script_maestro.js",
+        "entrega/incidencias_campus.json",
+        "backend/scripts/exportar_entrega.py"
+      ],
+      "criterios": [
+        "`mongosh <uri> entrega/script_maestro.js` sobre una base vacía deja el estado equivalente a la demo",
+        "Contiene las 5 operaciones atómicas, la búsqueda $text con `textScore` y Pipeline 1 y 2 comentados",
+        "El JSON exportado no contiene hashes de contraseñas ni datos personales reales",
+        "Se regenera con un comando documentado"
+      ],
+      "pruebas": [
+        "Manual: ejecutar el script en un Mongo local limpio (docker compose) y correr `verificar_demo.py` → todo ✔"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-014",
+      "titulo": "Refresh token en cookie HttpOnly + POST /auth/refresh + POST /auth/logout",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 8,
+      "depende": [],
+      "cubre": [
+        "RF-GEN-02",
+        "RNF-11",
+        "RF-SIS-09"
+      ],
+      "descripcion": "Al hacer login emitir refresh token (JWT_REFRESH_DAYS) en cookie `HttpOnly; Secure; SameSite=None/Lax; Path=/auth`. `POST /auth/refresh` rota el token (jti en Redis, el anterior queda revocado) y devuelve nuevo access token. `POST /auth/logout` revoca el jti y borra la cookie. Detección de reuso: si llega un refresh revocado, revocar toda la familia.",
+      "archivos": [
+        "backend/app/routers/auth.py",
+        "backend/app/core/security.py",
+        "backend/app/core/config.py",
+        "backend/tests/e2e/test_auth.py",
+        "postman/UTM-Desk.postman_collection.json"
+      ],
+      "criterios": [
+        "Login responde access token en el cuerpo y refresh solo en cookie (nunca en el cuerpo)",
+        "`/auth/refresh` sin cookie o con cookie inválida → 401",
+        "Rotación: reutilizar un refresh ya usado → 401 y la familia queda revocada",
+        "`/auth/logout` → 204 y la cookie queda expirada; el refresh anterior deja de servir",
+        "Usuario desactivado no puede refrescar",
+        "Rate limit aplicado también a `/auth/refresh`"
+      ],
+      "pruebas": [
+        "e2e: `test_login_emite_cookie_httponly`, `test_refresh_rota_token`, `test_refresh_reutilizado_revoca_familia`, `test_logout_invalida_refresh`, `test_refresh_usuario_desactivado_401`",
+        "Postman: requests 'Refresh' y 'Logout' con tests de status y cookie"
+      ],
+      "dod_extra": [
+        "Diagrama de secuencia del refresh en README o docs/"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-015",
+      "titulo": "Módulo dominio/ y puerto/adaptador de storage",
+      "epica": "backend",
+      "rol": "lider",
+      "prioridad": "Debería",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 10,
+      "depende": [
+        "T-001"
+      ],
+      "cubre": [
+        "RF-TEC-03",
+        "RF-SIS-07",
+        "RNF-19"
+      ],
+      "descripcion": "Extraer reglas puras a `backend/app/dominio/` (transiciones de estado, normalización de tags, formato de folio) sin dependencias de FastAPI/Mongo. Definir `StoragePort` (Protocol) en `dominio/puertos.py`, mover `core/storage.py` a `adaptadores/storage_b2.py` y crear `FakeStorage` para pruebas. Inyección vía `Depends`. El puerto de IA se hace aparte en `services/vision/` (tarea 'Puerto ProveedorVision').",
+      "archivos": [
+        "backend/app/dominio/estados.py",
+        "backend/app/dominio/tags.py",
+        "backend/app/dominio/folio.py",
+        "backend/app/dominio/puertos.py",
+        "backend/app/adaptadores/storage_b2.py",
+        "backend/app/routers/incidencias.py",
+        "backend/tests/unit/"
+      ],
+      "criterios": [
+        "`app/dominio/` no importa fastapi, pymongo, boto3 ni anthropic (verificado con prueba)",
+        "Los routers usan `StoragePort` vía dependencias; ninguno importa boto3 directamente",
+        "Las 208 pruebas e2e siguen verdes sin cambios de comportamiento",
+        "ADR explica la arquitectura de puertos/adaptadores en ≤ 1 página"
+      ],
+      "pruebas": [
+        "Unitarias: `tests/unit/test_estados.py::test_transiciones_validas` (tabla 9.4 completa) y `test_transicion_invalida_lanza`",
+        "Unitarias: `tests/unit/test_tags.py::test_normaliza_acentos_mayusculas_espacios`, `test_longitud_2_a_30`",
+        "Unitaria: `tests/unit/test_arquitectura.py::test_dominio_sin_dependencias_externas`"
+      ],
+      "dod_extra": [
+        "ADR `docs/adr/001-puertos-adaptadores.md`"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-016",
+      "titulo": "Unificar forma de error {error, detalle} en la API (HTTPException, DuplicateKeyError, 429)",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 5,
+      "depende": [],
+      "cubre": [
+        "RF-SIS-03",
+        "RNF-07"
+      ],
+      "descripcion": "Hoy conviven `detail` (HTTPException), errores de `DuplicateKeyError` y el 429 de slowapi con formatos distintos. Manejadores globales en `main.py` para devolver siempre `{\"error\": str, \"detalle\": ...}` en español. Cambio de contrato: va primero (backend) y después el cliente (tarea de `api/client.ts`).",
+      "archivos": [
+        "backend/app/main.py",
+        "backend/app/core/errores.py",
+        "backend/tests/e2e/test_formato_errores.py",
+        "postman/UTM-Desk.postman_collection.json",
+        "docs/reglas/API.md"
+      ],
+      "criterios": [
+        "400, 401, 403, 404, 409, 413, 415, 422→400, 429 y 503 responden `{error, detalle}`",
+        "`DuplicateKeyError` → 409 con mensaje en español, sin filtrar el índice",
+        "429 de slowapi con el mismo formato y `Retry-After`",
+        "Tests de Postman actualizados al nuevo formato"
+      ],
+      "pruebas": [
+        "e2e parametrizada: `test_formato_errores.py::test_forma_error[codigo]`",
+        "e2e: `test_duplicate_key_409_formato`, `test_rate_limit_429_formato`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-017",
+      "titulo": "Contratos Pydantic estrictos: extra=forbid, a_json, fechas con Z, horas 0.25 y dominio institucional",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 6,
+      "depende": [
+        "T-016"
+      ],
+      "cubre": [
+        "RF-SIS-02",
+        "RNF-13",
+        "RF-GEN-01"
+      ],
+      "descripcion": "Inconsistencias: `UsuarioIn`, `UsuarioPatch`, `RolIn` y `LoginIn` sin `extra=\"forbid\"`; `roles.py` y `categorias.py` no usan `a_json`; fechas sin `Z`; `SeguimientoIn.horas` sin paso de 0.25; correo sin validar dominio institucional (doc tabla 7.2). Alinear y reflejar en OpenAPI.",
+      "archivos": [
+        "backend/app/schemas/rol.py",
+        "backend/app/schemas/incidencia.py",
+        "backend/app/schemas/usuario.py",
+        "backend/app/routers/roles.py",
+        "backend/app/routers/categorias.py",
+        "backend/app/routers/auth.py",
+        "backend/app/core/serial.py",
+        "backend/tests/test_schemas.py"
+      ],
+      "criterios": [
+        "Campo desconocido en usuarios/roles/login → 400",
+        "Todas las fechas serializadas ISO 8601 con `Z`",
+        "`horas` acepta solo múltiplos de 0.25",
+        "Correo fuera del dominio institucional configurado (`DOMINIO_CORREO`) → 400",
+        "`roles.py` y `categorias.py` responden vía `a_json`"
+      ],
+      "pruebas": [
+        "Unitarias: `test_schemas.py` › `test_usuario_extra_forbid`, `test_rol_extra_forbid`, `test_login_extra_forbid`, `test_horas_paso_025`, `test_correo_dominio`",
+        "e2e: `test_fechas_terminan_en_z`"
+      ],
+      "dod_extra": [
+        "Avisar a Frontend para T-Zod (contrato backend primero)"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-018",
+      "titulo": "Caché Redis de analítica (5 min) + endpoint de KPIs y filtros por periodo/categoría",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 8,
+      "depende": [],
+      "cubre": [
+        "RF-DIR-01",
+        "RF-DIR-04",
+        "RF-COO-05",
+        "RF-SIS-08",
+        "CU-06"
+      ],
+      "descripcion": "Inconsistencia código↔doc: RF-SIS-08 pide caché de analítica en Redis y hoy no existe. Crear helper `cache_analitica(clave, alcance, filtros, ttl=300)` con degradación si Redis cae y aplicarlo a `/analitica/edificios` y `/analitica/tags`. Crear `GET /analitica/resumen?desde&hasta&categoria` (abiertas, en_proceso, críticas, resueltas en el periodo) con `$facet` y los mismos filtros en los otros dos endpoints.",
+      "archivos": [
+        "backend/app/routers/analitica.py",
+        "backend/app/schemas/analitica.py",
+        "backend/tests/e2e/test_analitica_ia.py",
+        "postman/UTM-Desk.postman_collection.json",
+        "backend/app/core/cache.py"
+      ],
+      "criterios": [
+        "Filtros validados con Pydantic (fechas ISO, categoría del catálogo); inválidos → 400",
+        "Coordinador ve solo su área aunque pida otra categoría",
+        "La caché no mezcla resultados entre alcances distintos",
+        "Pipeline 1 y Pipeline 2 siguen cumpliendo el PDF ($avg/$sum/conteo; $unwind + top 10)"
+      ],
+      "pruebas": [
+        "e2e: `test_resumen_cuenta_por_estado`, `test_resumen_filtra_periodo`, `test_resumen_alcance_coordinador`, `test_cache_separada_por_alcance`, `test_filtro_fecha_invalida_400`",
+        "Postman: 'Analítica › Resumen' con y sin filtros",
+        "e2e: `test_analitica_cache_hit`, `test_analitica_sin_redis_responde`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-019",
+      "titulo": "Categorías dinámicas: CRUD de categorías con definición de campos",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-015"
+      ],
+      "cubre": [
+        "RF-ADM-03",
+        "CU-01"
+      ],
+      "descripcion": "Agregar `POST /categorias`, `PATCH /categorias/{clave}` y desactivación. Cada categoría define `campos[]` (nombre, etiqueta, tipo: texto|numero|entero|booleano|ip|lista, requerido, opciones, min/max). Las 3 categorías del sistema no se pueden borrar.",
+      "archivos": [
+        "backend/app/routers/categorias.py",
+        "backend/app/schemas/categoria.py",
+        "backend/scripts/init_db.py",
+        "backend/tests/e2e/test_roles_categorias.py",
+        "postman/UTM-Desk.postman_collection.json"
+      ],
+      "criterios": [
+        "Solo permiso `categorias:gestionar` puede crear/editar (otros → 403)",
+        "Clave única normalizada; duplicada → 409",
+        "Definición de campos validada (tipos permitidos, nombres seguros sin `$` ni `.`)",
+        "Categorías del sistema protegidas contra borrado/desactivación",
+        "Validador de la colección `categorias` actualizado en `init_db.py`"
+      ],
+      "pruebas": [
+        "e2e: `test_crear_categoria_201`, `test_categoria_duplicada_409`, `test_categoria_campo_con_dolar_400`, `test_categoria_sin_permiso_403`, `test_no_desactiva_categoria_sistema`",
+        "Postman: carpeta 'Categorías' con POST 201, 400 y 409"
+      ],
+      "dod_extra": [
+        "Cambios en `backend/scripts/init_db.py` los hace o aprueba el DBA (propietario único)"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-020",
+      "titulo": "Validar detalle_especifico contra la categoría dinámica + categoria_version e índice wildcard",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 6,
+      "depende": [
+        "T-019"
+      ],
+      "cubre": [
+        "RF-REP-02",
+        "RF-SIS-02",
+        "CU-01"
+      ],
+      "descripcion": "Al crear incidencia, construir un modelo Pydantic dinámico (`create_model`) desde `categorias.campos` y validar `detalle_especifico`; rechazar campos desconocidos. Coordinar con DBA para que `$jsonSchema` admita categorías nuevas sin perder la validación estricta de las 3 originales.",
+      "archivos": [
+        "backend/app/dominio/detalle.py",
+        "backend/app/routers/incidencias.py",
+        "backend/scripts/init_db.py",
+        "backend/tests/e2e/test_incidencias_crear.py",
+        "docs/reglas/BASE-DE-DATOS.md"
+      ],
+      "criterios": [
+        "Incidencia de categoría nueva con detalle válido → 201",
+        "Campo requerido faltante, tipo incorrecto o campo extra → 400 con detalle por campo",
+        "Las 3 categorías originales mantienen exactamente su validación actual",
+        "Definiciones de categoría cacheadas (invalidación al editar)",
+        "La incidencia guarda `categoria_version` (doc §9.2) y el DBA crea índice wildcard sobre `detalle_especifico` si la doc lo mantiene (o se corrige la doc)"
+      ],
+      "pruebas": [
+        "Unitaria: `tests/unit/test_detalle.py::test_modelo_dinamico_tipos`",
+        "e2e: `test_crear_incidencia_categoria_dinamica_201`, `test_detalle_dinamico_campo_extra_400`, `test_detalle_dinamico_requerido_faltante_400`"
+      ],
+      "dod_extra": [
+        "Cambios en `backend/scripts/init_db.py` los hace o aprueba el DBA (propietario único)"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-021",
+      "titulo": "Acciones F2 del flujo: confirmar/reabrir, agregar info en espera y autoasignación",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 8,
+      "depende": [
+        "T-015"
+      ],
+      "cubre": [
+        "RF-REP-09",
+        "RF-REP-10",
+        "RF-TEC-07",
+        "CU-03"
+      ],
+      "descripcion": "`POST /incidencias/{id}/confirmacion` (reportante confirma → cerrada, o reabre → abierta dentro de 7 días de la resolución). `POST /incidencias/{id}/comentarios` del reportante solo en `en_espera`. `POST /incidencias/{id}/tomar` (técnico de su área, sin asignar). Todo atómico con filtro de estado en el `updateOne`.",
+      "archivos": [
+        "backend/app/routers/incidencias.py",
+        "backend/app/dominio/estados.py",
+        "backend/tests/e2e/test_seguimiento.py",
+        "postman/UTM-Desk.postman_collection.json"
+      ],
+      "criterios": [
+        "Reabrir después de 7 días → 409; reportante ajeno → 403/404",
+        "Comentario del reportante fuera de `en_espera` → 409",
+        "Dos técnicos tomando la misma incidencia a la vez: solo uno gana (el otro → 409)",
+        "Cada acción agrega entrada en `historial_seguimiento` con `$push`"
+      ],
+      "pruebas": [
+        "e2e: `test_reportante_confirma_cierra`, `test_reabrir_dentro_7_dias`, `test_reabrir_fuera_plazo_409`, `test_comentario_solo_en_espera`, `test_tomar_concurrente_un_ganador`, `test_tomar_otra_area_403`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-022",
+      "titulo": "Bitácora de auditoría de acciones administrativas",
+      "epica": "backend",
+      "rol": "dba",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 6,
+      "depende": [
+        "T-019"
+      ],
+      "cubre": [
+        "RF-ADM-05",
+        "RF-SIS-10"
+      ],
+      "descripcion": "Colección `auditoria` (quién, acción, recurso, antes/después resumido, fecha) escrita al crear/editar usuarios, roles y categorías. `GET /auditoria` paginado solo para admin. Índice TTL opcional de 180 días para cuidar los 512 MB.",
+      "archivos": [
+        "backend/app/core/auditoria.py",
+        "backend/app/routers/usuarios.py",
+        "backend/app/routers/roles.py",
+        "backend/app/routers/categorias.py",
+        "backend/scripts/init_db.py",
+        "backend/tests/e2e/test_auditoria.py"
+      ],
+      "criterios": [
+        "Cada POST/PATCH de usuarios, roles y categorías genera un registro",
+        "Nunca se guardan contraseñas ni hashes en la auditoría",
+        "`GET /auditoria` paginado, filtrable por recurso; no admin → 403",
+        "Falla al escribir auditoría no rompe la operación principal (se loguea)"
+      ],
+      "pruebas": [
+        "e2e: `test_auditoria_registra_alta_usuario`, `test_auditoria_sin_password`, `test_auditoria_403_no_admin`, `test_auditoria_paginada`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-023",
+      "titulo": "(Opcional) Estado `retirada` y «Retirar mi reporte» (≤ 15 min, abierta, sin asignar)",
+      "epica": "backend",
+      "rol": "backend",
+      "prioridad": "Podría",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 4,
+      "depende": [
+        "T-036"
+      ],
+      "requiere_aprobacion": true,
+      "cubre": [
+        "CU-03",
+        "RF-TEC-03"
+      ],
+      "descripcion": "⚑ pendiente de aprobación del PO (cambia reglas de negocio o de BD). Nuevo estado `retirada` con `update_one` filtrado por estado (regla 9 de `AGENTS.md`); requiere actualizar la tabla de transiciones y el `$jsonSchema`. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T26 de §6.",
+      "archivos": [
+        "backend/app/routers/incidencias.py",
+        "backend/app/dominio/estados.py",
+        "backend/scripts/init_db.py",
+        "backend/tests/e2e/test_retirar.py"
+      ],
+      "criterios": [
+        "Solo el reportante, dentro de 15 min, en `abierta` y sin técnico asignado",
+        "En cualquier otro caso ⇒ 409"
+      ],
+      "pruebas": [
+        "Pytest: `test_retirar_ok`, `test_retirar_fuera_ventana_409`, `test_retirar_asignada_409`, `test_retirar_otro_usuario`"
+      ],
+      "dod_extra": [
+        "Cambios en `backend/scripts/init_db.py` los hace o aprueba el DBA (propietario único)"
+      ]
+    },
+    {
+      "id": "T-024",
+      "titulo": "BUG: Reportar no bloqueante mientras la IA analiza + reconciliación sin sobrescribir campos",
+      "epica": "ia",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 8,
+      "depende": [],
+      "cubre": [
+        "RF-REP-04",
+        "RF-IA-02",
+        "RF-IA-05",
+        "RNF-02",
+        "RNF-05",
+        "CU-01"
+      ],
+      "descripcion": "Bugs confirmados en `Reportar.tsx`: la UI se bloquea en 'Analizando…' hasta que responde la IA y la sugerencia sobrescribe lo que el usuario ya escribió. Lanzar el análisis en paralelo (React Query mutation) y mostrar el formulario de inmediato con skeletons; al llegar la sugerencia rellenar solo campos no tocados (`isDirty` de react-hook-form), con badge 'Sugerido por IA' por campo; `critica` requiere confirmación explícita; enviar `ia_sugerencia.campos_aceptados`. Si la IA falla/429/503, continuar manual. Ver `docs/algoritmo-foto-ia.md` §1.4 y T3.",
+      "archivos": [
+        "frontend/src/pages/Reportar.tsx",
+        "frontend/src/components/SugerenciaIA.tsx",
+        "frontend/src/schemas/ia.ts",
+        "frontend/src/api/ia.ts"
+      ],
+      "criterios": [
+        "El formulario aparece < 1 s tras elegir la foto (sin esperar a la IA)",
+        "La sugerencia no sobrescribe campos `isDirty`",
+        "Badge 'Sugerido por IA' por campo; editar el campo lo marca como no aceptado",
+        "Prioridad `critica` sugerida requiere confirmación explícita",
+        "Error/429/503 muestra aviso en español y el formulario manual sigue usable; botón 'Continuar sin IA' siempre visible",
+        "Respuesta validada con Zod antes de usarla",
+        "Se envía `contexto` (texto opcional del usuario) en `POST /ia/analizar-imagen`"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `Reportar.ia.test.tsx` › `formulario visible antes de respuesta IA`, `no sobrescribe campo editado`, `critica pide confirmacion`, `continua manual si IA 503`, `envia campos_aceptados`",
+        "Manual: iPhone y Android, 5 fotos reales (capturas/GIF en PR)"
+      ],
+      "dod_extra": [
+        "Video o GIF corto del flujo en el PR"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-025",
+      "titulo": "BUG: /ia consume cupo aunque falle y no tiene caché (SHA-256, cupo solo en miss)",
+      "epica": "ia",
+      "rol": "backend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 6,
+      "depende": [],
+      "cubre": [
+        "RF-IA-07",
+        "RNF-21",
+        "RNF-18"
+      ],
+      "descripcion": "Bug confirmado en `routers/ia.py`: el cupo diario se incrementa aunque el proveedor falle y una misma imagen se cobra cada vez. Calcular SHA-256 de la imagen + pistas + `PROMPT_VERSION` como clave de caché en Redis (TTL 24 h); consumir cupo solo en miss y devolverlo (`DECR`) si el proveedor falla. Respuesta incluye `cache: bool`. Ver `docs/algoritmo-foto-ia.md` §2.2 y T6.",
+      "archivos": [
+        "backend/app/routers/ia.py",
+        "backend/app/schemas/ia.py",
+        "backend/tests/e2e/test_analitica_ia.py"
+      ],
+      "criterios": [
+        "Segunda petición con la misma imagen y pistas responde `cache=true` sin llamar al proveedor ni consumir cupo",
+        "Fallo del proveedor no incrementa el contador del usuario ni el global",
+        "Clave de caché incluye `PROMPT_VERSION` y proveedor",
+        "Si Redis cae, la IA funciona sin caché (degradación controlada)"
+      ],
+      "pruebas": [
+        "e2e: `test_ia_cache_hit_no_consume_cupo`, `test_ia_fallo_devuelve_cupo`, `test_ia_cache_distinta_por_pistas`, `test_ia_sin_redis_funciona`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-026",
+      "titulo": "BUG: /ia confía en el content_type del cliente; validar magic bytes y dimensiones",
+      "epica": "ia",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 5,
+      "depende": [],
+      "cubre": [
+        "RNF-13",
+        "RNF-16",
+        "RF-SIS-03"
+      ],
+      "descripcion": "Bug de seguridad confirmado: `routers/ia.py` acepta lo que diga `Content-Type`. Detectar el tipo real por magic bytes (JPEG `FF D8 FF`, PNG `89 50 4E 47`, WEBP `RIFF....WEBP`), validar dimensiones 200–2600 px y diferenciar 413/415/422. Opcional: re-encode con Pillow para eliminar metadatos. Aplicar la misma verificación al registrar evidencias si es barato. Ver `docs/algoritmo-foto-ia.md` §2.2 y T7.",
+      "archivos": [
+        "backend/app/core/imagen.py",
+        "backend/app/routers/ia.py",
+        "backend/requirements.txt",
+        "backend/tests/e2e/test_analitica_ia.py"
+      ],
+      "criterios": [
+        "Un ejecutable/texto con `Content-Type: image/jpeg` → 415",
+        "PNG enviado como JPEG se acepta con su tipo real",
+        "Imagen de 100 px → 422; > 5 MB → 413",
+        "Mensajes de error en español"
+      ],
+      "pruebas": [
+        "Unitaria: `tests/unit/test_imagen.py` › `test_sniff_jpeg_png_webp`, `test_sniff_rechaza_ejecutable`",
+        "e2e: `test_ia_rechaza_falso_jpeg_415`, `test_ia_png_renombrado_ok`, `test_ia_imagen_pequena_422`, `test_ia_imagen_grande_413`",
+        "Postman: request 'IA › archivo falso' con 415"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-027",
+      "titulo": "BUG: IA sin timeout; timeouts y reintentos en servidor y cliente",
+      "epica": "ia",
+      "rol": "backend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 5,
+      "depende": [],
+      "cubre": [
+        "RNF-02",
+        "RNF-18",
+        "RF-IA-05"
+      ],
+      "descripcion": "Bug confirmado: la llamada al proveedor no tiene timeout explícito. Servidor: timeout 25 s, 1 reintento con backoff + jitter solo en errores transitorios (429/5xx/timeout), luego 503 con mensaje en español. Cliente: 30 s con `AbortController` y cancelación al salir de la pantalla. Ver `docs/algoritmo-foto-ia.md` §T10.",
+      "archivos": [
+        "backend/app/services/ia.py",
+        "backend/app/routers/ia.py",
+        "frontend/src/api/ia.ts",
+        "frontend/src/pages/Reportar.tsx",
+        "backend/tests/e2e/test_analitica_ia.py"
+      ],
+      "criterios": [
+        "Proveedor lento (> 25 s) → 1 reintento y luego 503 controlado",
+        "429 del proveedor → 1 reintento con backoff; 4xx no transitorio → sin reintento",
+        "El cliente aborta a los 30 s y al desmontar Reportar",
+        "El reporte manual nunca queda bloqueado"
+      ],
+      "pruebas": [
+        "e2e: `test_ia_timeout_reintenta_y_503`, `test_ia_429_reintenta_una_vez`, `test_ia_4xx_sin_reintento` (proveedor fake lento)",
+        "Vitest: `ia.test.ts` › `aborta a los 30s`, `cancela al desmontar`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-028",
+      "titulo": "Puerto ProveedorVision + adaptadores Claude y Gemini (desacoplar services/ia.py)",
+      "epica": "ia",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [],
+      "cubre": [
+        "RF-IA-01",
+        "RNF-21"
+      ],
+      "descripcion": "Bug confirmado: `services/ia.py` está acoplado a Anthropic y recrea el cliente en cada request. Crear `backend/app/services/vision/` (`puerto.py` con Protocol `ProveedorVision` + `ErrorProveedor(transitorio)`, `prompt.py`, `claude.py`, `gemini.py`, fábrica `obtener_proveedor()` con cliente reutilizado). `services/ia.py` queda como fachada. Config: `IA_PROVEEDOR=claude|gemini`, `IA_PROVEEDOR_RESPALDO`, `GEMINI_API_KEY`, `GEMINI_MODELO`, `IA_PERMITIR_CAPA_GRATUITA=false`. Ver `docs/algoritmo-foto-ia.md` §3.1 y T5.",
+      "archivos": [
+        "backend/app/services/vision/__init__.py",
+        "backend/app/services/vision/puerto.py",
+        "backend/app/services/vision/prompt.py",
+        "backend/app/services/vision/claude.py",
+        "backend/app/services/vision/gemini.py",
+        "backend/app/services/ia.py",
+        "backend/app/core/config.py",
+        "backend/requirements.txt"
+      ],
+      "criterios": [
+        "Cambiar `IA_PROVEEDOR` no requiere tocar el router",
+        "Cliente SDK creado una sola vez y reutilizado (`max_retries=0`; los reintentos viven en el router)",
+        "Ambos adaptadores validan la salida con `AnalisisImagen.model_validate_json`; respuesta inválida → error controlado, nunca 500",
+        "Cada adaptador traduce sus excepciones a `ErrorProveedor(transitorio=True/False)`",
+        "`IA_PERMITIR_CAPA_GRATUITA=false` impide usar una clave gratuita de Gemini en producción",
+        "Variables nuevas documentadas en README y `.env.example`"
+      ],
+      "pruebas": [
+        "Unitarias: `tests/unit/test_vision.py` › `test_claude_parsea_respuesta`, `test_gemini_parsea_respuesta`, `test_respuesta_malformada_error_no_transitorio`, `test_429_es_transitorio`, `test_fabrica_reutiliza_cliente`, `test_bloquea_capa_gratuita_en_produccion` (dobles de ambos SDK)",
+        "e2e: `test_ia_usa_proveedor_configurado` con proveedor fake",
+        "Manual: 3 fotos reales con cada proveedor (resultado en el PR)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-029",
+      "titulo": "Registro ia_sugerencia y configuración de IA por el administrador",
+      "epica": "ia",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-028"
+      ],
+      "cubre": [
+        "RF-IA-02",
+        "RF-IA-05",
+        "RF-IA-06",
+        "RF-ADM-06",
+        "RNF-18",
+        "RNF-21"
+      ],
+      "descripcion": "El cupo diario (20 por usuario / 300 global) y `IA_HABILITADA` ya existen. Falta: guardar en la incidencia `ia_sugerencia` {modelo, prompt_version, confianza, accion, campos_aceptados} cuando el cliente la envía al crear (nunca autoguardar), y permitir al admin encender/apagar la IA y fijar los límites desde la API (`GET/PATCH /config/ia`, guardado en Mongo con caché Redis).",
+      "archivos": [
+        "backend/app/routers/incidencias.py",
+        "backend/app/routers/config.py",
+        "backend/app/schemas/incidencia.py",
+        "backend/app/routers/ia.py",
+        "backend/scripts/init_db.py",
+        "backend/tests/e2e/test_analitica_ia.py"
+      ],
+      "criterios": [
+        "`ia_sugerencia` se guarda solo si viene en el `POST /incidencias`; validada por Pydantic y `$jsonSchema`",
+        "`PATCH /config/ia` solo admin (otros → 403); cambios efectivos en ≤ 1 min",
+        "IA apagada → 503 controlado en `/ia/analizar-imagen` y el alta manual sigue funcionando",
+        "Ningún dato del usuario (nombre, correo) se envía al proveedor de IA"
+      ],
+      "pruebas": [
+        "e2e: `test_guarda_ia_sugerencia`, `test_incidencia_sin_ia_sugerencia_valida`, `test_config_ia_403_no_admin`, `test_ia_apagada_503`, `test_crear_incidencia_con_ia_caida`, `test_payload_ia_sin_datos_personales`"
+      ],
+      "dod_extra": [
+        "Cambios en `backend/scripts/init_db.py` los hace o aprueba el DBA (propietario único)"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-030",
+      "titulo": "Reglas de confianza (accion) y prompt endurecido contra injection",
+      "epica": "ia",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-028"
+      ],
+      "cubre": [
+        "RF-IA-01",
+        "RF-IA-02",
+        "RF-IA-03",
+        "RF-IA-04"
+      ],
+      "descripcion": "Función pura `decidir(analisis, calidad)` en el servidor → `RespuestaIA {accion: autollenar|sugerir|preguntar|rechazar, mensaje, analisis, cache}`; actualizar `analisisImagenSchema` (Zod) y los mensajes en Reportar. Endurecer prompt: texto en la imagen = dato, nunca `critica` automática, advertencia `texto_con_instrucciones` ⇒ confianza tope 0.79; `PROMPT_VERSION` en la clave de caché. No identificar personas. Ver `docs/algoritmo-foto-ia.md` §T8 y T9.",
+      "archivos": [
+        "backend/app/services/vision/decision.py",
+        "backend/app/services/vision/prompt.py",
+        "backend/app/schemas/ia.py",
+        "backend/app/routers/ia.py",
+        "frontend/src/schemas/ia.ts",
+        "frontend/src/components/SugerenciaIA.tsx"
+      ],
+      "criterios": [
+        "Tabla: (válida, 0.9) → autollenar; 0.6 → sugerir; 0.3 o `no_determinada` → preguntar; `es_incidencia_valida=false` → rechazar; advertencia 'borrosa' con 0.95 → sugerir",
+        "Las 4 fotos adversarias del set no cambian la categoría correcta y generan `texto_con_instrucciones`",
+        "Selfie/meme → `rechazar` con mensaje claro",
+        "Frontend muestra el mensaje según `accion` y Zod valida la respuesta nueva"
+      ],
+      "pruebas": [
+        "Unitaria: `tests/unit/test_decision.py::test_tabla_decision` (parametrizada)",
+        "e2e: `test_ia_respuesta_incluye_accion`",
+        "Manual/eval: 4 fotos adversarias con ambos proveedores",
+        "Vitest: `SugerenciaIA.test.tsx` › `mensaje por accion`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-031",
+      "titulo": "Set de evaluación de IA (40-50 fotos) y script evaluar_ia.py",
+      "epica": "ia",
+      "rol": "qa-devops",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 10,
+      "depende": [
+        "T-028",
+        "T-030"
+      ],
+      "cubre": [
+        "RF-IA-01",
+        "RF-IA-03",
+        "RNF-02"
+      ],
+      "descripcion": "Construir el set de la sección 4.1 (cómputo 10, infraestructura 10, académico 8, no incidencia 6, difíciles 6, adversarias 4) pasando por el pipeline del cliente, etiquetado por 2 personas. Script `backend/scripts/evaluar_ia.py --proveedor claude|gemini --repeticiones 3` con las métricas de la sección 4.2 para decidir proveedor. Ver `docs/algoritmo-foto-ia.md` §4 y T13.",
+      "archivos": [
+        "backend/scripts/evaluar_ia.py",
+        "backend/tests/eval_ia/etiquetas.jsonl",
+        "docs/evidencias/eval-ia.md"
+      ],
+      "criterios": [
+        "40–50 fotos etiquetadas por 2 personas con kappa de Cohen reportado",
+        "Sin rostros identificables ni EXIF",
+        "El script imprime exactitud por categoría, macro-F1, matriz de confusión, calibración, p50/p95 y costo por proveedor",
+        "Decisión de proveedor documentada con datos"
+      ],
+      "pruebas": [
+        "Unitaria: `tests/unit/test_evaluar_ia.py` › `test_metricas_con_predicciones_fijas`",
+        "Manual: corrida completa con ambos proveedores (salida en el PR)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-032",
+      "titulo": "IA: detalle_infra en AnalisisImagen + PROMPT_VERSION=v2 + mapeo determinista construir_incidencia",
+      "epica": "ia",
+      "rol": "lider",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-028"
+      ],
+      "cubre": [
+        "RF-IA-01",
+        "RF-IA-02"
+      ],
+      "descripcion": "Extender `AnalisisImagen` con `detalle_infra {tipo_dano, riesgo_seguridad}` (enums), `PROMPT_VERSION=v2` y función pura `construir_incidencia(a, ubic) → IncidenciaIn`. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T16 de §6.",
+      "archivos": [
+        "backend/app/schemas/ia.py",
+        "backend/app/services/vision/prompt.py",
+        "backend/app/services/vision/mapeo.py",
+        "backend/tests/unit/test_mapeo.py"
+      ],
+      "criterios": [
+        "Para cualquier `AnalisisImagen` válido de infraestructura el mapeo produce un `IncidenciaIn` válido",
+        "`requiere_*` = `false` en el mapeo",
+        "`critica` y riesgo `alto` jamás salen del mapeo"
+      ],
+      "pruebas": [
+        "Pytest: tests de tabla del mapeo",
+        "Property test (hypothesis): salidas aleatorias válidas del esquema siempre producen `IncidenciaIn` válido"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-033",
+      "titulo": "Compuertas G1–G9 en servidor + accion agentico|formulario|duplicado + analisis_id",
+      "epica": "ia",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-030",
+        "T-032"
+      ],
+      "cubre": [
+        "RF-IA-02",
+        "RF-IA-03",
+        "RNF-12"
+      ],
+      "descripcion": "`evaluar_compuertas()` G1–G9 en el servidor; `/ia/analizar-imagen` responde `accion: agentico|formulario|duplicado` con `motivos[]` y emite `analisis_id` (Redis, TTL 30 min, ligado a usuario + sha256). Ver `docs/algoritmo-foto-ia.md` sección A y tarea T19 de §6.",
+      "archivos": [
+        "backend/app/services/vision/compuertas.py",
+        "backend/app/routers/ia.py",
+        "backend/app/schemas/ia.py",
+        "backend/tests/unit/test_compuertas.py",
+        "backend/tests/e2e/test_analitica_ia.py"
+      ],
+      "criterios": [
+        "Cada compuerta tiene un motivo legible en español",
+        "El cliente no puede forzar `agentico`",
+        "`analisis_id` de otro usuario ⇒ 404"
+      ],
+      "pruebas": [
+        "Pytest de tabla: un caso que pasa todo + un caso por cada compuerta fallida",
+        "e2e: `test_analisis_id_otro_usuario_404`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-034",
+      "titulo": "require_permisos múltiple + cupos agénticos (10/usuario/día, 3/aula/hora) + kill switch",
+      "epica": "ia",
+      "rol": "qa-devops",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 5,
+      "depende": [
+        "T-029"
+      ],
+      "cubre": [
+        "RF-IA-07",
+        "RF-ADM-06",
+        "RNF-21"
+      ],
+      "descripcion": "`require_permisos(*p)` (los 3 permisos del modo agéntico), cupos agénticos 10/usuario/día y 3/aula/hora, *kill switch* y `ia_categorias_agenticas` (fase 1: `[\"infraestructura\"]`). Ver `docs/algoritmo-foto-ia.md` sección A y tarea T20 de §6.",
+      "archivos": [
+        "backend/app/core/security.py",
+        "backend/app/core/config.py",
+        "backend/app/routers/ia.py",
+        "backend/tests/e2e/test_cupos_agenticos.py"
+      ],
+      "criterios": [
+        "Falta cualquier permiso ⇒ 403",
+        "Cupo agotado ⇒ 429 y la UI cae al formulario",
+        "Kill switch off ⇒ siempre `formulario`",
+        "`ia_categorias_agenticas` por defecto solo `infraestructura`"
+      ],
+      "pruebas": [
+        "Pytest: uno por permiso faltante, uno por cada cupo y uno por el kill switch"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-035",
+      "titulo": "Auditoría y métricas de IA: ia_sugerencia, colección ia_eventos, POST /ia/eventos y tablero",
+      "epica": "ia",
+      "rol": "dba",
+      "prioridad": "Podría",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 8,
+      "depende": [
+        "T-029",
+        "T-036"
+      ],
+      "cubre": [
+        "RNF-21",
+        "RF-ADM-06"
+      ],
+      "descripcion": "Cada ticket con IA guarda `modo`, `modelo`, `version_prompt`, `confianza`, `campos_autollenados`; colección `ia_eventos` (TTL 180 días) + `POST /ia/eventos`; tablero con tasa de deshacer, edición, corrección técnica ≤ 72 h, cobertura, tiempo toque→folio, compuertas fallidas, latencia y costo estimado; alerta si el costo diario supera un umbral. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T24 y T14 de §6.",
+      "archivos": [
+        "backend/app/routers/ia.py",
+        "backend/app/routers/analitica.py",
+        "backend/app/schemas/ia.py",
+        "backend/scripts/init_db.py",
+        "backend/tests/e2e/test_ia_eventos.py"
+      ],
+      "criterios": [
+        "Cada ticket con IA guarda `modo`, `modelo`, `version_prompt`, `confianza`, `campos_autollenados`",
+        "Cada oferta agéntica genera exactamente un evento final",
+        "`ia_eventos` con TTL de 180 días; sin datos personales",
+        "Métricas solo para admin (otros → 403); alerta de costo diario"
+      ],
+      "pruebas": [
+        "Pytest: `test_ia_evento_registrado`, `test_un_evento_final_por_oferta`, `test_metricas_agregadas`, `test_metricas_ia_403_no_admin`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-036",
+      "titulo": "Modo agéntico: POST /incidencias/desde-foto con Idempotency-Key, compensación y evidencia por el servidor",
+      "epica": "ia",
+      "rol": "backend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 12,
+      "depende": [
+        "T-032",
+        "T-033",
+        "T-034"
+      ],
+      "cubre": [
+        "RF-REP-04",
+        "RF-IA-02",
+        "RF-IA-06",
+        "CU-01",
+        "CU-02"
+      ],
+      "descripcion": "⚑ pendiente de aprobación del PO (cambia reglas de negocio o de BD). Endpoint que re-evalúa las compuertas, sube la evidencia desde el servidor, hace `insert_one` con la evidencia embebida + `ia_sugerencia`, compensa (borra el objeto si falla el insert), índice único *sparse* `idempotency_key` en `init_db.py` (lo crea el DBA) y barrido de objetos huérfanos. Solo categorías en `ia_categorias_agenticas` (fase 1: `infraestructura`). Ver `docs/algoritmo-foto-ia.md` sección A y tarea T21 de §6.",
+      "archivos": [
+        "backend/app/routers/incidencias_foto.py",
+        "backend/app/services/vision/agentico.py",
+        "backend/app/main.py",
+        "backend/scripts/init_db.py",
+        "backend/scripts/limpiar_huerfanos.py",
+        "backend/tests/e2e/test_desde_foto.py",
+        "postman/UTM-Desk.postman_collection.json"
+      ],
+      "criterios": [
+        "Dos POST con la misma clave ⇒ un solo ticket y la misma respuesta",
+        "Misma clave con otro payload ⇒ 422",
+        "Concurrentes ⇒ uno 201 y otro 409",
+        "Si falla el insert no queda objeto en B2; nunca existe un ticket agéntico sin evidencia",
+        "Compuerta fallida ⇒ 422 sin efectos",
+        "Categoría fuera de `ia_categorias_agenticas` ⇒ modo asistido (fase 1: solo infraestructura)"
+      ],
+      "pruebas": [
+        "Pytest: `test_desde_foto_reintento_idempotente`, `test_desde_foto_payload_distinto_422`, `test_desde_foto_concurrente_201_409` (asyncio.gather), `test_desde_foto_fallo_storage_sin_ticket`, `test_desde_foto_fallo_insert_borra_objeto`, `test_desde_foto_compuerta_fallida_422`, `test_desde_foto_categoria_no_agentica`",
+        "Postman: carpeta 'Modo agéntico' (201, 409, 422)"
+      ],
+      "dod_extra": [
+        "Cambios en `backend/scripts/init_db.py` los hace o aprueba el DBA (propietario único)"
+      ],
+      "requiere_aprobacion": true
+    },
+    {
+      "id": "T-037",
+      "titulo": "Modo agéntico UI: «Reportar con IA» de un toque con ventana de 10 s [Deshacer] [Editar]",
+      "epica": "ia",
+      "rol": "frontend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 8,
+      "depende": [
+        "T-024",
+        "T-036",
+        "T-041",
+        "T-047",
+        "T-063"
+      ],
+      "cubre": [
+        "RF-REP-04",
+        "RNF-05",
+        "RNF-02"
+      ],
+      "descripcion": "Botón de un toque, tarjeta con ventana de 10 s [Deshacer] [Editar], pausa en `visibilitychange`, pantalla de éxito con folio, opción «Llenar sin IA» siempre visible y preferencia para desactivar el modo. Usa `analisis_id` y `Idempotency-Key`; si `accion` ≠ `agentico` abre el formulario prellenado (T-024). Ver `docs/algoritmo-foto-ia.md` sección A y tarea T23 de §6.",
+      "archivos": [
+        "frontend/src/pages/ReportarRapido.tsx",
+        "frontend/src/components/DeshacerReporte.tsx",
+        "frontend/src/api/ia.ts",
+        "frontend/src/schemas/ia.ts",
+        "frontend/src/App.tsx"
+      ],
+      "criterios": [
+        "Deshacer en la ventana ⇒ ninguna petición de creación sale (verificado en red)",
+        "App en segundo plano ⇒ la ventana se pausa y no se envía",
+        "Lectores de pantalla anuncian la cuenta regresiva (`aria-live`)",
+        "Botones ≥ 44 px; «Llenar sin IA» siempre visible",
+        "Preferencia para desactivar el modo agéntico persistida"
+      ],
+      "pruebas": [
+        "Vitest con fake timers: `ReportarRapido.test.tsx` › `deshacer no envia`, `editar abre formulario`, `expira y envia`, `pestaña oculta pausa`",
+        "Manual: iOS Safari y Android Chrome (GIF en el PR)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-038",
+      "titulo": "Detección de duplicados con huellas_reportes (TTL 24 h) y adhesiones",
+      "epica": "ia",
+      "rol": "dba",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 8,
+      "depende": [
+        "T-033"
+      ],
+      "requiere_aprobacion": true,
+      "cubre": [
+        "RF-COO-06",
+        "RNF-12",
+        "RNF-17"
+      ],
+      "descripcion": "⚑ pendiente de aprobación del PO (cambia reglas de negocio o de BD). Colección `huellas_reportes` (TTL 24 h) con sha256 y dHash por aula+categoría; si el usuario confirma «Sí, es el mismo» se suma una adhesión y no se crea ticket. Nunca consultar `incidencias_campus` fuera de alcance. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T22 de §6.",
+      "archivos": [
+        "backend/scripts/init_db.py",
+        "backend/app/services/vision/duplicados.py",
+        "backend/app/routers/ia.py",
+        "backend/tests/e2e/test_duplicados.py"
+      ],
+      "criterios": [
+        "Misma aula+categoría con sha256 igual o dHash ≤ 10 en 24 h ⇒ `duplicado`",
+        "La respuesta no expone datos del otro reportante",
+        "«Sí» ⇒ +1 adhesión y ningún ticket nuevo"
+      ],
+      "pruebas": [
+        "Pytest: `test_duplicado_exacto`, `test_casi_duplicado`, `test_otra_aula_no_dup`, `test_mas_24h_no_dup`, `test_respuesta_sin_pii_ajena`"
+      ],
+      "dod_extra": []
+    },
+    {
+      "id": "T-039",
+      "titulo": "Piloto controlado del modo agéntico (infraestructura, personal/docentes, 2 semanas)",
+      "epica": "ia",
+      "rol": "lider",
+      "prioridad": "Podría",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 4,
+      "depende": [
+        "T-035",
+        "T-037"
+      ],
+      "cubre": [
+        "RNF-05",
+        "RNF-16"
+      ],
+      "descripcion": "Activar el modo agéntico solo para infraestructura y un grupo (personal/docentes) durante 2 semanas; revisar métricas antes de abrirlo a alumnos. Puede extenderse después de la defensa. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T27 de §6.",
+      "archivos": [
+        "docs/evidencias/piloto-agentico.md"
+      ],
+      "criterios": [
+        "Informe con tasa de deshacer < 10 %, corrección técnica < 8 %, 0 incidentes de privacidad",
+        "Decisión documentada del umbral G3"
+      ],
+      "pruebas": [
+        "N/A: revisión de métricas del tablero de IA (T-035)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-040",
+      "titulo": "Capa de API tipada: Zod espejo de Pydantic (entradas y respuestas) y hooks useQuery",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 8,
+      "depende": [
+        "T-017",
+        "T-042"
+      ],
+      "cubre": [
+        "RF-SIS-03",
+        "RNF-07"
+      ],
+      "descripcion": "Partir de `src/api/client.ts`: módulos `api/incidencias.ts`, `api/usuarios.ts`, `api/analitica.ts`, `api/catalogos.ts` que validan cada respuesta con Zod (`src/schemas/*`) y exponen hooks (`useIncidencias`, `useIncidencia`, `useBuscar`, `useResumen`, …) con claves de query centralizadas e invalidación tras mutaciones. Toast global de errores en español por tipo (400/401/403/409). Inconsistencias a corregir: hoy no se usa `useQuery` en ninguna página y Zod no refleja Pydantic: edificio/aula ≤ 60, piso -5..50, equipos_afectados ≤ 10000, estudiantes_impactados ≤ 100000, insumos ≤ 10 elementos de 1..60, `puerto_uplink` mismo mínimo que el backend.",
+      "archivos": [
+        "frontend/src/api/client.ts",
+        "frontend/src/api/*.ts",
+        "frontend/src/schemas/*.ts",
+        "frontend/src/main.tsx",
+        "frontend/src/components/Toast.tsx"
+      ],
+      "criterios": [
+        "Cada endpoint usado por la UI tiene esquema Zod y tipo TS inferido (sin `any`)",
+        "Respuesta que no cumple el esquema produce error controlado, no pantalla blanca",
+        "Mutaciones invalidan las queries afectadas (lista y detalle)",
+        "Errores 400 muestran mensajes por campo usando `detalle`",
+        "Esquemas de entrada Zod con los mismos límites que Pydantic (tabla en el PR: campo · Pydantic · Zod)"
+      ],
+      "pruebas": [
+        "Vitest: `api/client.test.ts` › `mapea 400/401/403/409`, `valida respuesta con zod`",
+        "Vitest + MSW: `api/incidencias.test.ts` › `useIncidencias devuelve lista tipada`",
+        "Vitest: `schemas/incidencia.test.ts` › `limites iguales a pydantic` (casos borde por campo)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-041",
+      "titulo": "BUG: Reportar.tsx nunca sube la foto como evidencia (firma → PUT → registrar)",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 6,
+      "depende": [],
+      "cubre": [
+        "RF-REP-03",
+        "RF-REP-05",
+        "RF-SIS-04",
+        "CU-02"
+      ],
+      "descripcion": "Prioridad máxima: hoy, tras `POST /incidencias`, no se llama a `/evidencias/firma` → PUT a B2 → `POST /evidencias`, así que la foto se pierde. Crear el hook `useSubirEvidencia` (3 pasos, reintento ×3 del PUT con backoff, reintento del registro sin volver a subir) y usarlo en Reportar con el derivado `evidencia`. Ver `docs/algoritmo-foto-ia.md` §0 y T4.",
+      "archivos": [
+        "frontend/src/hooks/useSubirEvidencia.ts",
+        "frontend/src/api/evidencias.ts",
+        "frontend/src/pages/Reportar.tsx"
+      ],
+      "criterios": [
+        "Cada reporte con foto queda con 1 evidencia registrada en `evidencias_adjuntas`",
+        "Reintento ×3 del PUT; si falla el registro se reintenta sin volver a subir el archivo",
+        "Si la subida falla, el ticket se crea igual y se muestra 'No se pudo adjuntar la foto, reintentar'",
+        "Los 3 pasos se ejecutan en orden y solo después de tener `incidencia_id`"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `useSubirEvidencia.test.ts` › `ejecuta 3 pasos en orden`, `reintenta put 3 veces`, `reintenta solo registro`, `ticket creado aunque falle la subida`",
+        "Manual: reportar con foto desde iPhone y Android y verificar el objeto en B2 y la evidencia en Atlas",
+        "Postman (existente): carpeta Evidencias sigue en verde"
+      ],
+      "dod_extra": [
+        "Captura del documento en Atlas con `evidencias_adjuntas` poblado"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-042",
+      "titulo": "BUG: api/client.ts robusto (error/detalle, 401 cierra sesión, 404/413/429/503, JSON no válido) y QueryClient",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 5,
+      "depende": [
+        "T-016"
+      ],
+      "cubre": [
+        "RF-SIS-03",
+        "RNF-07"
+      ],
+      "descripcion": "Hoy `client.ts` solo lee `detail`, un 401 no cierra sesión, no maneja 404/413/429/503 y `JSON.parse` revienta con respuestas no JSON. Además el `QueryClient` reintenta 4xx y mutaciones. Leer `{error, detalle}`, clases de error por código, 401 → limpiar sesión (o refresh cuando exista T-014), parseo seguro y defaults `retry` solo para red/5xx en queries y 0 en mutaciones.",
+      "archivos": [
+        "frontend/src/api/client.ts",
+        "frontend/src/main.tsx",
+        "frontend/src/api/client.test.ts"
+      ],
+      "criterios": [
+        "Mensajes en español para 400/401/403/404/409/413/429/503 y error de red",
+        "Respuesta HTML/texto no rompe la app (error controlado)",
+        "401 limpia la sesión y redirige a login",
+        "QueryClient: sin reintentos en 4xx ni en mutaciones"
+      ],
+      "pruebas": [
+        "Vitest: `client.test.ts` › `lee error y detalle`, `401 cierra sesion`, `429 con retry-after`, `respuesta no json`, `queryclient no reintenta 4xx`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-043",
+      "titulo": "BUG: Reportar.tsx no envía `horas` en el detalle académico (422 al crear)",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 2,
+      "depende": [],
+      "cubre": [
+        "RF-REP-01",
+        "RF-REP-02",
+        "CU-01"
+      ],
+      "descripcion": "Bug real: `detalleVacio('academico')` en `frontend/src/pages/Reportar.tsx:24` no incluye `horas`, así que el formulario académico manual falla con 422. Prioridad alta. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T15 de §6.",
+      "archivos": [
+        "frontend/src/pages/Reportar.tsx",
+        "frontend/src/pages/Reportar.test.tsx"
+      ],
+      "criterios": [
+        "El formulario académico manual crea el ticket sin 422",
+        "Los detalles vacíos de las 3 categorías coinciden con los campos requeridos de Pydantic"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `Reportar.test.tsx` › `academico envia horas y crea ticket`",
+        "Manual: crear incidencia académica contra la API local"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-044",
+      "titulo": "Login real, renovación automática de sesión, logout y guardas por rol",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [
+        "T-014",
+        "T-040",
+        "T-042"
+      ],
+      "cubre": [
+        "RF-GEN-01",
+        "RF-GEN-02",
+        "RF-GEN-03",
+        "RNF-11"
+      ],
+      "descripcion": "Access token solo en memoria (zustand sin persistir). En 401, el cliente llama una vez a `/auth/refresh` (con `credentials: 'include'`), reintenta la petición y, si falla, redirige a login. Al abrir la app intenta refresh silencioso. Logout desde el perfil. `RequirePermiso` y `AppShell` muestran solo pantallas/botones permitidos.",
+      "archivos": [
+        "frontend/src/auth/store.ts",
+        "frontend/src/auth/RequirePermiso.tsx",
+        "frontend/src/api/client.ts",
+        "frontend/src/pages/Login.tsx",
+        "frontend/src/components/AppShell.tsx",
+        "frontend/src/App.tsx"
+      ],
+      "criterios": [
+        "El access token no aparece en localStorage/sessionStorage",
+        "Varias peticiones con 401 simultáneas disparan un solo refresh",
+        "Recargar la página mantiene la sesión vía refresh silencioso",
+        "Logout limpia estado y caché de React Query",
+        "Credenciales inválidas y 429 muestran mensaje en español"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `auth.test.ts` › `refresca y reintenta en 401`, `un solo refresh concurrente`, `redirige a login si refresh falla`, `logout limpia cache`",
+        "Vitest: `RequirePermiso.test.tsx` › `oculta ruta sin permiso`"
+      ],
+      "dod_extra": [
+        "Capturas de login (claro/oscuro, móvil/escritorio)"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-045",
+      "titulo": "Mis reportes conectado a la API (lista filtrable por estado)",
+      "epica": "frontend",
+      "rol": "backend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 5,
+      "depende": [
+        "T-040"
+      ],
+      "cubre": [
+        "RF-REP-07",
+        "CU-05"
+      ],
+      "descripcion": "Reemplazar los datos de ejemplo de `MisTickets.tsx` por `GET /incidencias` del usuario: chips de estado, badge de prioridad, fecha relativa, paginación/scroll infinito, pull-to-refresh y estados vacío/carga/error.",
+      "archivos": [
+        "frontend/src/pages/MisTickets.tsx",
+        "frontend/src/components/TarjetaIncidencia.tsx",
+        "frontend/src/api/incidencias.ts"
+      ],
+      "criterios": [
+        "Sin datos de ejemplo en el código",
+        "Filtro por estado se refleja en la URL (`?estado=`)",
+        "Estados vacío, cargando (skeleton) y error con 'Reintentar'",
+        "Tocar una tarjeta abre el detalle (T-046)",
+        "Botones táctiles ≥ 44×44 px"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `MisTickets.test.tsx` › `muestra lista`, `filtra por estado`, `estado vacío`, `error con reintentar`"
+      ],
+      "dod_extra": [
+        "Capturas móvil/escritorio"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-046",
+      "titulo": "Detalle de incidencia con evidencias y bitácora en línea de tiempo",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 8,
+      "depende": [
+        "T-040"
+      ],
+      "cubre": [
+        "RF-REP-08",
+        "RF-DIR-05",
+        "CU-03",
+        "CU-02"
+      ],
+      "descripcion": "Nueva página `/incidencias/:id`: datos universales, `detalle_especifico` renderizado según categoría, galería de evidencias (miniaturas que piden `GET .../evidencias/{id}/url` al abrir; PDF abre en pestaña) y `historial_seguimiento` como timeline. Zona de acciones según permisos (se llena en T-052/T-053).",
+      "archivos": [
+        "frontend/src/pages/DetalleIncidencia.tsx",
+        "frontend/src/components/Timeline.tsx",
+        "frontend/src/components/GaleriaEvidencias.tsx",
+        "frontend/src/App.tsx"
+      ],
+      "criterios": [
+        "URLs firmadas se piden bajo demanda y se renuevan si expiraron (5 min)",
+        "Directivo ve el detalle en solo lectura (sin botones de acción)",
+        "404/403 muestran pantalla amigable",
+        "Timeline muestra estado, autor, horas y comentario en orden cronológico"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `DetalleIncidencia.test.tsx` › `renderiza detalle polimórfico por categoría`, `timeline ordenado`, `solo lectura para directivo`, `404 amigable`"
+      ],
+      "dod_extra": [
+        "Capturas de las 3 categorías"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-047",
+      "titulo": "Procesamiento de foto en el cliente: orientación, derivados 2048/1280/320, sin EXIF (incluye bug initialQuality)",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 8,
+      "depende": [
+        "T-064"
+      ],
+      "cubre": [
+        "RF-REP-03",
+        "RNF-04",
+        "RNF-16"
+      ],
+      "descripcion": "Crear `frontend/src/lib/imagen.ts` (Worker si hay OffscreenCanvas): aplicar orientación EXIF, generar derivados JPEG `evidencia` 2048 px q0.85, `ia` 1280 px q0.80 y `miniatura` 320 px q0.7, eliminando metadatos por recodificación; decodificar con `createImageBitmap` y rechazar > 30 MB. Bug confirmado: hoy `browser-image-compression` no fija `initialQuality` (arranca en 1 e itera); si se mantiene la librería, fijar `initialQuality: 0.8`. JPEG y no WebP porque Safari no codifica WebP en canvas. Ver `docs/algoritmo-foto-ia.md` §1.2 y T1.",
+      "archivos": [
+        "frontend/src/lib/imagen.ts",
+        "frontend/src/lib/imagen.worker.ts",
+        "frontend/src/lib/imagen.test.ts",
+        "frontend/src/pages/Reportar.tsx",
+        "docs/algoritmo-foto-ia.md"
+      ],
+      "criterios": [
+        "Genera derivados 2048/1280/320 en JPEG",
+        "Orientación correcta en fotos verticales de iPhone y Android (prueba manual con 4 orientaciones)",
+        "El blob resultante no contiene EXIF/GPS (verificado con `exiftool`)",
+        "`accept=\"image/jpeg,image/png,image/webp\"` en el input; `initialQuality` fijado",
+        "Probado en iOS Safari (≥ 17) y Android Chrome; tiempo de proceso p95 < 1.5 s en teléfono medio",
+        "La UI sigue respondiendo durante el procesamiento"
+      ],
+      "pruebas": [
+        "Vitest: `imagen.test.ts` › `genera 3 derivados con lado maximo`, `salida jpeg`, `sin exif`, `corrige orientacion 6`, `rechaza mayor a 30MB` (fixtures en `src/lib/__fixtures__/`)",
+        "Manual: `exiftool` sobre derivados de iPhone (HEIC) y Android; 4 orientaciones"
+      ],
+      "dod_extra": [
+        "Tiempos medidos en 2 teléfonos anotados en el PR"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-048",
+      "titulo": "Adjuntar evidencias desde el detalle (hasta 10, tipos, progreso) reutilizando useSubirEvidencia",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [
+        "T-041",
+        "T-046"
+      ],
+      "cubre": [
+        "RF-REP-05",
+        "RF-TEC-05",
+        "RF-SIS-04",
+        "CU-02"
+      ],
+      "descripcion": "En el detalle, permitir a reportante y técnico adjuntar más evidencias (fotos procesadas o PDF) usando el hook `useSubirEvidencia` creado en el bug de Reportar. Progreso real del PUT (XHR), cancelación y límite de 10 por incidencia (JPG, PNG, WEBP, PDF ≤ 10 MB).",
+      "archivos": [
+        "frontend/src/components/SubirEvidencia.tsx",
+        "frontend/src/pages/DetalleIncidencia.tsx",
+        "frontend/src/hooks/useSubirEvidencia.ts"
+      ],
+      "criterios": [
+        "Barra de progreso real durante el PUT",
+        "Tipo/peso inválido o evidencia 11 → mensaje claro antes de pedir firma",
+        "Firma expirada (5 min) se renueva automáticamente una vez",
+        "La galería del detalle se actualiza al terminar"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `SubirEvidencia.test.tsx` › `sube pdf`, `rechaza tipo invalido`, `limite 10`, `renueva firma expirada`",
+        "Manual: subir foto y PDF desde iPhone y Android a B2 (capturas)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-049",
+      "titulo": "Reportar completo: foto inicial, detalle polimórfico, validación al salir del campo, etiquetas legibles y folio",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [
+        "T-040",
+        "T-041",
+        "T-047"
+      ],
+      "cubre": [
+        "RF-REP-01",
+        "RF-REP-02",
+        "RF-REP-03",
+        "RF-REP-06",
+        "RF-SIS-01",
+        "CU-01"
+      ],
+      "descripcion": "Completar `Reportar.tsx` (ya llama a la API): primer paso cámara/galería con `lib/imagen.ts`, formulario con react-hook-form + Zod donde los campos de `detalle_especifico` cambian según categoría, y pantalla de éxito con el folio (INC-AAAA-MMDD-CAT-NNNN) y estado de la subida de la foto.",
+      "archivos": [
+        "frontend/src/pages/Reportar.tsx",
+        "frontend/src/schemas/incidencia.ts",
+        "frontend/src/components/CamposCategoria.tsx",
+        "frontend/src/pages/ReporteEnviado.tsx",
+        "frontend/src/lib/etiquetas.ts"
+      ],
+      "criterios": [
+        "`<input type=file accept=image/* capture=environment>` abre cámara en móvil y galería como alternativa",
+        "Cambiar de categoría limpia los campos del detalle anterior",
+        "Errores 400 del backend se muestran junto al campo correspondiente",
+        "Pantalla final muestra folio y botón 'Ver mi reporte'",
+        "Formulario usable con teclado y lector de pantalla (labels en todos los campos)",
+        "react-hook-form en `mode: 'onBlur'` (doc §7.1): el error aparece al salir del campo",
+        "Cada 400 del backend se mapea al campo (`setError`) usando `detalle`",
+        "Enums con etiquetas humanas desde `src/lib/etiquetas.ts` (critica → Crítica, filtracion → Filtración)"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `Reportar.test.tsx` › `muestra campos por categoria`, `envia y muestra folio`, `muestra error 400 por campo`",
+        "Postman (existente): `POST /incidencias` 201 y 400 siguen pasando",
+        "Vitest: `Reportar.test.tsx` › `error al salir del campo`, `etiquetas legibles`"
+      ],
+      "dod_extra": [
+        "Capturas del flujo en iPhone y Android"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-050",
+      "titulo": "Bandeja del técnico conectada (asignadas y sin asignar de su área)",
+      "epica": "frontend",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 5,
+      "depende": [
+        "T-040"
+      ],
+      "cubre": [
+        "RF-TEC-01",
+        "CU-05"
+      ],
+      "descripcion": "Reemplazar datos de ejemplo de `Bandeja.tsx`: pestañas 'Mías' y 'Sin asignar', orden por prioridad y antigüedad, indicadores de SLA (antigüedad) y acceso al detalle. Botón 'Tomar' visible cuando exista T-021.",
+      "archivos": [
+        "frontend/src/pages/Bandeja.tsx",
+        "frontend/src/api/incidencias.ts"
+      ],
+      "criterios": [
+        "Sin datos de ejemplo",
+        "Orden: critica > alta > media > baja y, a igual prioridad, más antigua primero",
+        "Solo aparecen incidencias del área del técnico (alcance del backend)",
+        "Refresco automático al volver a la app (refetchOnWindowFocus)"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `Bandeja.test.tsx` › `ordena por prioridad y antiguedad`, `pestaña sin asignar`, `estado vacío`"
+      ],
+      "dod_extra": [
+        "Capturas móvil/escritorio"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-051",
+      "titulo": "Control de calidad de la foto (Laplaciano + brillo) con aviso no bloqueante",
+      "epica": "frontend",
+      "rol": "lider",
+      "prioridad": "Debería",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-047"
+      ],
+      "cubre": [
+        "RF-REP-03",
+        "RNF-05"
+      ],
+      "descripcion": "Sobre una copia gris de 512 px calcular varianza del Laplaciano (borrosa) y brillo medio (oscura/sobreexpuesta); umbrales en `CONFIG_FOTO`. Aviso con 'Repetir' y 'Usar de todos modos'. Enviar `calidad_cliente` al servidor como pista. Ver `docs/algoritmo-foto-ia.md` §1.4 paso 3 y T2.",
+      "archivos": [
+        "frontend/src/lib/calidad.ts",
+        "frontend/src/lib/calidad.test.ts",
+        "frontend/src/components/AvisoCalidad.tsx",
+        "frontend/src/pages/Reportar.tsx"
+      ],
+      "criterios": [
+        "Pruebas unitarias con imágenes sintéticas (nítida / desenfocada / negra / blanca)",
+        "El aviso ofrece 'Repetir' y 'Usar de todos modos' (no bloquea)",
+        "Umbrales centralizados en `CONFIG_FOTO` y documentados",
+        "Se envía `calidad_cliente` en `POST /ia/analizar-imagen`"
+      ],
+      "pruebas": [
+        "Vitest: `calidad.test.ts` › `nitida pasa`, `desenfocada detectada`, `negra detectada`, `blanca detectada`",
+        "Manual: 5 fotos reales (nítida, borrosa, oscura, contraluz, normal)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-052",
+      "titulo": "Registrar seguimiento: estado, horas y comentario; cambio de prioridad y cierre",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 6,
+      "depende": [
+        "T-046"
+      ],
+      "cubre": [
+        "RF-TEC-02",
+        "RF-TEC-03",
+        "RF-COO-03",
+        "RF-COO-04",
+        "CU-03"
+      ],
+      "descripcion": "Hoja inferior (bottom sheet) en el detalle para `PATCH /incidencias/{id}/seguimiento`: el selector solo ofrece transiciones válidas desde el estado actual (tabla 9.4 replicada en `src/lib/estados.ts`), horas ≥ 0 con decimales, comentario obligatorio. Coordinador: cambiar prioridad y cerrar resueltas.",
+      "archivos": [
+        "frontend/src/components/FormSeguimiento.tsx",
+        "frontend/src/lib/estados.ts",
+        "frontend/src/pages/DetalleIncidencia.tsx"
+      ],
+      "criterios": [
+        "Solo se muestran transiciones válidas; un 409 del backend se explica en español",
+        "Tras guardar, el timeline y el estado se actualizan sin recargar",
+        "Botones visibles solo con el permiso correspondiente",
+        "Doble clic no envía dos veces (botón deshabilitado mientras guarda)"
+      ],
+      "pruebas": [
+        "Vitest: `estados.test.ts` › `transiciones iguales a tabla 9.4`",
+        "Vitest + MSW: `FormSeguimiento.test.tsx` › `envia seguimiento`, `muestra 409`, `oculta para reportante`"
+      ],
+      "dod_extra": [
+        "Capturas"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-053",
+      "titulo": "Etiquetas técnicas: chips para agregar/quitar con sugerencias",
+      "epica": "frontend",
+      "rol": "dba",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 4,
+      "depende": [
+        "T-046"
+      ],
+      "cubre": [
+        "RF-TEC-04",
+        "RF-SIS-07",
+        "CU-04"
+      ],
+      "descripcion": "Componente `EditorTags` en el detalle: input con autocompletado desde `/analitica/tags` (etiquetas usadas antes), normalización en vivo igual que el backend (minúsculas, sin acentos, espacios → `_`, 2-30), `POST/DELETE /incidencias/{id}/tags`.",
+      "archivos": [
+        "frontend/src/components/EditorTags.tsx",
+        "frontend/src/lib/tags.ts",
+        "frontend/src/pages/DetalleIncidencia.tsx"
+      ],
+      "criterios": [
+        "La vista previa del tag coincide con la normalización del backend",
+        "Agregar un tag existente no duplica (refleja $addToSet)",
+        "Quitar un tag actualiza la lista (refleja $pull)",
+        "Navegable con teclado (Enter agrega, Backspace quita el último)"
+      ],
+      "pruebas": [
+        "Vitest: `tags.test.ts` › `normaliza 'Cableado Dañado' a 'cableado_danado'`, `rechaza 1 caracter`",
+        "Vitest + MSW: `EditorTags.test.tsx` › `agrega y quita`, `no duplica`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-054",
+      "titulo": "Tablero del coordinador con filtros y asignación/reasignación de técnico",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 6,
+      "depende": [
+        "T-050"
+      ],
+      "cubre": [
+        "RF-COO-01",
+        "RF-COO-02",
+        "CU-03",
+        "CU-05"
+      ],
+      "descripcion": "Vista de tablero (lista en móvil, tabla en escritorio) con filtros por estado, prioridad, edificio y técnico (en la URL). Acción 'Asignar' abre selector de técnicos del área (`GET /usuarios?rol=tecnico&area=`) y llama `PATCH /incidencias/{id}/asignacion`.",
+      "archivos": [
+        "frontend/src/pages/Bandeja.tsx",
+        "frontend/src/components/FiltrosTablero.tsx",
+        "frontend/src/components/SelectorTecnico.tsx"
+      ],
+      "criterios": [
+        "Filtros combinables y persistidos en la URL",
+        "Solo se listan técnicos activos del área del coordinador",
+        "Reasignar deja registro visible en el timeline",
+        "Usa el índice compuesto (filtros enviados al backend, no filtrado en cliente)"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `Tablero.test.tsx` › `aplica filtros en query`, `asigna tecnico`, `selector solo area`"
+      ],
+      "dod_extra": [
+        "Capturas"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-055",
+      "titulo": "Búsqueda por palabras clave con resultados por relevancia",
+      "epica": "frontend",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 4,
+      "depende": [
+        "T-040"
+      ],
+      "cubre": [
+        "RF-TEC-06",
+        "RF-DIR-05",
+        "CU-05"
+      ],
+      "descripcion": "Barra de búsqueda (en AppShell para técnico, coordinador y directivo) que llama `GET /incidencias/buscar?q=` con debounce 300 ms y muestra resultados ordenados por `score`, resaltando términos.",
+      "archivos": [
+        "frontend/src/pages/Buscar.tsx",
+        "frontend/src/components/AppShell.tsx",
+        "frontend/src/api/incidencias.ts"
+      ],
+      "criterios": [
+        "No consulta con menos de 2 caracteres",
+        "Muestra el score/relevancia y respeta el orden del backend",
+        "Estado 'sin resultados' con sugerencia",
+        "Directivo abre resultados en solo lectura"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `Buscar.test.tsx` › `debounce 300ms`, `orden por score`, `sin resultados`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-056",
+      "titulo": "Dashboard conectado a los pipelines (KPIs, horas por edificio, top 10 tags)",
+      "epica": "frontend",
+      "rol": "dba",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 6,
+      "depende": [
+        "T-018",
+        "T-040"
+      ],
+      "cubre": [
+        "RF-DIR-01",
+        "RF-DIR-02",
+        "RF-DIR-03",
+        "RF-DIR-04",
+        "RF-COO-05",
+        "CU-06"
+      ],
+      "descripcion": "Reemplazar datos de ejemplo de `Dashboard.tsx`: tarjetas KPI (`/analitica/resumen`), barras de promedio y total de horas por edificio (Pipeline 1) y ranking top 10 tags (Pipeline 2) con Recharts; filtros de periodo y categoría.",
+      "archivos": [
+        "frontend/src/pages/Dashboard.tsx",
+        "frontend/src/components/graficas/*.tsx",
+        "frontend/src/api/analitica.ts"
+      ],
+      "criterios": [
+        "Sin datos de ejemplo",
+        "Gráficas legibles en tema claro y oscuro, con tabla alternativa accesible",
+        "Filtros de periodo/categoría actualizan las 3 secciones",
+        "Coordinador ve solo su área"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `Dashboard.test.tsx` › `renderiza kpis`, `aplica filtro periodo`, `estado vacío sin datos`"
+      ],
+      "dod_extra": [
+        "Capturas para el documento final"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-057",
+      "titulo": "Admin de usuarios: listar, crear, editar, desactivar y reactivar",
+      "epica": "frontend",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 6,
+      "depende": [
+        "T-040"
+      ],
+      "cubre": [
+        "RF-ADM-01"
+      ],
+      "descripcion": "Nueva página `AdminUsuarios.tsx` sobre `GET/POST/PATCH /usuarios`: tabla con búsqueda, formulario con rol, áreas y edificios, interruptor activo/inactivo con confirmación.",
+      "archivos": [
+        "frontend/src/pages/AdminUsuarios.tsx",
+        "frontend/src/api/usuarios.ts",
+        "frontend/src/schemas/usuario.ts",
+        "frontend/src/App.tsx"
+      ],
+      "criterios": [
+        "Correo duplicado (409) se muestra en el campo",
+        "Desactivar pide confirmación y el usuario desaparece de selectores de técnicos",
+        "Contraseña inicial con validación de fortaleza; nunca se vuelve a mostrar",
+        "Solo visible con permiso `usuarios:gestionar`"
+      ],
+      "pruebas": [
+        "Vitest + MSW: `AdminUsuarios.test.tsx` › `crea usuario`, `409 correo duplicado`, `desactiva con confirmacion`"
+      ],
+      "dod_extra": [
+        "Capturas"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-058",
+      "titulo": "Tokens accesibles (WCAG AA), variantes oscuras, focus-visible y perfil/tema",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-044"
+      ],
+      "cubre": [
+        "RF-GEN-05",
+        "RF-GEN-07",
+        "RNF-16",
+        "RNF-08"
+      ],
+      "descripcion": "Inconsistencias UX: `#d97706` como texto en badges y blanco sobre `OfflineBanner` ≈ 3.2:1, texto muted sobre fondo ≈ 4.2:1, sin variantes oscuras para tokens de estado/prioridad/categoría, sin estilos `:focus-visible`/`:active`. Corregir en `styles/tokens.css` y componentes. Además: página `Perfil.tsx` (`/auth/me`, cerrar sesión, aviso de privacidad) y selector de tema claro/oscuro/automático (respeta `prefers-color-scheme` y `prefers-reduced-motion`).",
+      "archivos": [
+        "frontend/src/pages/Perfil.tsx",
+        "frontend/src/pages/Privacidad.tsx",
+        "frontend/src/styles/tokens.css",
+        "frontend/src/lib/tema.ts",
+        "frontend/src/components/Badge.tsx",
+        "frontend/src/components/OfflineBanner.tsx",
+        "frontend/src/index.css"
+      ],
+      "criterios": [
+        "Todos los pares texto/fondo ≥ 4.5:1 en claro y oscuro (tabla de contrastes en el PR)",
+        "Tokens de estado, prioridad y categoría con variante oscura",
+        "`:focus-visible` visible en todos los controles y estado `:active` táctil",
+        "Cambio de tema sin parpadeo al recargar; `theme-color` se ajusta",
+        "Aviso de privacidad accesible sin iniciar sesión"
+      ],
+      "pruebas": [
+        "Vitest: `tema.test.ts` › `auto sigue prefers-color-scheme`, `persiste eleccion`",
+        "Lighthouse accesibilidad ≥ 90 en Inicio, Reportar y Perfil (claro y oscuro)",
+        "Manual: navegación completa solo con teclado"
+      ],
+      "dod_extra": [
+        "Capturas claro/oscuro"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-059",
+      "titulo": "PWA instalable verificada en iPhone y Android + Lighthouse",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 3,
+      "horas": 6,
+      "depende": [
+        "T-005"
+      ],
+      "cubre": [
+        "RF-GEN-04",
+        "RF-GEN-06",
+        "RNF-03",
+        "RNF-06",
+        "RNF-08",
+        "RNF-09",
+        "RNF-10"
+      ],
+      "descripcion": "Verificar en producción: instalación en Android (botón Instalar de `InstallPrompt`), instrucciones 'Compartir → Agregar a inicio' en iOS, modo standalone, zonas seguras (notch), pantalla sin conexión (`OfflineBanner`) y aviso de nueva versión (`UpdatePrompt`). Corregir lo que falle y guardar evidencia.",
+      "archivos": [
+        "frontend/vite.config.ts",
+        "frontend/index.html",
+        "frontend/src/components/InstallPrompt.tsx",
+        "frontend/src/components/OfflineBanner.tsx",
+        "frontend/src/components/UpdatePrompt.tsx",
+        "docs/evidencias/pwa/"
+      ],
+      "criterios": [
+        "Se instala y abre en standalone en iPhone (iOS 16.4+) y en Android (Chrome 110+)",
+        "Nada queda bajo el notch o la barra de gestos",
+        "Modo avión: se muestra pantalla/aviso sin conexión, no error del navegador",
+        "Publicar una versión nueva muestra 'Actualizar' y recarga correctamente",
+        "Lighthouse móvil: Rendimiento ≥ 80, Accesibilidad ≥ 90, PWA instalable",
+        "Eliminar `navigateFallbackDenylist: [/^\\/api/]` de `vite.config.ts` (la API es de otro origen) o justificarlo"
+      ],
+      "pruebas": [
+        "Manual: checklist `docs/evidencias/pwa/checklist.md` con capturas de iPhone y Android (instalada, offline, actualización)",
+        "Lighthouse CI o reporte HTML guardado en `docs/evidencias/pwa/`"
+      ],
+      "dod_extra": [
+        "Capturas en `docs/evidencias/pwa/` para el documento final"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-060",
+      "titulo": "Edición ligera de foto: recortar, rotar 90° y marcar zona (capa vectorial)",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 8,
+      "depende": [
+        "T-024",
+        "T-047"
+      ],
+      "cubre": [
+        "RF-REP-03",
+        "RNF-05"
+      ],
+      "descripcion": "Editor táctil opcional en Reportar. La marca (círculo/flecha) se guarda como JSON normalizado `{forma,x,y,w,h,color}` y se dibuja encima en el detalle; la imagen para IA no lleva trazos (la zona se envía como pista `zona_marcada`). Si el recorte conserva < 60 % del área, re-analizar (pega en caché si no cambió). Ver `docs/algoritmo-foto-ia.md` §1.1 y T12.",
+      "archivos": [
+        "frontend/src/components/EditorFoto.tsx",
+        "frontend/src/lib/imagen.ts",
+        "frontend/src/components/GaleriaEvidencias.tsx"
+      ],
+      "criterios": [
+        "Recorte y rotación funcionan con gestos táctiles en iOS y Android",
+        "La marca se guarda como JSON normalizado y se dibuja encima en el detalle",
+        "La imagen enviada a la IA no contiene trazos",
+        "Recorte < 60 % del área ⇒ re-análisis"
+      ],
+      "pruebas": [
+        "Vitest: `EditorFoto.test.tsx` › `recorte produce dimensiones esperadas`, `rotacion 90`, `marca normalizada 0-1`",
+        "Manual: recortar y marcar en iPhone y Android (capturas)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-061",
+      "titulo": "Admin de categorías: constructor de campos y formulario dinámico",
+      "epica": "frontend",
+      "rol": "lider",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 10,
+      "depende": [
+        "T-019",
+        "T-020",
+        "T-049"
+      ],
+      "cubre": [
+        "RF-ADM-03",
+        "RF-REP-02"
+      ],
+      "descripcion": "Conectar `AdminCategorias.tsx` (hoy datos de ejemplo): lista y constructor de campos (tipo, etiqueta, requerido, opciones). `CamposCategoria.tsx` pasa a renderizar los campos desde la definición de `/categorias` y genera el esquema Zod en tiempo de ejecución.",
+      "archivos": [
+        "frontend/src/pages/AdminCategorias.tsx",
+        "frontend/src/components/CamposCategoria.tsx",
+        "frontend/src/lib/zodDinamico.ts"
+      ],
+      "criterios": [
+        "Crear una categoría nueva y reportar con ella sin cambiar código",
+        "Vista previa del formulario mientras se diseña",
+        "Categorías del sistema marcadas como no eliminables",
+        "El esquema Zod dinámico coincide con la validación del backend (mismos tipos)"
+      ],
+      "pruebas": [
+        "Vitest: `zodDinamico.test.ts` › `genera esquema por tipo`, `requerido`, `opciones de lista`",
+        "Vitest + MSW: `AdminCategorias.test.tsx` › `crea categoria con 2 campos`"
+      ],
+      "dod_extra": [
+        "Capturas"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-062",
+      "titulo": "Cola sin conexión con Idempotency-Key en IndexedDB (borradores y modo agéntico)",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Podría",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 8,
+      "depende": [
+        "T-037",
+        "T-041",
+        "T-049"
+      ],
+      "cubre": [
+        "RF-REP-11",
+        "RNF-10"
+      ],
+      "descripcion": "Borradores e intentos agénticos en IndexedDB con su `Idempotency-Key`; Background Sync en Chromium; reintentos en `online`/apertura/`visibilitychange` en iOS; `navigator.storage.persist()`; límite de 10 borradores / 7 días. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T25 y T11 de §6.",
+      "archivos": [
+        "frontend/src/lib/borradores.ts",
+        "frontend/src/pages/Reportar.tsx",
+        "frontend/src/components/OfflineBanner.tsx"
+      ],
+      "criterios": [
+        "Modo avión ⇒ borrador; al reconectar se analiza y la tarjeta solo aparece en primer plano",
+        "Un envío interrumpido se reintenta sin duplicar (misma clave)",
+        "Máximo 10 borradores y 7 días; lista visible y descartable"
+      ],
+      "pruebas": [
+        "Vitest (fake-indexeddb + service worker simulado): `cola.test.ts` › `guarda borrador offline`, `reintenta misma clave`, `limite 10 / 7 dias`",
+        "Manual: modo avión en iPhone y Android"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-063",
+      "titulo": "Recordar y confirmar ubicación (vigencia 4 h) + selector de una sola vez",
+      "epica": "frontend",
+      "rol": "frontend",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 4,
+      "depende": [
+        "T-012"
+      ],
+      "cubre": [
+        "RF-REP-01",
+        "RNF-05"
+      ],
+      "descripcion": "Guardar la ubicación confirmada en localStorage con vigencia de 4 h; selector de una sola vez. El texto de la placa leído por la IA solo precarga (no satisface G5). Ver `docs/algoritmo-foto-ia.md` sección A y tarea T18 de §6.",
+      "archivos": [
+        "frontend/src/lib/ubicacion.ts",
+        "frontend/src/lib/ubicacion.test.ts",
+        "frontend/src/components/SelectorUbicacion.tsx"
+      ],
+      "criterios": [
+        "G5 pasa solo con QR o confirmación ≤ 4 h",
+        "`ubicacion_fuente=\"ia\"` no satisface G5 (solo precarga)"
+      ],
+      "pruebas": [
+        "Vitest: `ubicacion.test.ts` › `vigencia 4h`, `fuente ia no satisface G5`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-064",
+      "titulo": "Infraestructura de pruebas del frontend: Vitest + Testing Library + MSW en CI",
+      "epica": "qa",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 5,
+      "depende": [
+        "T-001"
+      ],
+      "cubre": [
+        "RNF-19"
+      ],
+      "descripcion": "Agregar Vitest (jsdom), @testing-library/react y MSW con handlers base generados a partir de los ejemplos de Postman. Script `npm test` y job en CI. Un test de ejemplo por tipo (lib pura, componente, hook con MSW) como plantilla para el equipo.",
+      "archivos": [
+        "frontend/package.json",
+        "frontend/vitest.config.ts",
+        "frontend/src/test/setup.ts",
+        "frontend/src/test/msw/handlers.ts",
+        ".github/workflows/ci.yml"
+      ],
+      "criterios": [
+        "`npm test` corre en local y en CI",
+        "Handlers MSW cubren los 22 endpoints con respuestas de ejemplo válidas para Zod",
+        "Cobertura reportada (umbral inicial 40% en `src/lib` y `src/api`)",
+        "Guía corta 'cómo escribir un test' en CONTRIBUTING"
+      ],
+      "pruebas": [
+        "Vitest: `src/test/ejemplo.test.tsx` (componente), `src/lib/platform.test.ts` (lib pura)"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-065",
+      "titulo": "Pruebas e2e de navegador con Playwright del flujo completo",
+      "epica": "qa",
+      "rol": "qa-devops",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-044",
+        "T-048",
+        "T-052"
+      ],
+      "cubre": [
+        "CU-01",
+        "CU-02",
+        "CU-03",
+        "CU-04",
+        "RNF-05"
+      ],
+      "descripcion": "Playwright con viewport iPhone y Pixel contra API local (docker compose + init_db demo). Escenarios: reportante crea con foto → técnico registra seguimiento y tags → coordinador cierra → reportante ve historial. Job opcional en CI.",
+      "archivos": [
+        "frontend/e2e/flujo-completo.spec.ts",
+        "frontend/playwright.config.ts",
+        ".github/workflows/e2e.yml"
+      ],
+      "criterios": [
+        "Corre headless en CI con servicios locales (sin Atlas ni B2: storage fake)",
+        "Capturas y trace guardados como artifact si falla",
+        "Escenarios en móvil (WebKit + Chromium)"
+      ],
+      "pruebas": [
+        "Playwright: `reportante crea incidencia con foto`, `tecnico registra seguimiento y tags`, `coordinador cierra`, `reportante no ve acciones de tecnico`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-066",
+      "titulo": "Banco formal de pruebas Postman con capturas + Newman en CI",
+      "epica": "qa",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F2",
+      "semana": 3,
+      "horas": 8,
+      "depende": [
+        "T-004",
+        "T-009",
+        "T-014"
+      ],
+      "cubre": [
+        "RF-SIS-03",
+        "RNF-01",
+        "RNF-12",
+        "CU-01",
+        "CU-02",
+        "CU-03",
+        "CU-04",
+        "CU-05",
+        "CU-06",
+        "CU-07"
+      ],
+      "descripcion": "Revisar los 47 requests: organizar por CU, tests en cada uno (status, esquema, tiempo < 500 ms), casos 201/200/400/401/403/404/409. Ejecutar con Newman/Postman CLI en CI contra local y contra producción. Capturas de cada caso (URL, método, cabeceras, código, payload) para el PDF.",
+      "archivos": [
+        "postman/UTM-Desk.postman_collection.json",
+        "postman/UTM-Desk.prod.postman_environment.json",
+        ".github/workflows/postman.yml",
+        "docs/evidencias/postman/"
+      ],
+      "criterios": [
+        "Cada CU-01..07 tiene al menos un caso exitoso y uno de error",
+        "Incluye obligatoriamente: POST 201, GET 200, PATCH/PUT 200 y 400 de validación",
+        "Casos 403 de alcance (usuario de otra área) para RNF-12",
+        "Run completo en verde en producción; reporte HTML guardado",
+        "Tabla resumen (CU, método, URL, código esperado/obtenido) lista para el documento"
+      ],
+      "pruebas": [
+        "Postman CLI: `postman collection run postman/UTM-Desk.postman_collection.json -e ...` sin fallos (local y prod)"
+      ],
+      "dod_extra": [
+        "Capturas en `docs/evidencias/postman/`"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-067",
+      "titulo": "Pruebas no funcionales: degradación, rendimiento, dispositivos y usabilidad",
+      "epica": "qa",
+      "rol": "qa-devops",
+      "prioridad": "Debería",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 6,
+      "depende": [
+        "T-006",
+        "T-059"
+      ],
+      "cubre": [
+        "RNF-01",
+        "RNF-05",
+        "RNF-09",
+        "RNF-18"
+      ],
+      "descripcion": "Ejecutar y documentar: Redis apagado e IA apagada (el sistema sigue registrando y consultando), p95 < 500 ms en endpoints sin IA, matriz de compatibilidad (iOS Safari, Android Chrome, Chrome/Edge/Safari/Firefox escritorio) y prueba de usabilidad con 5 usuarios (reportar en ≤ 3 pasos). La evaluación de IA va en su propia tarea.",
+      "archivos": [
+        "docs/evidencias/no-funcionales.md",
+        "backend/tests/e2e/test_degradacion.py"
+      ],
+      "criterios": [
+        "Tabla de resultados por RNF con evidencia (captura o log)",
+        "Hallazgos convertidos en issues nuevos",
+        "Resultados de usabilidad con tiempo y número de pasos por usuario"
+      ],
+      "pruebas": [
+        "e2e: `test_degradacion.py` › `test_crear_incidencia_redis_caido`, `test_analitica_sin_cache_redis_caido`",
+        "Manual: matriz de dispositivos documentada con capturas"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-068",
+      "titulo": "Revisión de acceso 2: 5 roles base y permisos de init_db.py vs RF por rol",
+      "epica": "revision-acceso",
+      "rol": "dba",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 1,
+      "horas": 4,
+      "depende": [],
+      "cubre": [
+        "RF-ADM-02",
+        "RF-GEN-03"
+      ],
+      "descripcion": "Verificar `roles_sistema()` de `backend/scripts/init_db.py` contra la tabla 3.3 (catálogo de permisos) y los RF de cada rol (REP, TEC, COO, DIR, ADM). Ej.: ¿directivo necesita `incidencias:buscar` y solo lectura?, ¿coordinador puede cerrar (RF-COO-04) con `seguimiento:registrar`? Ajustar init_db o la doc.",
+      "archivos": [
+        "backend/scripts/init_db.py",
+        "docs/revision-acceso/roles.md",
+        "backend/tests/test_roles_sistema.py"
+      ],
+      "criterios": [
+        "Tabla permiso × rol (doc vs código) sin diferencias o con decisión documentada",
+        "Cada RF Debe de cada rol tiene el permiso que lo habilita",
+        "Roles de sistema protegidos (no editables/borrables por API)"
+      ],
+      "pruebas": [
+        "Unitaria: `tests/test_roles_sistema.py::test_permisos_igual_tabla_3_3`, `test_alcance_por_rol`",
+        "e2e: `test_directivo_no_puede_crear_403`, `test_reportante_no_ve_analitica_403`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-069",
+      "titulo": "Revisión de acceso 1: alcance (propio/area/edificio/global) por rol vs matriz de la documentación",
+      "epica": "revision-acceso",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [],
+      "cubre": [
+        "RNF-12",
+        "RF-GEN-03"
+      ],
+      "descripcion": "Comparar `filtro_alcance` en `core/security.py` y su uso en cada endpoint (consultas, búsqueda, pipelines, actualizaciones, evidencias) contra la doc §3.1. Producir tabla esperado vs real por rol × endpoint. Corregir: `PATCH /usuarios/{id}` revela existencia (404 vs 403) a gestores delegados → responder 404 cuando no es gestionable. Decidir 403 vs 404 fuera de alcance (el código devuelve 404, RNF-12 dice 403) y registrar la decisión para la tarea de documentación.",
+      "archivos": [
+        "docs/revision-acceso/alcance.md",
+        "backend/app/routers/usuarios.py",
+        "backend/tests/e2e/test_alcance_matriz.py"
+      ],
+      "criterios": [
+        "Tabla rol × endpoint con alcance esperado, real y resultado (✔/✘)",
+        "Cada ✘ corregido o convertido en issue",
+        "`PATCH /usuarios/{id}` no gestionable → 404 (igual que inexistente)",
+        "Decisión 403/404 documentada (BOLA: no revelar existencia)"
+      ],
+      "pruebas": [
+        "e2e parametrizada: `test_alcance_matriz.py::test_rol_endpoint_alcance[rol-endpoint]` (5 roles × endpoints de lectura/escritura)",
+        "e2e: `test_patch_usuario_no_gestionable_404`",
+        "Postman: casos fuera de alcance por rol"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-070",
+      "titulo": "Revisión de acceso 3: JWT, permisos leídos de BD, revocación, cambio de rol y límite de login",
+      "epica": "revision-acceso",
+      "rol": "qa-devops",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [
+        "T-014"
+      ],
+      "cubre": [
+        "RNF-11",
+        "RF-GEN-02",
+        "RF-SIS-09"
+      ],
+      "descripcion": "Auditar `core/security.py`: claims `sub`, `iss`, `aud`, `exp` (15 min), `iat`; que rol y permisos se lean de BD en cada request (revocación inmediata), comportamiento al cambiar de rol o desactivar usuario (access y refresh), y el refresh/logout de T-014. Decidir y alinear el límite de login: doc 5/min vs código 10/min.",
+      "archivos": [
+        "backend/app/core/security.py",
+        "backend/app/core/limiter.py",
+        "backend/tests/e2e/test_jwt_revision.py",
+        "docs/revision-acceso/jwt.md"
+      ],
+      "criterios": [
+        "Token sin `aud`/`iss` correctos o expirado → 401",
+        "Cambiar el rol de un usuario surte efecto en la siguiente petición sin re-login",
+        "Usuario desactivado: access vigente → 401 y refresh → 401",
+        "Límite de login alineado entre doc y código (valor decidido en el PR)",
+        "Algoritmo fijo (sin `none`, sin confusión de algoritmos)"
+      ],
+      "pruebas": [
+        "e2e: `test_jwt_aud_incorrecto_401`, `test_jwt_iss_incorrecto_401`, `test_jwt_expirado_401`, `test_cambio_rol_efecto_inmediato`, `test_usuario_desactivado_access_401`, `test_login_rate_limit_valor_doc`"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-071",
+      "titulo": "Revisión de acceso 4: matriz rol × pantalla/ruta/acción, guardas RequirePermiso y menú por rol",
+      "epica": "revision-acceso",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [
+        "T-040"
+      ],
+      "cubre": [
+        "RF-GEN-03",
+        "RNF-12"
+      ],
+      "descripcion": "Validar contra la matriz de la sección «Pantallas por rol» de este documento (basada en doc §6.5): rutas de `App.tsx` con su `RequirePermiso`, pestañas de `AppShell.tsx` y botones de acción. Inconsistencias conocidas: pestaña 'Mis tickets' debe llamarse 'Mis reportes' (ruta `/mis-reportes`), falta Perfil, falta Buscar/Tablero/Usuarios.",
+      "archivos": [
+        "frontend/src/App.tsx",
+        "frontend/src/components/AppShell.tsx",
+        "frontend/src/auth/RequirePermiso.tsx",
+        "frontend/src/lib/navegacion.ts",
+        "frontend/src/lib/navegacion.test.ts"
+      ],
+      "criterios": [
+        "`lib/navegacion.ts` define la matriz como datos (rol → pestañas/menú) y AppShell la usa",
+        "Cada ruta tiene `RequirePermiso` con el permiso de la matriz",
+        "Pestañas y nombres iguales a doc §6.5 en móvil y escritorio",
+        "Acceder por URL a una ruta sin permiso muestra 'Sin acceso' (no pantalla en blanco)"
+      ],
+      "pruebas": [
+        "Vitest: `navegacion.test.ts` › `pestañas por rol igual a matriz` (5 roles)",
+        "Vitest: `RequirePermiso.test.tsx` › `bloquea ruta por url`",
+        "Manual: capturas del menú de los 5 roles"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-072",
+      "titulo": "Documento Fase 1 en PDF: tecnologías, RF/RNF y modelado JSON/BSON",
+      "epica": "docs-defensa",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 6,
+      "depende": [
+        "T-007"
+      ],
+      "cubre": [
+        "Entregable Fase 1"
+      ],
+      "descripcion": "A partir de `docs/UTM_Desk_Documentacion_Proyecto.docx`, preparar el PDF de Fase 1: selección justificada de tecnologías (backend, UI, herramientas), RF y RNF formales, y modelado de colecciones en JSON/BSON (detalle_especifico por categoría, arreglos, tipos nativos, índices). Preparar 5 diapositivas para la revisión en clase.",
+      "archivos": [
+        "docs/entregas/Fase1_UTM_Desk.pdf",
+        "docs/entregas/Fase1_presentacion.pdf"
+      ],
+      "criterios": [
+        "Contiene los 3 puntos exigidos por el PDF de la materia",
+        "Ejemplo BSON de una incidencia por cada categoría (con tipos Date, ObjectId, Decimal/Double)",
+        "Formato APA 7 (portada, numeración, referencias)",
+        "Revisado por todo el equipo (1 comentario por integrante)"
+      ],
+      "pruebas": [
+        "Manual: checklist de rúbrica Fase 1 marcado en el PR"
+      ],
+      "dod_extra": [
+        "Retroalimentación del docente registrada como issues"
+      ],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-073",
+      "titulo": "Corregir documentación: Backblaze B2 en lugar de R2, 403/404, límite de login y nombres de pestañas",
+      "epica": "docs-defensa",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F1",
+      "semana": 2,
+      "horas": 3,
+      "depende": [
+        "T-069",
+        "T-070",
+        "T-071"
+      ],
+      "cubre": [
+        "RNF-12",
+        "RNF-15"
+      ],
+      "descripcion": "README y documento de requerimientos mencionan Cloudflare R2 pero el storage real es Backblaze B2 (S3 compatible); RNF-12 dice 403 fuera de alcance pero el código devuelve 404; límite de login; nombres de pestañas. Aplicar las decisiones de la Revisión de acceso.",
+      "archivos": [
+        "README.md",
+        "docs/UTM_Desk_Documentacion_Proyecto.docx",
+        "docs/reglas/API.md"
+      ],
+      "criterios": [
+        "Ninguna mención a R2 como proveedor actual (o se aclara que es intercambiable vía S3)",
+        "RNF-12 y API.md coinciden con el comportamiento real",
+        "Límite de login y pestañas iguales en doc y código"
+      ],
+      "pruebas": [
+        "Manual: `grep -ri 'r2' README.md docs/reglas` revisado; checklist en el PR"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-074",
+      "titulo": "Documento final PDF en APA 7 con capturas, esquema poblado y banco Postman",
+      "epica": "docs-defensa",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 10,
+      "depende": [
+        "T-009",
+        "T-013",
+        "T-031",
+        "T-047",
+        "T-059",
+        "T-066"
+      ],
+      "cubre": [
+        "Entregable Fase 2"
+      ],
+      "descripcion": "Documento final: portada, problemática, justificación, requisitos finales, tecnologías finales, capturas nítidas de la UI en funcionamiento, esquema JSON final poblado en Atlas, banco formal Postman (URL, método, cabeceras, código, payload), algoritmo de procesamiento de foto, conclusiones individuales (una por integrante) y referencias APA 7.",
+      "archivos": [
+        "docs/entregas/Final_UTM_Desk.pdf",
+        "docs/entregas/Final_UTM_Desk.docx"
+      ],
+      "criterios": [
+        "Cumple cada punto de la sección 'FASE 2' del PDF de la materia",
+        "Conclusión individual firmada por cada integrante",
+        "Capturas legibles (≥ 1200 px) con pie de figura APA",
+        "Referencias APA 7 con sangría francesa y orden alfabético",
+        "Enlaces: repositorio Git, URL de la PWA y de la API"
+      ],
+      "pruebas": [
+        "Manual: checklist de rúbrica Fase 2 revisado por 2 integrantes distintos al autor"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    },
+    {
+      "id": "T-075",
+      "titulo": "Presentación, guion de demo en vivo, banco de preguntas y paquete .zip",
+      "epica": "docs-defensa",
+      "rol": "lider",
+      "prioridad": "Debe",
+      "fase": "F2",
+      "semana": 4,
+      "horas": 6,
+      "depende": [
+        "T-074"
+      ],
+      "cubre": [
+        "Defensa técnica",
+        "Entregable Fase 2 (.zip)"
+      ],
+      "descripcion": "Diapositivas, guion de demo (CRUD, operaciones atómicas, $text, pipelines, TTL, control de acceso) con datos preparados y plan B (video grabado si falla la red). Banco de preguntas de defensa para que cada integrante pueda explicar índices, operaciones atómicas, pipelines y permisos. Ensayo cronometrado y armado del .zip (PDF, script maestro/JSON, enlaces).",
+      "archivos": [
+        "docs/entregas/presentacion.pdf",
+        "docs/defensa/guion-demo.md",
+        "docs/defensa/banco-preguntas.md",
+        "entrega/UTM_Desk_Fase2.zip"
+      ],
+      "criterios": [
+        "Demo en vivo cubre CU-01..CU-07 en ≤ 10 min",
+        "Banco con ≥ 30 preguntas y respuestas, ≥ 6 por tema obligatorio",
+        "Cada integrante respondió el banco en un ensayo (registro en el issue)",
+        "API 'despertada' y datos demo verificados 30 min antes (checklist)",
+        ".zip contiene PDF, script/JSON y archivo de enlaces"
+      ],
+      "pruebas": [
+        "Manual: ensayo completo cronometrado con la API de producción",
+        "Manual: `verificar_demo.py` contra Atlas el día de la defensa → todo ✔"
+      ],
+      "dod_extra": [],
+      "requiere_aprobacion": false
+    }
+  ],
+  "objetivo_ia": "«El usuario toma la foto, la IA rellena los datos y sube el reporte sola.» Flujo agéntico de un toque: foto → procesamiento → IA → si pasan las compuertas G1–G9 (evaluadas en el servidor), el reporte se envía solo tras una ventana de 10 s para deshacer; si alguna falla, se abre el formulario prellenado. «Llenar sin IA» siempre visible; nunca bloquea el reporte manual. **Fase 1 del modo agéntico: solo infraestructura (y la categoría `infraestructura`); `computo_redes` y `academico` siguen en modo asistido.** Detalle: `docs/algoritmo-foto-ia.md` sección A."
+}

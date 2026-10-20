@@ -1,0 +1,11 @@
+# Servicios locales de desarrollo. En producción: MongoDB Atlas M0 + Upstash Redis.
+services:
+  mongo:
+    image: mongo:8
+    ports: ["27017:27017"]
+    volumes: ["mongo_data:/data/db"]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+volumes:
+  mongo_data:

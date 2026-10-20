@@ -1,0 +1,1718 @@
+{
+  "info": {
+    "name": "UTM Desk",
+    "description": "Banco formal de pruebas de la API UTM Desk. Ejecutar en orden con el environment UTM-Desk.local.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Autenticación y perfil.",
+      "item": [
+        {
+          "name": "Login (reportante/admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Devuelve access_token y usuario', function () { const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.expect(j.usuario).to.have.property('rol'); pm.expect(j.usuario.permisos).to.be.an('array'); pm.environment.set('token', j.access_token); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Inicia sesión con {{correo}} y {{password}}. Guarda el token JWT en {{token}}.",
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Perfil actual (/auth/me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Perfil con _id, nombre, permisos y alcance', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.nombre).to.be.a('string'); pm.expect(j.permisos).to.be.an('array'); pm.expect(j.alcance).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Devuelve el perfil, permisos y alcance del usuario autenticado.",
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un objeto', function () { const j = pm.response.json(); pm.expect(j).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Verifica que el servicio esté activo (sin autenticación).",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Incidencias",
+      "description": "Alta, listado y detalle de incidencias.",
+      "item": [
+        {
+          "name": "Crear incidencia (cómputo y redes)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Devuelve _id, codigo y estado abierta', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.codigo).to.be.a('string'); pm.expect(j.estado).to.eql('abierta'); pm.environment.set('incidencia_id', j._id); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Crea una incidencia con detalle específico de cómputo/redes. Guarda _id en {{incidencia_id}}.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Switch sin conexión en laboratorio\",\n  \"descripcion\": \"El switch del laboratorio de cómputo no responde y varios equipos quedaron sin red.\",\n  \"prioridad\": \"alta\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio A\",\n    \"piso\": 2,\n    \"aula\": \"Lab 3\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"computo_redes\",\n    \"ip\": \"10.0.12.15\",\n    \"vlan\": 120,\n    \"puerto_uplink\": \"Gi0/24\",\n    \"equipos_afectados\": 18\n  },\n  \"tags\": [\n    \"switch\",\n    \"red\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Crear incidencia (infraestructura)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Devuelve _id y codigo', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.codigo).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Crea una incidencia con detalle de infraestructura.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Filtración de agua en el techo\",\n  \"descripcion\": \"Hay una filtración constante de agua en el techo del salón durante lluvias.\",\n  \"prioridad\": \"media\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio B\",\n    \"piso\": 1,\n    \"aula\": \"Aula 105\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"infraestructura\",\n    \"tipo_dano\": \"filtracion\",\n    \"riesgo_seguridad\": \"medio\",\n    \"requiere_insumos\": true,\n    \"insumos\": [\n      \"sellador\"\n    ],\n    \"requiere_contratista\": false\n  },\n  \"tags\": [\n    \"filtracion\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Crear incidencia (académico)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Devuelve _id y codigo', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.codigo).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Crea una incidencia con detalle académico.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"LMS no carga calificaciones\",\n  \"descripcion\": \"El switch del laboratorio de cómputo no responde y varios equipos quedaron sin red.\",\n  \"prioridad\": \"alta\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio A\",\n    \"piso\": 2,\n    \"aula\": \"Lab 3\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"academico\",\n    \"plataforma\": \"lms\",\n    \"codigo_curso\": \"ISC-101\",\n    \"periodo\": \"2026-2\",\n    \"estudiantes_impactados\": 35\n  },\n  \"tags\": [\n    \"lms\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Listar incidencias",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });",
+                  "pm.test('Elementos con _id y estado', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('_id'); pm.expect(j[0]).to.have.property('estado'); } });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Lista incidencias dentro del alcance del usuario. Filtros opcionales: estado, categoria, prioridad, edificio, limite.",
+            "url": {
+              "raw": "{{base_url}}/incidencias?estado=abierta&limite=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "abierta"
+                },
+                {
+                  "key": "limite",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detalle de incidencia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Incluye codigo, estado e historial', function () { const j = pm.response.json(); pm.expect(j._id).to.eql(pm.environment.get('incidencia_id')); pm.expect(j).to.have.property('codigo'); pm.expect(j.historial_seguimiento).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Obtiene una incidencia por su ObjectId.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Seguimiento y Tags",
+      "description": "Cambios de estado con historial y gestión de tags.",
+      "item": [
+        {
+          "name": "Registrar seguimiento (abierta a en_proceso)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es objeto', function () { const j = pm.response.json(); pm.expect(j).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Registra un cambio de estado con comentario y horas. Transición válida.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/seguimiento",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "seguimiento"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado_nuevo\": \"en_proceso\",\n  \"comentario\": \"Se inicia el diagnóstico del equipo.\",\n  \"horas\": 1.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Seguimiento con transición inválida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Mensaje de error presente', function () { const j = pm.response.json(); pm.expect(j.detail || j.error || j.message).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Intenta pasar de en_proceso a cerrada, no permitido: 409 (requiere incidencia en en_proceso).",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/seguimiento",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "seguimiento"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado_nuevo\": \"abierta\",\n  \"comentario\": \"Intento de transición inválida.\",\n  \"horas\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Agregar tags",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es objeto', function () { const j = pm.response.json(); pm.expect(j).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Agrega tags (minúsculas, sin acentos, a-z0-9_).",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/tags",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "tags"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tags\": [\n    \"switch\",\n    \"red_laboratorio\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Quitar tags",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es objeto', function () { const j = pm.response.json(); pm.expect(j).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Elimina tags de la incidencia.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/tags",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "tags"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tags\": [\n    \"red_laboratorio\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Asignación",
+      "description": "Asignación de incidencias a técnicos.",
+      "item": [
+        {
+          "name": "Asignar técnico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ok y tecnico_asignado', function () { const j = pm.response.json(); pm.expect(j.ok).to.eql(true); pm.expect(j.tecnico_asignado.usuario_id).to.be.a('string'); pm.expect(j.tecnico_asignado.nombre).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Asigna la incidencia a un técnico ({{tecnico_id}}) activo y dentro de su alcance.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/asignacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "asignacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tecnico_id\": \"{{tecnico_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Evidencias",
+      "description": "Flujo de evidencias: firma, PUT a R2, registro y URL de lectura.",
+      "item": [
+        {
+          "name": "1. Firmar subida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('evidencia_id, url_storage, upload_url, expira_en', function () { const j = pm.response.json(); pm.expect(j.evidencia_id).to.be.a('string'); pm.expect(j.url_storage).to.be.a('string'); pm.expect(j.upload_url).to.be.a('string'); pm.expect(j.expira_en).to.be.a('number'); pm.environment.set('evidencia_id', j.evidencia_id); pm.environment.set('upload_url', j.upload_url); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Paso 1: solicita URL prefirmada. Guarda evidencia_id y upload_url.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/evidencias/firma",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "evidencias",
+                "firma"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_archivo\": \"foto-switch.png\",\n  \"tipo_mime\": \"image/png\",\n  \"peso_bytes\": 20480\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "PUT a R2 (upload_url)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('R2 responde 200', function () { pm.expect(pm.response.code).to.be.oneOf([200, 204]); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "image/png",
+                "description": "Igual a tipo_mime firmado",
+                "disabled": false
+              },
+              {
+                "key": "Content-Length",
+                "value": "20480",
+                "description": "Igual a peso_bytes firmado",
+                "disabled": false
+              }
+            ],
+            "description": "Paso 2 (cliente directo a R2, no al backend): sube el archivo con PUT a {{upload_url}} usando el mismo Content-Type y Content-Length firmados. Deshabilitado: se ejecuta desde el cliente con el binario real.",
+            "url": {
+              "raw": "{{upload_url}}",
+              "host": [
+                "{{upload_url}}"
+              ]
+            },
+            "body": {
+              "mode": "file",
+              "file": {}
+            },
+            "disabled": false
+          },
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "name": "3. Registrar evidencia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Respuesta es objeto', function () { const j = pm.response.json(); pm.expect(j).to.be.an('object'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Paso 3: confirma la evidencia ya subida a R2.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/evidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "evidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"evidencia_id\": \"{{evidencia_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "4. URL de lectura de evidencia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('url y expira_en', function () { const j = pm.response.json(); pm.expect(j.url).to.be.a('string'); pm.expect(j.expira_en).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Obtiene URL temporal de descarga.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/evidencias/{{evidencia_id}}/url",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "evidencias",
+                "{{evidencia_id}}",
+                "url"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Búsqueda",
+      "description": "Búsqueda de texto completo.",
+      "item": [
+        {
+          "name": "Buscar incidencias (q=switch)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Búsqueda de texto completo dentro del alcance del usuario (q de 2 a 100 caracteres).",
+            "url": {
+              "raw": "{{base_url}}/incidencias/buscar?q=switch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "buscar"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "switch"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analítica",
+      "description": "Indicadores agregados.",
+      "item": [
+        {
+          "name": "Analítica por edificio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Conteo de incidencias agrupado por edificio (requiere analitica:ver).",
+            "url": {
+              "raw": "{{base_url}}/analitica/edificios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "edificios"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Analítica de tags",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Tags más usados (requiere analitica:ver).",
+            "url": {
+              "raw": "{{base_url}}/analitica/tags",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "tags"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "IA",
+      "description": "Análisis de imagen con IA.",
+      "item": [
+        {
+          "name": "Analizar imagen con IA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de análisis', function () { const j = pm.response.json(); pm.expect(j.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.titulo).to.be.a('string'); pm.expect(j.prioridad_sugerida).to.be.a('string'); pm.expect(j.tags).to.be.an('array'); pm.expect(j.confianza).to.be.within(0,1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Multipart: campo imagen (archivo) y contexto (opcional). Adjunta un archivo antes de enviar.",
+            "url": {
+              "raw": "{{base_url}}/ia/analizar-imagen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "analizar-imagen"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagen",
+                  "type": "file",
+                  "src": [],
+                  "description": "JPEG, PNG o WebP, máx. 5 MB"
+                },
+                {
+                  "key": "contexto",
+                  "value": "Foto de un switch apagado en el laboratorio",
+                  "type": "text",
+                  "description": "Texto opcional (máx. 500)"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Roles",
+      "description": "Gestión de roles y permisos.",
+      "item": [
+        {
+          "name": "Listar roles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });",
+                  "pm.test('Roles con clave y permisos', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('clave'); pm.expect(j[0].permisos).to.be.an('array'); } });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Lista roles (requiere roles:gestionar).",
+            "url": {
+              "raw": "{{base_url}}/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear rol",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const l = 'abcdefghijklmnopqrstuvwxyz'; let s = 'rol_prueba_'; for (let i = 0; i < 6; i++) { s += l[Math.floor(Math.random() * 26)]; }",
+                  "pm.collectionVariables.set('rol_clave', s);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Rol creado con _id y clave', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('rol_clave')); pm.expect(j.sistema).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Crea un rol personalizado. La clave se genera aleatoria (solo letras y _).",
+            "url": {
+              "raw": "{{base_url}}/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"{{rol_clave}}\",\n  \"nombre\": \"Rol de prueba\",\n  \"descripcion\": \"Rol creado desde Postman\",\n  \"permisos\": [\n    \"incidencias:ver\",\n    \"incidencias:buscar\"\n  ],\n  \"alcance\": \"propio\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Crear rol duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Detalle de conflicto', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Reenvía la misma clave: 409 (ejecutar después de Crear rol).",
+            "url": {
+              "raw": "{{base_url}}/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"{{rol_clave}}\",\n  \"nombre\": \"Rol de prueba\",\n  \"descripcion\": \"Duplicado\",\n  \"permisos\": [\n    \"incidencias:ver\"\n  ],\n  \"alcance\": \"propio\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Usuarios",
+      "description": "Gestión de usuarios.",
+      "item": [
+        {
+          "name": "Crear usuario técnico",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('correo_nuevo', 'tecnico.' + Date.now() + '@utm.edu.mx');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Usuario sin password_hash', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.rol).to.eql('tecnico'); pm.expect(j.areas).to.include('computo_redes'); pm.expect(j).to.not.have.property('password_hash'); pm.environment.set('usuario_id', j._id); pm.environment.set('tecnico_id', j._id); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Crea un técnico con área de cómputo/redes. Guarda _id en {{usuario_id}} y {{tecnico_id}}. Correo único por timestamp.",
+            "url": {
+              "raw": "{{base_url}}/usuarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Técnico de Pruebas\",\n  \"correo\": \"{{correo_nuevo}}\",\n  \"password\": \"ClaveSegura#2026\",\n  \"rol\": \"tecnico\",\n  \"areas\": [\n    \"computo_redes\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Listar usuarios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });",
+                  "pm.test('Sin password_hash', function () { const j = pm.response.json(); if (j.length) pm.expect(j[0]).to.not.have.property('password_hash'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Lista usuarios sin hash de contraseña.",
+            "url": {
+              "raw": "{{base_url}}/usuarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Nombre actualizado', function () { const j = pm.response.json(); pm.expect(j._id).to.eql(pm.environment.get('usuario_id')); pm.expect(j.nombre).to.eql('Técnico Actualizado'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Actualiza nombre del usuario creado.",
+            "url": {
+              "raw": "{{base_url}}/usuarios/{{usuario_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "{{usuario_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Técnico Actualizado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categorías",
+      "description": "Catálogo de categorías.",
+      "item": [
+        {
+          "name": "Listar categorías",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });",
+                  "pm.test('Categorías con clave', function () { const j = pm.response.json(); if (j.length) pm.expect(j[0]).to.have.property('clave'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Lista categorías activas (cualquier usuario autenticado).",
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pruebas negativas",
+      "description": "Casos de error esperados: validación, autenticación, permisos y no encontrado.",
+      "item": [
+        {
+          "name": "Detalle de otra categoría",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Categoría computo_redes con campos de infraestructura: 400 validacion.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Switch sin conexión en laboratorio\",\n  \"descripcion\": \"El switch del laboratorio de cómputo no responde y varios equipos quedaron sin red.\",\n  \"prioridad\": \"alta\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio A\",\n    \"piso\": 2,\n    \"aula\": \"Lab 3\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"computo_redes\",\n    \"tipo_dano\": \"filtracion\",\n    \"riesgo_seguridad\": \"alto\",\n    \"requiere_insumos\": false,\n    \"requiere_contratista\": false\n  },\n  \"tags\": [\n    \"switch\",\n    \"red\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Campo extra en el body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Campo no permitido (extra=forbid): 400.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Switch sin conexión en laboratorio\",\n  \"descripcion\": \"El switch del laboratorio de cómputo no responde y varios equipos quedaron sin red.\",\n  \"prioridad\": \"alta\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio A\",\n    \"piso\": 2,\n    \"aula\": \"Lab 3\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"computo_redes\",\n    \"ip\": \"10.0.12.15\",\n    \"vlan\": 120,\n    \"puerto_uplink\": \"Gi0/24\",\n    \"equipos_afectados\": 18\n  },\n  \"tags\": [\n    \"switch\",\n    \"red\"\n  ],\n  \"campo_extra\": \"no permitido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Inyección NoSQL en titulo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "titulo con objeto {$ne:''}: 400.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": {\n    \"$ne\": \"\"\n  },\n  \"descripcion\": \"El switch del laboratorio de cómputo no responde y varios equipos quedaron sin red.\",\n  \"prioridad\": \"alta\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio A\",\n    \"piso\": 2,\n    \"aula\": \"Lab 3\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"computo_redes\",\n    \"ip\": \"10.0.12.15\",\n    \"vlan\": 120,\n    \"puerto_uplink\": \"Gi0/24\",\n    \"equipos_afectados\": 18\n  },\n  \"tags\": [\n    \"switch\",\n    \"red\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Sin token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Petición sin Authorization: 401.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Token inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer token.invalido.xyz"
+              }
+            ],
+            "description": "Token JWT corrupto: 401.",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reportante en analítica",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Rol reportante sin analitica:ver: 403.",
+            "url": {
+              "raw": "{{base_url}}/analitica/edificios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "edificios"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Incidencia inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "ObjectId válido que no existe: 404.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/64b7f0c2a1b2c3d4e5f60718",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "64b7f0c2a1b2c3d4e5f60718"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Id malformado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Identificador no ObjectId: 400.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/id-malformado",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "id-malformado"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cerrar como técnico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Solo coordinador puede cerrar: 403.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/seguimiento",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "seguimiento"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado_nuevo\": \"cerrada\",\n  \"comentario\": \"Intento de cierre por técnico.\",\n  \"horas\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "rol_clave",
+      "value": ""
+    },
+    {
+      "key": "correo_nuevo",
+      "value": ""
+    }
+  ]
+}

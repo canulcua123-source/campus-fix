@@ -1,0 +1,11 @@
+# Dueños de código: GitHub pide su revisión automáticamente en los PR que tocan estas rutas.
+# Reemplaza los @usuario por los de tu equipo y descomenta. Un usuario inexistente
+# hace que GitHub marque el archivo como inválido.
+#
+# *                         @lider-equipo
+# /backend/                 @responsable-backend
+# /backend/scripts/init_db.py @responsable-bd @lider-equipo
+# /frontend/                @responsable-frontend
+# /postman/                 @responsable-backend
+# /.github/                 @lider-equipo
+# /AGENTS.md                @lider-equipo

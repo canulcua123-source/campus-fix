@@ -1,0 +1,223 @@
+# Campus Fix · UTM Desk
+
+**Sistema de gestión, resolución y analítica de incidencias del campus.** Docentes, estudiantes y administrativos reportan fallas desde el celular con una foto; la IA llena el reporte, los técnicos le dan seguimiento y la coordinación ve métricas en tiempo real.
+
+> Proyecto de la asignatura **Bases de Datos en la Nube** (Unidad II · NoSQL). Núcleo obligatorio: **MongoDB Atlas**.
+
+| | |
+|---|---|
+| **Issues / tareas** | [github.com/canulcua123-source/campus-fix/issues](https://github.com/canulcua123-source/campus-fix/issues) · detalle en [`docs/TAREAS.md`](docs/TAREAS.md) |
+| **Mockup visual** | [`docs/mockup-pwa.html`](docs/mockup-pwa.html) (ábrelo en el navegador) |
+| **Requerimientos** | [`docs/UTM_Desk_Documentacion_Proyecto.docx`](docs/UTM_Desk_Documentacion_Proyecto.docx) |
+| **Reglas del equipo** | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`AGENTS.md`](AGENTS.md) · [`docs/reglas/`](docs/reglas/) |
+
+---
+
+## ⛔ Antes de escribir una sola línea
+
+1. Lee **[`docs/reglas/GIT.md`](docs/reglas/GIT.md)** si es tu primera vez con Git en equipo.
+2. **Nunca** trabajes en `dev` ni en `main`. Rama por issue: `feat/<número-del-issue>-descripcion` desde `dev`.
+3. **Nunca** subas `.env`, llaves ni contraseñas. **Nunca** conectes tu código ni tu IA a Atlas: se trabaja con Docker local.
+4. Si programas con IA, dale primero [`AGENTS.md`](AGENTS.md) y el issue. Revisa **todo** su diff antes del commit.
+5. Toda pantalla nueva sigue el **sistema de diseño** de abajo y el mockup. Nada de colores inventados.
+6. Antes del PR: `ruff check` + `pytest tests -q` (backend) y `npm run lint` + `npm run build` (frontend). Si el CI está en rojo, nadie revisa.
+
+---
+
+## Arquitectura
+
+**Monolito modular** en 3 capas con API REST, servicios externos detrás de puertos/adaptadores (almacenamiento e IA).
+
+```
+ PWA React (celular / PC) ──HTTPS + JWT──▶ API FastAPI ──▶ MongoDB Atlas M0 (documentos)
+         │                                    │        └─▶ Redis (folio INCR, caché, límites)
+         └── sube la foto con URL firmada ───▶│        └─▶ IA de visión (Gemini / Claude)
+                                     Backblaze B2 (fotos y PDF) ◀── firma y verifica
+```
+
+| Capa | Tecnología |
+|---|---|
+| Frontend | React 19 + TypeScript · Vite · PWA (vite-plugin-pwa) · Tailwind 4 · React Router · TanStack Query · React Hook Form + Zod · Zustand · Recharts |
+| Backend | FastAPI · PyMongo Async · Pydantic v2 · PyJWT · pwdlib (argon2) · slowapi |
+| Datos | MongoDB Atlas M0 (colecciones `incidencias_campus`, `usuarios`, `roles`, `categorias`) |
+| Apoyo | Redis (Upstash en la nube, Docker en local) · Backblaze B2 (compatible con S3) |
+| Pruebas | pytest (208 e2e contra Mongo/Redis reales) · Postman (47 requests) · GitHub Actions |
+
+---
+
+## 🎨 Sistema de diseño (obligatorio)
+
+La app debe **sentirse nativa** en iPhone y Android y verse igual en todas las pantallas. La fuente de verdad es **`frontend/src/styles/tokens.css`**; las reglas completas están en [`docs/reglas/UX-UI.md`](docs/reglas/UX-UI.md) y el aspecto en el [mockup](docs/mockup-pwa.html).
+
+### Colores base
+
+| Token | Claro | Oscuro | Uso |
+|---|---|---|---|
+| `--color-primary` | `#1D4ED8` | `#60A5FA` | Botones principales, enlaces, pestaña activa, botón de cámara |
+| `--color-on-primary` | `#FFFFFF` | `#0B1220` | Texto sobre el color primario |
+| `--color-secondary` | `#0F766E` | `#2DD4BF` | Todo lo relacionado con la IA ("Sugerido por IA") |
+| `--color-bg` | `#F2F2F7` | `#0B0F17` | Fondo de pantalla |
+| `--color-surface` | `#FFFFFF` | `#151B26` | Tarjetas, barras, hojas |
+| `--color-surface-2` | `#F8FAFC` | `#1E2633` | Fondos secundarios, selectores |
+| `--color-border` | `#E5E7EB` | `#2A3342` | Bordes y divisores |
+| `--color-text` | `#0F172A` | `#F1F5F9` | Texto principal |
+| `--color-text-muted` | `#64748B` | `#94A3B8` | Texto secundario (sobre `surface`, no sobre `bg`) |
+
+### Colores con significado (insignias)
+
+Las insignias **siempre** llevan texto (nunca solo color) y usan **fondo claro + texto oscuro** para cumplir contraste AA:
+
+| Grupo | Valor | Fondo | Texto |
+|---|---|---|---|
+| Estado | abierta | `#DBEAFE` | `#1D4ED8` |
+| | en proceso | `#FEF3C7` | `#92400E` |
+| | en espera | `#EDE9FE` | `#5B21B6` |
+| | resuelta | `#DCFCE7` | `#166534` |
+| | cerrada | `#E2E8F0` | `#334155` |
+| Prioridad | baja | `#E2E8F0` | `#334155` |
+| | media | `#E0F2FE` | `#075985` |
+| | alta | `#FFEDD5` | `#9A3412` |
+| | crítica | `#FEE2E2` | `#B91C1C` |
+| Categoría | cómputo y redes | `#CFFAFE` | `#155E75` |
+| | infraestructura | `#FEF3C7` | `#92400E` |
+| | académico | `#FCE7F3` | `#9D174D` |
+| IA | sugerido por IA | `#CCFBF1` | `#115E59` |
+
+### Tipografía y medidas
+
+| Elemento | Valor |
+|---|---|
+| Fuente | `var(--font-sans)`: San Francisco en iPhone, Roboto en Android. **No importes fuentes.** |
+| Título grande (iOS) | 34 px bold · título de pantalla 22 px semibold |
+| Texto | 17 px (iOS) / 16 px (Android) · secundario 13 px |
+| Campos de formulario | **mínimo 16 px** (si no, iPhone hace zoom) |
+| Radios | tarjetas `--radius-card` 14 px · campos `--radius-input` 10 px · insignias 999 px |
+| Toques | botones y zonas táctiles **≥ 44 × 44 px** (`--tap-min`) |
+| Espaciado | múltiplos de 4 px |
+| Zonas seguras | `--safe-top/right/bottom/left` (notch y barra de gestos) |
+
+### Navegación
+
+- **Celular (< 1024 px):** barra inferior translúcida con botón central de cámara (`AppShell`).
+- **Computadora (≥ 1024 px):** menú lateral.
+- Pestañas por rol: ver la matriz rol × pantalla en [`docs/TAREAS.md`](docs/TAREAS.md).
+
+### ✅ Sí / ❌ No
+
+| ✅ Sí | ❌ No |
+|---|---|
+| `className="bg-panel text-ink"` o `var(--color-surface)` | `style={{ color: '#3b82f6' }}` o colores de Tailwind sueltos (`bg-blue-500`) |
+| Reusar `Badge`, `AppShell` y los componentes de `components/` | Crear otro botón o insignia "parecido" |
+| Estados de carga (skeleton), vacío, error con "Reintentar" y sin conexión en **cada** pantalla | Pantalla en blanco mientras carga |
+| Error debajo del campo al salir de él, en español claro | `alert()` o "Error 400" |
+| Probar en iPhone (Safari), Android (Chrome) y escritorio, en claro y oscuro | Probar solo en el navegador de la PC |
+| Íconos `lucide-react` | Emojis como íconos |
+
+---
+
+## Puesta en marcha (local)
+
+Requisitos: Python 3.12+, Node 22+, Docker, Git.
+
+```bash
+git clone https://github.com/canulcua123-source/campus-fix.git && cd campus-fix
+pip install pre-commit && pre-commit install && git config commit.template .gitmessage
+
+# 1. Mongo y Redis locales
+docker compose up -d
+
+# 2. Backend
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env                    # pon un JWT_SECRET de 32+ caracteres: openssl rand -hex 32
+python scripts/init_db.py --seed-demo   # colecciones, $jsonSchema, índices, roles y datos demo
+uvicorn app.main:app --reload           # http://localhost:8000/docs
+pytest tests -q                         # 208 pruebas (necesitan el docker de arriba)
+
+# 3. Frontend (otra terminal)
+cd frontend
+cp .env.example .env
+npm install
+npm run dev                             # http://localhost:5173
+```
+
+> El `.env` real con llaves de Atlas, Backblaze e IA **solo lo tiene el responsable de despliegue**. Para desarrollar no lo necesitas.
+
+### Variables de entorno (backend)
+
+| Variable | Para qué | Local |
+|---|---|---|
+| `MONGODB_URI` / `MONGODB_DB` | Base de datos | `mongodb://localhost:27017` / `utm_desk` |
+| `MONGODB_ADMIN_URI` | Solo `init_db.py` en Atlas (usuario con dbAdmin) | vacío |
+| `REDIS_URL` | Folio, caché, límites | `redis://localhost:6379/0` |
+| `JWT_SECRET` | Firma de tokens (≥ 32 caracteres o la API no arranca) | `openssl rand -hex 32` |
+| `CORS_ORIGINS` | Orígenes del frontend | `http://localhost:5173` |
+| `STORAGE_ENDPOINT` / `STORAGE_REGION` | Backblaze B2 (S3) | vacío |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | Llaves del bucket | vacío |
+| `IA_HABILITADA` / `IA_MODELO` / `ANTHROPIC_API_KEY` | Análisis de foto | `false` en local |
+
+Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`).
+
+---
+
+## Estructura
+
+```
+campus-fix/
+├── AGENTS.md / CLAUDE.md        # reglas para quien programa con IA
+├── CONTRIBUTING.md              # flujo de ramas, commits y PR
+├── .github/                     # CI, plantillas de issue/PR, CODEOWNERS
+├── docker-compose.yml           # mongo:8 + redis:7
+├── docs/
+│   ├── reglas/                  # GIT, UX-UI, API, FRONT-BACK, CREAR-API, BASE-DE-DATOS
+│   ├── TAREAS.md                # backlog con criterios y matriz de conflictos
+│   ├── algoritmo-foto-ia.md     # flujo foto → IA (modo asistido y agéntico)
+│   └── mockup-pwa.html          # cómo se ve la app
+├── postman/                     # banco de pruebas de la API
+├── scripts/github/              # protección de ramas, issues, revisor de reglas de BD
+├── backend/
+│   ├── app/
+│   │   ├── core/                # config, db, security (JWT, permisos, alcance), storage, limiter
+│   │   ├── routers/             # auth, incidencias, ia, roles, usuarios, categorias, analitica
+│   │   ├── schemas/             # contratos Pydantic
+│   │   └── services/ia.py       # proveedor de IA
+│   ├── scripts/init_db.py       # ÚNICO lugar para cambiar el esquema (solo el DBA)
+│   └── tests/e2e/               # pruebas contra Mongo/Redis reales
+└── frontend/src/
+    ├── styles/tokens.css        # ← colores y medidas (fuente de verdad)
+    ├── components/              # AppShell, Badge, … (reutilízalos)
+    ├── api/client.ts            # único cliente HTTP
+    ├── auth/                    # sesión y RequirePermiso
+    ├── schemas/                 # Zod (espejo de Pydantic)
+    └── pages/                   # una pantalla por archivo
+```
+
+---
+
+## Roles del sistema
+
+| Rol | Ve | Puede |
+|---|---|---|
+| Reportante | Solo sus reportes | Crear con foto + IA, subir evidencias |
+| Técnico | Su área | Seguimiento, etiquetas, evidencias, búsqueda |
+| Coordinador | Su área | Lo del técnico + asignar, cerrar, métricas |
+| Directivo | Todo (solo lectura) | Dashboard y búsqueda |
+| Admin | Todo | Usuarios, roles (con alcance) y categorías |
+
+Los permisos se validan **en el backend** en cada petición (`require_permiso` + `filtro_alcance`); ocultar un botón en el frontend no es seguridad.
+
+---
+
+## Flujo de trabajo (resumen)
+
+```bash
+git switch dev && git pull
+git switch -c feat/12-pantalla-login     # 12 = número del issue
+# … commits pequeños …
+git fetch origin && git rebase origin/dev
+git push --force-with-lease               # (o git push la primera vez)
+gh pr create --base dev                   # con "Closes #12" en la descripción
+```
+
+`dev` recibe PRs con *squash*; `main` solo recibe PRs desde `dev` con el CI en verde. Detalle en [`CONTRIBUTING.md`](CONTRIBUTING.md) y [`docs/reglas/GIT.md`](docs/reglas/GIT.md).
