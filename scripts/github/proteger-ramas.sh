@@ -11,13 +11,18 @@
 # Es idempotente: si el ruleset ya existe (por nombre) lo actualiza.
 set -euo pipefail
 
-uso() { echo "Uso: $0 <owner> <repo> [--dry-run]" >&2; exit 2; }
+uso() { echo "Uso: $0 <owner> <repo> [--dry-run] [--admin-bypass]" >&2; exit 2; }
 [ $# -ge 2 ] || uso
 OWNER="$1"; REPO="$2"; shift 2
 DRY_RUN=false
+# --admin-bypass: los administradores del repo pueden saltarse las reglas SOLO desde un PR
+# (nunca con push directo). Útil mientras el equipo tiene una sola persona que pueda aprobar.
+# Quítalo (vuelve a correr el script sin la opción) cuando haya al menos 2 revisores.
+BYPASS='[]'
 for a in "$@"; do
   case "$a" in
     --dry-run) DRY_RUN=true ;;
+    --admin-bypass) BYPASS='[{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"}]' ;;
     *) uso ;;
   esac
 done
@@ -43,7 +48,7 @@ ruleset() {
   "name": "$nombre",
   "target": "branch",
   "enforcement": "active",
-  "bypass_actors": [],
+  "bypass_actors": $BYPASS,
   "conditions": { "ref_name": { "include": ["refs/heads/$rama"], "exclude": [] } },
   "rules": [
     {"type": "deletion"},
