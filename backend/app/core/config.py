@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ia_limite_diario: int = 20
     ia_limite_global_diario: int = 300  # tope de gasto total de IA por día
     limite_escritura: str = "60/minute"  # altas y seguimiento por usuario
+    limite_general: str = "300/minute"  # cualquier endpoint, por usuario (o IP sin token)
+    limite_consulta_pesada: str = "30/minute"  # $text y pipelines de analítica
     anthropic_api_key: str = ""
     ia_habilitada: bool = True
     ia_modelo: str = "claude-opus-5-5"
@@ -39,6 +41,14 @@ class Settings(BaseSettings):
         # Fail-closed: sin un secreto real la API no arranca (evita tokens falsificables).
         if v == "cambia-esto" or len(v) < 32:
             raise ValueError("JWT_SECRET debe tener al menos 32 caracteres (openssl rand -hex 32)")
+        return v
+
+    @field_validator("cors_origins")
+    @classmethod
+    def _sin_comodin(cls, v: str) -> str:
+        # Con "*" cualquier página web podría llamar a la API desde el navegador de un usuario.
+        if "*" in v:
+            raise ValueError("CORS_ORIGINS no admite '*': lista los dominios del frontend separados por coma")
         return v
 
     @property

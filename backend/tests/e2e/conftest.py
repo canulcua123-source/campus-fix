@@ -16,7 +16,9 @@ _ENV = {
     "R2_SECRET_ACCESS_KEY": "test",
     "R2_BUCKET": "test-bucket",
     "R2_VERIFICAR_SUBIDA": "false",
-    "LIMITE_ESCRITURA": "100000/minute",  # la suite hace cientos de altas; el límite real se prueba aparte  # sin red: el HEAD a R2 se prueba con monkeypatch
+    "LIMITE_ESCRITURA": "100000/minute",
+    "LIMITE_GENERAL": "100000/minute",
+    "LIMITE_CONSULTA_PESADA": "100000/minute",  # la suite hace cientos de peticiones; los límites reales se prueban aparte
     "IA_HABILITADA": "true",
     "CORS_ORIGINS": "http://localhost:5173",
     "ANTHROPIC_API_KEY": "",
