@@ -27,6 +27,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
   const iniciarSesion = useAuth((s) => s.iniciarSesion)
+  const aviso = useAuth((s) => s.aviso)
   const navigate = useNavigate()
 
   async function enviar(e: FormEvent) {
@@ -120,6 +121,13 @@ export default function Login() {
                 {verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               </button>
             </div>
+
+            {aviso && !error && (
+              <p role="status" className="flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 p-3 text-sm text-warn">
+                <CircleAlert size={18} className="mt-px shrink-0" aria-hidden />
+                {aviso}
+              </p>
+            )}
 
             {error && (
               <p role="alert" className="flex items-start gap-2 rounded-xl border border-bad/30 bg-bad/10 p-3 text-sm text-bad">
