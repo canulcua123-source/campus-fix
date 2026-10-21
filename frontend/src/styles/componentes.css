@@ -1,0 +1,501 @@
+/*
+ * Estilos de components/ui y del AppShell. Solo tokens de tokens.css.
+ * Las sombras rgb(0 0 0 / x) son la única excepción permitida (UX-10).
+ * Ajustes por plataforma solo con :root[data-platform='ios|android'] (UX-04).
+ */
+@layer components {
+  /* ---------- Botón ---------- */
+  .ui-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: var(--tap-min);
+    min-width: var(--tap-min);
+    padding: 0 18px;
+    border-radius: var(--radius-input);
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: transform var(--duracion) ease, opacity var(--duracion) ease;
+  }
+  .ui-btn:active:not(:disabled, [aria-disabled='true']) {
+    transform: scale(0.97);
+  }
+  .ui-btn:disabled,
+  .ui-btn[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .ui-btn[aria-busy='true'] {
+    opacity: 0.85;
+    cursor: progress;
+  }
+  .ui-btn--lg {
+    min-height: 52px;
+    padding: 0 22px;
+    font-size: 17px;
+    border-radius: var(--radius-card);
+  }
+  .ui-btn--icono {
+    padding: 0;
+  }
+  .ui-btn--bloque {
+    width: 100%;
+  }
+  .ui-btn--primario {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+  .ui-btn--secundario {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border-color: var(--color-border-strong);
+  }
+  .ui-btn--peligro {
+    background: var(--color-danger);
+    color: var(--color-on-danger);
+  }
+  .ui-btn--fantasma {
+    background: transparent;
+    color: var(--color-primary);
+  }
+  .ui-btn--fantasma:hover:not(:disabled) {
+    background: var(--color-surface-2);
+  }
+
+  /* ---------- Spinner ---------- */
+  .ui-spinner {
+    display: inline-block;
+    flex-shrink: 0;
+    border-radius: var(--radius-pill);
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: ui-girar 0.8s linear infinite;
+  }
+  @keyframes ui-girar {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* ---------- Campos ---------- */
+  .ui-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ui-campo + .ui-campo {
+    margin-top: 14px;
+  }
+  .ui-campo__etiqueta {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+  .ui-campo__requerido {
+    color: var(--color-danger);
+    margin-left: 2px;
+  }
+  .ui-campo__ayuda {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-text-muted);
+  }
+  .ui-campo__error {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--color-danger);
+  }
+  .ui-campo [aria-invalid='true'] {
+    border-color: var(--color-danger);
+    border-width: 2px;
+  }
+  .ui-campo :disabled {
+    background: var(--color-surface-2);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+  .ui-campo select {
+    appearance: none;
+    padding-right: 40px;
+  }
+  .ui-campo__select {
+    position: relative;
+  }
+  .ui-campo__select svg {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--color-text-muted);
+  }
+  .ui-campo textarea {
+    min-height: 96px;
+    resize: vertical;
+  }
+
+  /* ---------- Tarjeta ---------- */
+  .ui-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    padding: 16px;
+    color: var(--color-text);
+  }
+  .ui-card--interactiva {
+    display: block;
+    text-decoration: none;
+    transition: transform var(--duracion) ease;
+  }
+  .ui-card--interactiva:active {
+    transform: scale(0.98);
+  }
+
+  /* ---------- Insignia ---------- */
+  .ui-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    background: var(--badge-bg);
+    color: var(--badge-text);
+  }
+
+  /* ---------- Skeleton ---------- */
+  .ui-skeleton {
+    display: block;
+    background: var(--color-border);
+    border-radius: 8px;
+    animation: ui-pulso 1.4s ease-in-out infinite;
+  }
+  @keyframes ui-pulso {
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  /* ---------- Estados vacío / error ---------- */
+  .ui-estado {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 32px 16px;
+    text-align: center;
+  }
+  .ui-estado__icono {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-2);
+    color: var(--color-text-muted);
+    margin-bottom: 4px;
+  }
+  .ui-estado--error .ui-estado__icono {
+    background: var(--prioridad-critica-bg);
+    color: var(--prioridad-critica-text);
+  }
+  .ui-estado__titulo {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .ui-estado__texto {
+    margin: 0 0 8px;
+    max-width: 36ch;
+    font-size: 15px;
+    color: var(--color-text-muted);
+  }
+
+  /* ---------- Encabezado de página ---------- */
+  .ui-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px 12px;
+    margin-bottom: 16px;
+  }
+  .ui-header__atras {
+    flex-basis: 100%;
+    margin: 0 0 4px -12px;
+  }
+  .ui-header__atras .ui-btn {
+    padding: 0 12px 0 4px;
+  }
+  .ui-header__texto {
+    min-width: 0;
+  }
+  .ui-header .titulo-pagina {
+    margin: 0;
+  }
+  .ui-header__subtitulo {
+    margin: 2px 0 0;
+    font-size: 15px;
+    color: var(--color-text-muted);
+  }
+  .ui-header__acciones {
+    display: flex;
+    gap: 8px;
+  }
+  :root[data-platform='ios'] .ui-header__subtitulo {
+    order: -1;
+    margin: 0 0 2px;
+  }
+  :root[data-platform='ios'] .ui-header__texto {
+    display: flex;
+    flex-direction: column;
+  }
+  @media (min-width: 1024px) {
+    :root .ui-header .titulo-pagina {
+      font-size: 26px;
+      letter-spacing: 0;
+    }
+  }
+
+  /* ---------- Hoja inferior (dialog nativo) ---------- */
+  .ui-sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 640px;
+    max-height: calc(100dvh - var(--safe-top) - 24px);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: 0 -8px 30px rgb(0 0 0 / 0.2);
+    overflow-y: auto;
+  }
+  .ui-sheet[open] {
+    animation: ui-subir var(--duracion) ease-out;
+  }
+  .ui-sheet::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+  .ui-sheet__contenido {
+    padding: 8px 16px calc(16px + var(--safe-bottom));
+  }
+  .ui-sheet__asa {
+    width: 36px;
+    height: 5px;
+    margin: 0 auto 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-border-strong);
+  }
+  .ui-sheet__cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ui-sheet__titulo {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .ui-sheet__acciones {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  :root[data-platform='android'] .ui-sheet {
+    border-radius: 28px 28px 0 0;
+  }
+  @keyframes ui-subir {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  @media (min-width: 1024px) {
+    .ui-sheet {
+      inset: 0;
+      margin: auto;
+      height: fit-content;
+      max-width: 480px;
+      border-radius: var(--radius-card);
+    }
+    .ui-sheet__contenido {
+      padding: 20px 24px 24px;
+    }
+    .ui-sheet__asa {
+      display: none;
+    }
+    .ui-sheet__acciones {
+      flex-direction: row;
+      justify-content: flex-end;
+    }
+  }
+
+  /* ---------- Barra inferior (< 1024 px) ---------- */
+  .tabbar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 40;
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    align-items: center;
+    min-height: var(--tabbar-height);
+    padding: 4px max(8px, var(--safe-right)) var(--safe-bottom) max(8px, var(--safe-left));
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+  .tabbar--estatica {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    padding-bottom: 4px;
+  }
+  .tabbar__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: var(--tap-min);
+    min-height: 52px;
+    border-radius: var(--radius-input);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+  .tabbar__item[aria-current='page'] {
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+  .tabbar__camara {
+    justify-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    margin-top: -24px;
+    border-radius: var(--radius-pill);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: 0 6px 16px rgb(0 0 0 / 0.28);
+    transition: transform var(--duracion) ease;
+  }
+  .tabbar__camara:active {
+    transform: scale(0.94);
+  }
+  :root[data-platform='ios'] .tabbar {
+    background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+  :root[data-platform='android'] .tabbar {
+    border-top: 0;
+    box-shadow: 0 -1px 4px rgb(0 0 0 / 0.15);
+  }
+  :root[data-platform='android'] .tabbar__camara {
+    border-radius: 16px;
+  }
+  :root[data-platform='android'] .tabbar__item[aria-current='page'] svg {
+    background: var(--estado-abierta-bg);
+    color: var(--estado-abierta-text);
+    border-radius: var(--radius-pill);
+    padding: 2px 16px;
+    box-sizing: content-box;
+  }
+
+  /* ---------- Menú lateral (≥ 1024 px) ---------- */
+  .sidebar {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 248px;
+    padding: calc(20px + var(--safe-top)) 12px 20px;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+  }
+  .sidebar__pie {
+    margin-top: auto;
+    padding-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sidebar__marca {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 20px;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .sidebar__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-size: 14px;
+  }
+  .sidebar__item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: var(--tap-min);
+    padding: 0 12px;
+    border-radius: var(--radius-input);
+    color: var(--color-text-muted);
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .sidebar__item:hover {
+    background: var(--color-surface-2);
+    color: var(--color-text);
+  }
+  .sidebar__item[aria-current='page'] {
+    background: var(--estado-abierta-bg);
+    color: var(--estado-abierta-text);
+    font-weight: 600;
+  }
+  .sidebar--estatica {
+    display: flex;
+    padding-top: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+  }
+  @media (min-width: 1024px) {
+    .tabbar:not(.tabbar--estatica) {
+      display: none;
+    }
+    .sidebar:not(.sidebar--estatica) {
+      position: sticky;
+      top: 0;
+      display: flex;
+      height: 100dvh;
+      overflow-y: auto;
+    }
+  }
+}

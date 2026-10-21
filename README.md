@@ -61,27 +61,30 @@ La app debe **sentirse nativa** en iPhone y Android y verse igual en todas las p
 | `--color-surface-2` | `#F8FAFC` | `#1E2633` | Fondos secundarios, selectores |
 | `--color-border` | `#E5E7EB` | `#2A3342` | Bordes y divisores |
 | `--color-text` | `#0F172A` | `#F1F5F9` | Texto principal |
-| `--color-text-muted` | `#64748B` | `#94A3B8` | Texto secundario (sobre `surface`, no sobre `bg`) |
+| `--color-text-muted` | `#475569` | `#94A3B8` | Texto secundario (≥ 4.5:1 sobre `bg`, `surface` y `surface-2`) |
+| `--color-border-strong` | `#64748B` | `#64748B` | Borde de campos y botón secundario (≥ 3:1) |
+| `--color-focus` | `#1D4ED8` | `#93C5FD` | Anillo de foco (`:focus-visible`) |
+| `--color-success` / `warning` / `danger` / `info` | `#166534` / `#92400E` / `#B91C1C` / `#0369A1` | `#4ADE80` / `#FBBF24` / `#F87171` / `#38BDF8` | Retroalimentación; texto encima con `--color-on-*` |
 
 ### Colores con significado (insignias)
 
-Las insignias **siempre** llevan texto (nunca solo color) y usan **fondo claro + texto oscuro** para cumplir contraste AA:
+Las insignias **siempre** llevan texto (nunca solo color) y usan pares **fondo + texto** (`--estado-abierta-bg` / `--estado-abierta-text`, etc.) con contraste ≥ 4.5:1 en ambos temas. En claro: fondo claro + texto oscuro; en oscuro: fondo oscuro + texto claro.
 
-| Grupo | Valor | Fondo | Texto |
-|---|---|---|---|
-| Estado | abierta | `#DBEAFE` | `#1D4ED8` |
-| | en proceso | `#FEF3C7` | `#92400E` |
-| | en espera | `#EDE9FE` | `#5B21B6` |
-| | resuelta | `#DCFCE7` | `#166534` |
-| | cerrada | `#E2E8F0` | `#334155` |
-| Prioridad | baja | `#E2E8F0` | `#334155` |
-| | media | `#E0F2FE` | `#075985` |
-| | alta | `#FFEDD5` | `#9A3412` |
-| | crítica | `#FEE2E2` | `#B91C1C` |
-| Categoría | cómputo y redes | `#CFFAFE` | `#155E75` |
-| | infraestructura | `#FEF3C7` | `#92400E` |
-| | académico | `#FCE7F3` | `#9D174D` |
-| IA | sugerido por IA | `#CCFBF1` | `#115E59` |
+| Grupo | Valor | Fondo claro | Texto claro | Fondo oscuro | Texto oscuro |
+|---|---|---|---|---|---|
+| Estado | abierta | `#DBEAFE` | `#1D4ED8` | `#1E3A8A` | `#BFDBFE` |
+| | en proceso | `#FEF3C7` | `#92400E` | `#78350F` | `#FDE68A` |
+| | en espera | `#EDE9FE` | `#5B21B6` | `#4C1D95` | `#DDD6FE` |
+| | resuelta | `#DCFCE7` | `#166534` | `#14532D` | `#BBF7D0` |
+| | cerrada | `#E2E8F0` | `#334155` | `#334155` | `#E2E8F0` |
+| Prioridad | baja | `#E2E8F0` | `#334155` | `#334155` | `#E2E8F0` |
+| | media | `#E0F2FE` | `#075985` | `#0C4A6E` | `#BAE6FD` |
+| | alta | `#FFEDD5` | `#9A3412` | `#7C2D12` | `#FED7AA` |
+| | crítica | `#FEE2E2` | `#B91C1C` | `#7F1D1D` | `#FECACA` |
+| Categoría | cómputo y redes | `#CFFAFE` | `#155E75` | `#164E63` | `#A5F3FC` |
+| | infraestructura | `#FEF3C7` | `#92400E` | `#78350F` | `#FDE68A` |
+| | académico | `#FCE7F3` | `#9D174D` | `#831843` | `#FBCFE8` |
+| IA | sugerido por IA | `#CCFBF1` | `#115E59` | `#134E4A` | `#99F6E4` |
 
 ### Tipografía y medidas
 
@@ -91,7 +94,7 @@ Las insignias **siempre** llevan texto (nunca solo color) y usan **fondo claro +
 | Título grande (iOS) | 34 px bold · título de pantalla 22 px semibold |
 | Texto | 17 px (iOS) / 16 px (Android) · secundario 13 px |
 | Campos de formulario | **mínimo 16 px** (si no, iPhone hace zoom) |
-| Radios | tarjetas `--radius-card` 14 px · campos `--radius-input` 10 px · insignias 999 px |
+| Radios | tarjetas `--radius-card` 14 px · campos `--radius-input` 10 px · hojas `--radius-sheet` 20 px · insignias `--radius-pill` 999 px |
 | Toques | botones y zonas táctiles **≥ 44 × 44 px** (`--tap-min`) |
 | Espaciado | múltiplos de 4 px |
 | Zonas seguras | `--safe-top/right/bottom/left` (notch y barra de gestos) |
@@ -107,7 +110,7 @@ Las insignias **siempre** llevan texto (nunca solo color) y usan **fondo claro +
 | ✅ Sí | ❌ No |
 |---|---|
 | `className="bg-panel text-ink"` o `var(--color-surface)` | `style={{ color: '#3b82f6' }}` o colores de Tailwind sueltos (`bg-blue-500`) |
-| Reusar `Badge`, `AppShell` y los componentes de `components/` | Crear otro botón o insignia "parecido" |
+| Reusar los componentes de `components/ui` (`Button`, `Input`, `Badge`…) y `AppShell`; consultar `/_estilos` en `npm run dev` | Crear otro botón o insignia "parecido" |
 | Estados de carga (skeleton), vacío, error con "Reintentar" y sin conexión en **cada** pantalla | Pantalla en blanco mientras carga |
 | Error debajo del campo al salir de él, en español claro | `alert()` o "Error 400" |
 | Probar en iPhone (Safari), Android (Chrome) y escritorio, en claro y oscuro | Probar solo en el navegador de la PC |
