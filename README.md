@@ -208,6 +208,19 @@ campus-fix/
 
 ---
 
+## Equipo
+
+> ✏️ Cada integrante: revisa **tu fila** y corrige tu nombre completo o rol si hace falta (botón ✏️ en GitHub sobre este archivo, en la rama del PR).
+
+| Integrante | GitHub | Rol en el equipo | Responsable de |
+|---|---|---|---|
+| Líder del proyecto | [@canulcua123-source](https://github.com/canulcua123-source) | **Líder / arquitecto** | Base visual (#76), arquitectura, coordinación, documento y defensa |
+| Diego Solís | [@Genokiller05](https://github.com/Genokiller05) | **Frontend / UX** | Pantallas de la PWA, formularios, dashboard |
+| Bogarth Peña *(por confirmar)* | [@raiden3893](https://github.com/raiden3893) | **Backend + Base de datos** | API FastAPI, MongoDB, `init_db.py`, IA en el servidor |
+| Yael Rodríguez | [@Nanashi31](https://github.com/Nanashi31) | **QA / DevOps** | Pruebas, Postman, CI, despliegue y revisión de criterios en cada PR |
+
+**Revisar es de todos:** cada PR necesita la aprobación de otro integrante. GitHub pide automáticamente la revisión del dueño del área según [`.github/CODEOWNERS`](.github/CODEOWNERS).
+
 ## Roles del sistema
 
 | Rol | Ve | Puede |
