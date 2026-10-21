@@ -2,7 +2,7 @@
 
 Cómo habla la PWA (`frontend/src/`) con la API (`backend/app/`). Si cambias un lado del contrato, cambias el otro **en el mismo PR**.
 
-Archivos clave: `frontend/src/api/client.ts` (`api<T>()`, `ApiError` y subclases), `frontend/src/auth/store.ts` (`useAuth`, token en memoria), `frontend/src/auth/RequirePermiso.tsx`, `frontend/src/schemas/incidencia.ts` (Zod), `frontend/src/main.tsx` (`QueryClient`), `frontend/vite.config.ts` (service worker), `backend/app/schemas/*.py` (Pydantic), `backend/app/main.py` (CORS y errores).
+Archivos clave: `frontend/src/api/client.ts` (`api()`, `ApiError` y subclases, `debeReintentar`, `subirArchivoFirmado`), `frontend/src/api/queryClient.ts` (`crearQueryClient`), `frontend/src/api/keys.ts` (claves de query), `frontend/src/api/hooks/` (hooks de TanStack Query), `frontend/src/api/<recurso>.ts` (llamadas + `queryOptions`), `frontend/src/api/avisos.ts` (errores globales para el Toast), `frontend/src/auth/store.ts` (`useAuth`, token en memoria), `frontend/src/auth/RequirePermiso.tsx`, `frontend/src/schemas/*.ts` (Zod de entradas y respuestas; `etiquetas.ts` con los textos de los enums), `frontend/src/main.tsx`, `frontend/vite.config.ts` (service worker), `backend/app/schemas/*.py` (Pydantic), `backend/app/main.py` (CORS y errores).
 
 ---
 
@@ -10,11 +10,13 @@ Archivos clave: `frontend/src/api/client.ts` (`api<T>()`, `ApiError` y subclases
 
 **FB-01 · URL base solo por `VITE_API_URL`.** Se define en `frontend/.env` (`.env.example`: `http://localhost:8000`). Nunca escribas la URL de la API en un componente. En producción apunta al dominio HTTPS de la API.
 
-**FB-02 · Un solo cliente: `api<T>()` de `api/client.ts`.** Prohibido `fetch`/`axios` sueltos hacia la API en páginas o componentes. El cliente agrega el Bearer token, serializa `json`, y convierte los errores en `ApiError`. La **única** excepción es el `PUT` al bucket (FB-14), que también vive en `api/client.ts` como función propia.
+**FB-02 · Un solo cliente: `api()` de `api/client.ts`.** Prohibido `fetch`/`axios` sueltos hacia la API en páginas o componentes. El cliente agrega el Bearer token, serializa `json` (solo entonces pone `Content-Type`), arma `params`, corta a los 20 s (`timeoutMs`; 60 s en IA), valida la respuesta con `schema` (Zod) y convierte los errores en `ApiError`. En pantallas usa los hooks de `api/hooks/` (sección 4), no `api()` directo. La **única** excepción es el `PUT` al bucket (FB-14), que también vive en `api/client.ts` como función propia.
 
 ```ts
 // ✅
-const inc = await api<{ _id: string; codigo: string; estado: string }>('/incidencias', { method: 'POST', json: datos })
+const inc = await api('/incidencias', { method: 'POST', json: datos, schema: incidenciaCreadaSchema })
+// ✅✅ en una pantalla
+const crear = useCrearIncidencia()
 // ❌
 const r = await fetch('http://localhost:8000/incidencias', { method: 'POST', body: JSON.stringify(datos) })
 ```
@@ -32,13 +34,13 @@ const r = await fetch('http://localhost:8000/incidencias', { method: 'POST', bod
 
 Consecuencia aceptada: al recargar la página se pide iniciar sesión de nuevo (dura 15 min, `JWT_ACCESS_MINUTES`). La renovación con refresh token en cookie HttpOnly (RF-GEN-02) aún no existe en la API; cuando exista se implementa en `api/client.ts`, no en cada pantalla.
 
-**FB-05 · 401 → volver a iniciar sesión.** Cualquier 401 (token expirado, usuario desactivado) debe: `useAuth.getState().cerrarSesion()`, limpiar la caché (`queryClient.clear()`) y llevar a `/login` con el mensaje "Tu sesión expiró. Inicia sesión de nuevo". Se hace **una vez, en `api/client.ts`** (o en un `QueryCache`/`MutationCache` `onError` global), no en cada pantalla. Excepción: el 401 de `POST /auth/login` significa "Credenciales inválidas" y se muestra en el formulario.
+**FB-05 · 401 → volver a iniciar sesión.** Cualquier 401 (token expirado, usuario desactivado) hace: `cerrarSesion("Tu sesión expiró. Inicia sesión de nuevo")` (el aviso queda en `useAuth().aviso` y lo muestra `Login`), `queryClient.clear()` y `RequirePermiso` lleva a `/login`. Se hace **una vez, en `api/client.ts`** (`expirarSesion`, solo si el token rechazado sigue vigente: varias peticiones con 401 producen un solo cierre), no en cada pantalla. Excepción: el 401 de `POST /auth/login` significa "Credenciales inválidas" y se muestra en el formulario.
 
 **FB-06 · Cerrar sesión limpia todo:** `cerrarSesion()` + `queryClient.clear()`. Si no, el siguiente usuario en el mismo celular vería datos en caché del anterior.
 
 ## 3. Errores
 
-**FB-07 · Mensaje por código.** El cliente ya crea `ValidacionError` (400), `NoAutenticadoError` (401), `SinPermisoError` (403) y `ConflictoError` (409). Las pantallas muestran:
+**FB-07 · Mensaje por código.** El cliente crea `ValidacionError` (400), `NoAutenticadoError` (401), `SinPermisoError` (403), `NoEncontradoError` (404) y `ConflictoError` (409); todas son `ApiError` con `status`, `codigo` (`validacion`, `no_autenticado`, `sin_permiso`, `no_encontrado`, `conflicto`, `duplicado`, `demasiado_grande`, `limite`, `no_disponible`, `servidor`, `red`, `timeout`, `contrato`…), `message` en español, `campos` (400) y `reintentarEn` (`Retry-After`). Muestra siempre `e.message`. Las mutaciones publican su error en `useAvisosApi` (para el Toast global) salvo 401 y 400 con campos; `meta: { silencioso: true }` lo evita. Las pantallas muestran:
 
 | Código | Qué muestra la PWA | Acción |
 |---|---|---|
@@ -52,26 +54,25 @@ Consecuencia aceptada: al recargar la página se pide iniciar sesión de nuevo (
 | 503 | "El servicio no está disponible por ahora"; en IA: seguir con el formulario manual | Reintentar más tarde |
 | red caída / 5xx | "Sin conexión con el servidor" + Reintentar | `refetch()` |
 
-Los mensajes de la API llegan en `detail` (HTTPException) o en `error`/`detalle` (validación, 409 de duplicado, 413, 429 de slowapi): ver API.md API-08. Lee ambos en `mapear()`. Si la respuesta no es JSON (p. ej. un 502 del proxy en HTML), el cliente no debe romper con `JSON.parse`: usa un mensaje genérico.
+Los mensajes de la API llegan en `detail` (HTTPException) o en `error`/`detalle` (validación, 409 de duplicado, 413, 429 de slowapi): ver API.md API-08. Ambos se leen en `mapearError()`. Si la respuesta no es JSON (p. ej. un 502 del proxy en HTML), el cliente no debe romper con `JSON.parse`: usa un mensaje genérico.
 
-**FB-08 · 400 de la API → `setError` en el campo.** `detalle[].loc` trae la ruta (`["body","detalle_especifico","vlan"]`). Quita `"body"`, une con `.` y llama `setError(ruta, { message })`. Traduce `msg` a español si viene en inglés (Pydantic responde en inglés: "String should have at least 5 characters"); lo ideal es que Zod ya lo haya detectado antes (FB-11).
+**FB-08 · 400 de la API → `setError` en el campo.** `detalle[].loc` trae la ruta (`["body","detalle_especifico","computo_redes","vlan"]`). El cliente ya la convierte en `e.campos` (`{ 'detalle_especifico.vlan': 'El valor excede el máximo' }`: sin `body` ni la etiqueta de la unión, mensaje traducido por `type`; sin ruta → `_general`). Lo ideal es que Zod ya lo haya detectado antes (FB-12).
 
 ```ts
 // ✅
 catch (e) {
-  if (e instanceof ValidacionError && Array.isArray(e.detalle)) {
-    for (const d of e.detalle as { loc?: (string | number)[]; msg: string }[]) {
-      const ruta = (d.loc ?? []).filter((p) => p !== 'body').join('.')
-      if (ruta) setError(ruta as Path<IncidenciaForm>, { message: 'Revisa este campo' })
-      else setErrorGeneral(d.msg)
+  if (e instanceof ValidacionError) {
+    for (const [ruta, message] of Object.entries(e.campos)) {
+      if (ruta === '_general') setErrorGeneral(message)
+      else setError(ruta as Path<IncidenciaForm>, { message })
     }
-  } else setErrorGeneral(e instanceof Error ? e.message : 'No se pudo guardar')
+  } else setErrorGeneral(mensajeDeError(e, 'No se pudo guardar'))
 }
 ```
 
 ## 4. TanStack Query
 
-**FB-09 · Lecturas con `useQuery`, escrituras con `useMutation`.** Nada de `useEffect` + `fetch` + `useState` para datos del servidor. Claves de query estándar (arreglos, empezando por el recurso):
+**FB-09 · Lecturas con `useQuery`, escrituras con `useMutation`.** Nada de `useEffect` + `fetch` + `useState` para datos del servidor. Usa los hooks de `api/hooks/` (`useMe`, `useLogin`, `useLogout`, `useIncidencias(filtros)`, `useIncidencia(id)`, `useBuscar(q)`, `useCrearIncidencia`, `useSeguimiento(id)`, `useAsignar(id)`, `useTags(id)`, `useEvidencia(id)`, `useUrlEvidencia`, `useCategorias`, `useAnalitica`, `useAnalizarImagen`, `useUsuarios`, `useCrearUsuario`, `useEditarUsuario`, `useRoles`, `useCrearRol`). Si falta uno, agrégalo ahí con su `queryOptions` en `api/<recurso>.ts`. Claves estándar (centralizadas en `api/keys.ts`, objeto `claves`):
 
 | Clave | Endpoint |
 |---|---|
@@ -103,14 +104,14 @@ const m = useMutation({
 })
 ```
 
-**FB-11 · Reintentos solo en GET y nunca en 4xx.** Configúralo una vez en el `QueryClient` de `main.tsx` (hoy usa los valores por defecto: 3 reintentos para todo error, incluidos 401/403/404).
+**FB-11 · Reintentos solo en GET y nunca en 4xx.** Configurado una vez en `crearQueryClient()` (`api/queryClient.ts`, usado por `main.tsx`): `retry: debeReintentar` (máx. 2, solo red/timeout/5xx; nunca 4xx ni `contrato`), `staleTime: 30 s`, mutaciones sin reintento, `refetchOnWindowFocus` solo en listas.
 
 ```ts
 // ✅ main.tsx
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: (intentos, e) => !(e instanceof ApiError && e.status >= 400 && e.status < 500) && intentos < 2,
+      retry: debeReintentar, // api/client.ts
       staleTime: 30_000,
     },
     mutations: { retry: false },   // un POST repetido puede duplicar una incidencia
@@ -139,7 +140,7 @@ edificio: z.string().min(1, 'Requerido'),
 
 Zod es para avisar rápido; **la seguridad está en Pydantic y `$jsonSchema`**. Nunca relajes Pydantic "porque el front ya valida".
 
-**FB-13 · Tipos compartidos.** Los tipos de TypeScript salen de Zod (`z.infer`) para entradas y de interfaces en `frontend/src/schemas/` para respuestas, con los mismos nombres que el JSON (`_id`, `codigo`, `fecha_creacion`, `tecnico_asignado`). Enums una sola vez (`PRIORIDADES`, `ESTADOS`, `CATEGORIAS`) y se reutilizan en formularios y `Badge`. Las respuestas inciertas (IA) se validan con `.parse()`, como `analisisImagenSchema` en `Reportar.tsx`. (recomendado) Generar tipos desde `/openapi.json` con `openapi-typescript` para detectar desajustes.
+**FB-13 · Tipos compartidos.** Los tipos de TypeScript salen de Zod (`z.infer`) tanto para entradas como para respuestas (`incidenciaListaItemSchema`, `incidenciaDetalleSchema`, `meSchema`, `rolSchema`, `categoriaSchema`, `analiticaEdificioSchema`…). Cada hook valida la respuesta con `safeParse`; si no cumple, lanza `ApiError` `contrato` (error controlado, no pantalla blanca) y lo registra en consola en desarrollo. Mismos nombres que el JSON con los mismos nombres que el JSON (`_id`, `codigo`, `fecha_creacion`, `tecnico_asignado`). Enums una sola vez (`PRIORIDADES`, `ESTADOS`, `CATEGORIAS`) y se reutilizan en formularios y `Badge`.  (recomendado) Generar tipos desde `/openapi.json` con `openapi-typescript` para detectar desajustes.
 
 ## 6. Evidencias: flujo exacto en 3 pasos
 
@@ -159,18 +160,12 @@ PWA ──3. POST /incidencias/{id}/evidencias {evidencia_id} ──────
 4. La `upload_url` caduca en 5 min (`EXPIRA_SEGUNDOS = 300`) y la firma pendiente en 10 min (`FIRMA_TTL`); haz los 3 pasos seguidos. Una firma sirve una sola vez.
 5. Si el paso 3 responde 400 ("La evidencia no fue firmada… o la firma expiró" / "El archivo no se subió o no coincide"), se repite desde el paso 1. 409 = límite de 10 evidencias.
 
+Implementado en `subirEvidencia()` (`api/evidencias.ts`) + `subirArchivoFirmado()` (`api/client.ts`); valida con `evidenciaFirmaSchema` antes de pedir la firma.
+
 ```ts
-// ✅ en api/client.ts
-export async function subirEvidencia(incidenciaId: string, archivo: Blob, nombre: string) {
-  const f = await api<{ evidencia_id: string; upload_url: string }>(`/incidencias/${incidenciaId}/evidencias/firma`, {
-    method: 'POST', json: { nombre_archivo: nombre, tipo_mime: archivo.type, peso_bytes: archivo.size },
-  })
-  const put = await fetch(f.upload_url, { method: 'PUT', headers: { 'Content-Type': archivo.type }, body: archivo })
-  if (!put.ok) throw new ApiError(put.status, 'No se pudo subir el archivo')
-  return api<{ ok: true; evidencia_id: string }>(`/incidencias/${incidenciaId}/evidencias`, {
-    method: 'POST', json: { evidencia_id: f.evidencia_id },
-  })
-}
+// ✅ en una pantalla
+const evidencia = useEvidencia(incidenciaId)
+evidencia.mutate({ archivo, onProgreso: (f) => setProgreso(f) })   // firma → PUT → registro; invalida ['incidencia', id]
 // ❌ mandar el archivo a la API, poner Authorization en el PUT, o comprimir después de pedir la firma
 ```
 
@@ -186,6 +181,8 @@ const fd = new FormData()
 fd.append('imagen', comprimida, 'incidencia.jpg')
 if (contexto) fd.append('contexto', contexto.slice(0, 500))
 const sugerencia = analisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
+// ✅✅ o con el hook (multipart, timeout 60 s, respuesta validada)
+const ia = useAnalizarImagen(); ia.mutate({ imagen: comprimida, contexto })
 // ❌ headers: { 'Content-Type': 'multipart/form-data' }   → falta el boundary, 400
 ```
 
@@ -193,7 +190,7 @@ Respuestas: 200 `AnalisisImagen`; 400 formato/tamaño; 429 límite diario; 503 I
 
 ## 8. CORS, service worker y fechas
 
-**FB-17 · CORS en dos lugares.** API: `CORS_ORIGINS` (lista separada por comas, sin `/` final) con el origen exacto de la PWA (`http://localhost:5173`, `https://<dominio-pwa>`); nunca `*` (la API usa `allow_credentials=True`). Bucket: reglas CORS con los mismos orígenes, permitiendo `PUT` (subida) y `GET` (lectura) y el encabezado `Content-Type`. Si agregas un dominio de despliegue, actualiza **ambos** en el mismo cambio.
+**FB-17 · CORS en dos lugares.** API: `CORS_ORIGINS` (lista separada por comas, sin `/` final) con el origen exacto de la PWA (`http://localhost:5173`, `https://<dominio-pwa>`); nunca `*` (la API usa `allow_credentials=False`: la sesión viaja en `Authorization`, no en cookies). Bucket: reglas CORS con los mismos orígenes, permitiendo `PUT` (subida) y `GET` (lectura) y el encabezado `Content-Type`. Si agregas un dominio de despliegue, actualiza **ambos** en el mismo cambio.
 
 **FB-18 · El service worker no cachea la API ni datos autenticados.** `vite.config.ts` tiene `runtimeCaching: []` y `navigateFallbackDenylist: [/^\/api/]`: solo se precachean los archivos del build. Prohibido agregar reglas de `runtimeCaching` para `VITE_API_URL`, URLs firmadas del bucket o cualquier respuesta con `Authorization`. Lo "sin conexión" se resuelve con la caché en memoria de TanStack Query y `OfflineBanner`, no con el SW.
 
