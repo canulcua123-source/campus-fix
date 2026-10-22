@@ -1,4 +1,5 @@
 """Conversión de documentos de MongoDB a JSON (ObjectId anidados → str)."""
+
 from typing import Any
 
 from bson import ObjectId

@@ -9,8 +9,12 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 
 def _u(**over):
-    b = {"nombre": "Nuevo Usuario", "correo": f"nuevo_{uuid.uuid4().hex[:8]}@e2e.local",
-         "password": "Contrasena-Segura1", "rol": "reportante"}
+    b = {
+        "nombre": "Nuevo Usuario",
+        "correo": f"nuevo_{uuid.uuid4().hex[:8]}@e2e.local",
+        "password": "Contrasena-Segura1",
+        "rol": "reportante",
+    }
     b.update(over)
     return b
 
@@ -45,20 +49,35 @@ async def test_correo_duplicado_409(api):
     assert (await _crear(api, correo=correo.upper())).status_code == 409
 
 
-@pytest.mark.parametrize("over", [
-    {"rol": "inexistente"},
-    {"rol": "tecnico"},
-    {"rol": "tecnico", "areas": []},
-    {"rol": "tecnico", "areas": ["cafeteria"]},
-    {"rol": "jefe_edificio"},
-    {"rol": "jefe_edificio", "edificios": []},
-    {"password": "corta123"},
-    {"nombre": "ab"},
-    {"correo": "no-es-correo"},
-    {"correo": {"$ne": ""}},
-    {"rol": {"$ne": ""}},
-], ids=["rol_desconocido", "area_sin_areas", "area_vacia", "area_invalida", "edificio_sin", "edificio_vacio",
-        "password_corta", "nombre_corto", "correo_invalido", "correo_nosql", "rol_nosql"])
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"rol": "inexistente"},
+        {"rol": "tecnico"},
+        {"rol": "tecnico", "areas": []},
+        {"rol": "tecnico", "areas": ["cafeteria"]},
+        {"rol": "jefe_edificio"},
+        {"rol": "jefe_edificio", "edificios": []},
+        {"password": "corta123"},
+        {"nombre": "ab"},
+        {"correo": "no-es-correo"},
+        {"correo": {"$ne": ""}},
+        {"rol": {"$ne": ""}},
+    ],
+    ids=[
+        "rol_desconocido",
+        "area_sin_areas",
+        "area_vacia",
+        "area_invalida",
+        "edificio_sin",
+        "edificio_vacio",
+        "password_corta",
+        "nombre_corto",
+        "correo_invalido",
+        "correo_nosql",
+        "rol_nosql",
+    ],
+)
 async def test_crear_usuario_invalido_400(api, over):
     antes = await api.db.usuarios.count_documents({})
     r = await _crear(api, **over)
@@ -93,7 +112,9 @@ async def test_patch_usuario(api):
 
     # cambio de rol a 'area' sin áreas → 400, con áreas válidas → 200
     assert (await api.c.patch(url, json={"rol": "tecnico"}, headers=api.h("admin"))).status_code == 400
-    assert (await api.c.patch(url, json={"rol": "tecnico", "areas": ["cafeteria"]}, headers=api.h("admin"))).status_code == 400
+    assert (
+        await api.c.patch(url, json={"rol": "tecnico", "areas": ["cafeteria"]}, headers=api.h("admin"))
+    ).status_code == 400
     assert (await api.c.patch(url, json={"rol": "rol_fantasma"}, headers=api.h("admin"))).status_code == 400
     r = await api.c.patch(url, json={"rol": "tecnico", "areas": ["computo_redes"]}, headers=api.h("admin"))
     assert r.status_code == 200, r.text
@@ -115,7 +136,9 @@ async def test_patch_usuario_errores(api):
     r = await api.c.patch(f"/usuarios/{api.oid('admin')}", json={"activo": False}, headers=api.h("admin"))
     assert r.status_code == 400
     assert (await api.c.get("/auth/me", headers=api.h("admin"))).status_code == 200
-    assert (await api.c.patch(f"/usuarios/{ObjectId()}", json={"nombre": "Alguien"}, headers=api.h("admin"))).status_code == 404
+    assert (
+        await api.c.patch(f"/usuarios/{ObjectId()}", json={"nombre": "Alguien"}, headers=api.h("admin"))
+    ).status_code == 404
     assert (await api.c.patch("/usuarios/malo", json={"nombre": "Alguien"}, headers=api.h("admin"))).status_code == 400
     r = await api.c.patch(f"/usuarios/{api.oid('reportante_b')}", json={"password_hash": "x"}, headers=api.h("admin"))
     assert r.status_code == 400

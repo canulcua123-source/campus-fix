@@ -34,7 +34,10 @@ async def login(request: Request, datos: LoginIn):
     clave_ip = f"login:fallos:{correo}:{get_remote_address(request)}"
     clave_cuenta = f"login:fallos:{correo}"
     redis = get_redis()
-    if int(await redis.get(clave_ip) or 0) >= MAX_FALLOS_IP or int(await redis.get(clave_cuenta) or 0) >= MAX_FALLOS_CUENTA:
+    if (
+        int(await redis.get(clave_ip) or 0) >= MAX_FALLOS_IP
+        or int(await redis.get(clave_cuenta) or 0) >= MAX_FALLOS_CUENTA
+    ):
         raise HTTPException(429, "Demasiados intentos fallidos; espera 15 minutos")
     usuario = await get_db().usuarios.find_one({"correo": correo})
     # Se verifica siempre contra un hash (real o ficticio) para no revelar por tiempo si el correo existe.
@@ -63,5 +66,7 @@ async def login(request: Request, datos: LoginIn):
 @router.get("/me")
 async def yo(usuario: Annotated[dict, Depends(get_usuario_actual)]):
     info = await permisos_del_usuario(usuario)
-    datos = {k: usuario[k] for k in ("nombre", "correo", "rol", "areas", "edificios", "tipo_reportante") if k in usuario}
+    datos = {
+        k: usuario[k] for k in ("nombre", "correo", "rol", "areas", "edificios", "tipo_reportante") if k in usuario
+    }
     return {"_id": str(usuario["_id"]), **datos, "permisos": info["permisos"], "alcance": info["alcance"]}

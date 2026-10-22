@@ -4,8 +4,13 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 
 def _rol(**over):
-    b = {"clave": "auditor_pruebas", "nombre": "Auditor", "descripcion": "rol e2e",
-         "permisos": ["incidencias:ver", "analitica:ver"], "alcance": "global"}
+    b = {
+        "clave": "auditor_pruebas",
+        "nombre": "Auditor",
+        "descripcion": "rol e2e",
+        "permisos": ["incidencias:ver", "analitica:ver"],
+        "alcance": "global",
+    }
     b.update(over)
     return b
 
@@ -19,11 +24,29 @@ async def test_crear_rol_y_duplicado(api):
     assert r.status_code == 409
 
 
-@pytest.mark.parametrize("over", [
-    {"clave": "Mal-Clave"}, {"clave": "ab"}, {"clave": {"$ne": ""}},
-    {"permisos": ["incidencias:volar"]}, {"permisos": ["incidencias:ver", "incidencias:ver"]}, {"permisos": []},
-    {"alcance": "universo"}, {"nombre": "ab"},
-], ids=["clave_patron", "clave_corta", "clave_nosql", "permiso_desconocido", "permiso_dup", "sin_permisos", "alcance", "nombre"])
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"clave": "Mal-Clave"},
+        {"clave": "ab"},
+        {"clave": {"$ne": ""}},
+        {"permisos": ["incidencias:volar"]},
+        {"permisos": ["incidencias:ver", "incidencias:ver"]},
+        {"permisos": []},
+        {"alcance": "universo"},
+        {"nombre": "ab"},
+    ],
+    ids=[
+        "clave_patron",
+        "clave_corta",
+        "clave_nosql",
+        "permiso_desconocido",
+        "permiso_dup",
+        "sin_permisos",
+        "alcance",
+        "nombre",
+    ],
+)
 async def test_crear_rol_invalido(api, over):
     body = {**_rol(clave="rol_invalido"), **over}
     r = await api.c.post("/roles", json=body, headers=api.h("admin"))
@@ -44,11 +67,15 @@ async def test_listar_roles_admin(api):
 
 
 async def test_escalada_privilegios(api):
-    r = await api.c.post("/roles", json=_rol(clave="escalada", permisos=["incidencias:ver", "analitica:ver"]),
-                         headers=api.h("gestor"))
+    r = await api.c.post(
+        "/roles", json=_rol(clave="escalada", permisos=["incidencias:ver", "analitica:ver"]), headers=api.h("gestor")
+    )
     assert r.status_code == 403, r.text
-    r = await api.c.post("/roles", json=_rol(clave="escalada", permisos=["roles:gestionar", "usuarios:gestionar"]),
-                         headers=api.h("gestor"))
+    r = await api.c.post(
+        "/roles",
+        json=_rol(clave="escalada", permisos=["roles:gestionar", "usuarios:gestionar"]),
+        headers=api.h("gestor"),
+    )
     assert r.status_code == 403
     assert await api.db.roles.find_one({"clave": "escalada"}) is None
     # dentro de sus permisos sí puede

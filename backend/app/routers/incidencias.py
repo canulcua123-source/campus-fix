@@ -47,8 +47,15 @@ return v
 ZONA = ZoneInfo("America/Mexico_City")
 FIRMA_TTL = 600
 PROYECCION_LISTA = {
-    "codigo": 1, "titulo": 1, "categoria": 1, "estado": 1, "prioridad": 1,
-    "ubicacion": 1, "tags": 1, "fecha_creacion": 1, "tecnico_asignado": 1,
+    "codigo": 1,
+    "titulo": 1,
+    "categoria": 1,
+    "estado": 1,
+    "prioridad": 1,
+    "ubicacion": 1,
+    "tags": 1,
+    "fecha_creacion": 1,
+    "tecnico_asignado": 1,
 }
 
 
@@ -60,7 +67,9 @@ def _oid(id_: str) -> ObjectId:
 
 async def _en_alcance(incidencia_id: str, usuario: dict, proyeccion: dict | None = None) -> dict:
     """Carga la incidencia solo si está dentro del alcance; fuera de alcance responde 404 (no revela que existe)."""
-    doc = await get_db().incidencias_campus.find_one({"_id": _oid(incidencia_id), **filtro_alcance(usuario)}, proyeccion)
+    doc = await get_db().incidencias_campus.find_one(
+        {"_id": _oid(incidencia_id), **filtro_alcance(usuario)}, proyeccion
+    )
     if doc is None:
         raise HTTPException(404, "Incidencia no encontrada")
     return doc
@@ -93,8 +102,7 @@ async def _resincronizar_contador(categoria: str, ahora: datetime) -> None:
 @router.post("", status_code=201)
 @limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
 async def crear_incidencia(
-    request: Request,
-    datos: IncidenciaIn, usuario: Annotated[dict, Depends(require_permiso("incidencias:crear"))]
+    request: Request, datos: IncidenciaIn, usuario: Annotated[dict, Depends(require_permiso("incidencias:crear"))]
 ):
     ahora = datetime.now(timezone.utc)
     detalle = datos.detalle_especifico.model_dump(mode="json", exclude_none=True)
@@ -113,7 +121,13 @@ async def crear_incidencia(
         "evidencias_adjuntas": [],
         "horas_invertidas": 0,
         "historial_seguimiento": [
-            {"fecha": ahora, "usuario_id": usuario["_id"], "estado_nuevo": "abierta", "comentario": "Incidencia creada", "horas": 0}
+            {
+                "fecha": ahora,
+                "usuario_id": usuario["_id"],
+                "estado_nuevo": "abierta",
+                "comentario": "Incidencia creada",
+                "horas": 0,
+            }
         ],
         "fecha_creacion": ahora,
         "fecha_actualizacion": ahora,
@@ -141,11 +155,21 @@ async def listar_incidencias(
     limite: Annotated[int, Query(ge=1, le=100)] = 100,
 ):
     filtro: dict[str, Any] = {}
-    for campo, valor in (("estado", estado), ("categoria", categoria), ("prioridad", prioridad), ("ubicacion.edificio", edificio)):
+    for campo, valor in (
+        ("estado", estado),
+        ("categoria", categoria),
+        ("prioridad", prioridad),
+        ("ubicacion.edificio", edificio),
+    ):
         if valor is not None:
             filtro[campo] = valor
     # $and: el filtro del cliente se suma al alcance; nunca lo reemplaza ni es reemplazado.
-    cursor = get_db().incidencias_campus.find({"$and": [filtro, filtro_alcance(usuario)]}, PROYECCION_LISTA).sort("fecha_creacion", -1).limit(limite)
+    cursor = (
+        get_db()
+        .incidencias_campus.find({"$and": [filtro, filtro_alcance(usuario)]}, PROYECCION_LISTA)
+        .sort("fecha_creacion", -1)
+        .limit(limite)
+    )
     return [a_json(d) async for d in cursor]
 
 
@@ -184,13 +208,15 @@ async def registrar_seguimiento(
         "$set": sets,
         "$push": {
             "historial_seguimiento": {
-                "$each": [{
-                    "fecha": ahora,
-                    "usuario_id": usuario["_id"],
-                    "estado_nuevo": datos.estado_nuevo,
-                    "comentario": datos.comentario,
-                    "horas": datos.horas,
-                }],
+                "$each": [
+                    {
+                        "fecha": ahora,
+                        "usuario_id": usuario["_id"],
+                        "estado_nuevo": datos.estado_nuevo,
+                        "comentario": datos.comentario,
+                        "horas": datos.horas,
+                    }
+                ],
                 "$slice": -MAX_HISTORIAL,
             }
         },
@@ -209,11 +235,15 @@ async def registrar_seguimiento(
     asigna = "incidencias:asignar" in usuario["_permisos"]
     if not asigna:
         # Si ya tiene técnico asignado, solo ese técnico (o un coordinador) le da seguimiento.
-        condiciones.append({"$or": [{"tecnico_asignado": {"$exists": False}}, {"tecnico_asignado.usuario_id": usuario["_id"]}]})
+        condiciones.append(
+            {"$or": [{"tecnico_asignado": {"$exists": False}}, {"tecnico_asignado.usuario_id": usuario["_id"]}]}
+        )
     filtro = {"$and": condiciones}
     res = await get_db().incidencias_campus.update_one(filtro, update)
     if res.matched_count == 0:
-        actual = await _en_alcance(incidencia_id, usuario, {"tecnico_asignado": 1, "historial_seguimiento": {"$slice": -1}})
+        actual = await _en_alcance(
+            incidencia_id, usuario, {"tecnico_asignado": 1, "historial_seguimiento": {"$slice": -1}}
+        )
         asignado = actual.get("tecnico_asignado", {}).get("usuario_id")
         if not asigna and asignado is not None and asignado != usuario["_id"]:
             raise HTTPException(403, "La incidencia está asignada a otro técnico")
@@ -275,14 +305,25 @@ async def asignar(
     res = await get_db().incidencias_campus.update_one(
         {"_id": incidencia["_id"], "estado": {"$ne": "cerrada"}, **filtro_alcance(usuario)},
         {
-            "$set": {"tecnico_asignado": {"usuario_id": tecnico["_id"], "nombre": tecnico["nombre"]}, "fecha_actualizacion": ahora},
-            "$push": {"historial_seguimiento": {
-                "$each": [{
-                    "fecha": ahora, "usuario_id": usuario["_id"], "tipo": "asignacion", "estado_nuevo": incidencia["estado"],
-                    "comentario": f"Asignada a {tecnico['nombre']}", "horas": 0,
-                }],
-                "$slice": -MAX_HISTORIAL,
-            }},
+            "$set": {
+                "tecnico_asignado": {"usuario_id": tecnico["_id"], "nombre": tecnico["nombre"]},
+                "fecha_actualizacion": ahora,
+            },
+            "$push": {
+                "historial_seguimiento": {
+                    "$each": [
+                        {
+                            "fecha": ahora,
+                            "usuario_id": usuario["_id"],
+                            "tipo": "asignacion",
+                            "estado_nuevo": incidencia["estado"],
+                            "comentario": f"Asignada a {tecnico['nombre']}",
+                            "horas": 0,
+                        }
+                    ],
+                    "$slice": -MAX_HISTORIAL,
+                }
+            },
         },
     )
     if res.matched_count == 0:
@@ -352,8 +393,13 @@ async def firmar_evidencia(
     clave_staging = f"staging/{clave}"
     url = storage.url_subida(clave_staging, datos.tipo_mime, datos.peso_bytes)
     # El servidor recuerda lo que firmó: al registrar solo se acepta esta evidencia, con estos datos.
-    pendiente = {"incidencia_id": str(inc["_id"]), "clave": clave, "clave_staging": clave_staging,
-                 "usuario_id": str(usuario["_id"]), **datos.model_dump()}
+    pendiente = {
+        "incidencia_id": str(inc["_id"]),
+        "clave": clave,
+        "clave_staging": clave_staging,
+        "usuario_id": str(usuario["_id"]),
+        **datos.model_dump(),
+    }
     await redis.set(f"firma:{evidencia_id}", json.dumps(pendiente), ex=FIRMA_TTL)
     return {"evidencia_id": evidencia_id, "url_storage": clave, "upload_url": url, "expira_en": storage.EXPIRA_SEGUNDOS}
 
@@ -385,15 +431,17 @@ async def registrar_evidencia(
             **filtro_alcance(usuario),
         },
         {
-            "$push": {"evidencias_adjuntas": {
-                "evidencia_id": evidencia_id,
-                "nombre_archivo": pendiente["nombre_archivo"],
-                "tipo_mime": pendiente["tipo_mime"],
-                "peso_kb": math.ceil(pendiente["peso_bytes"] / 1024),
-                "url_storage": pendiente["clave"],
-                "fecha_carga": ahora,
-                "subido_por": usuario["_id"],
-            }},
+            "$push": {
+                "evidencias_adjuntas": {
+                    "evidencia_id": evidencia_id,
+                    "nombre_archivo": pendiente["nombre_archivo"],
+                    "tipo_mime": pendiente["tipo_mime"],
+                    "peso_kb": math.ceil(pendiente["peso_bytes"] / 1024),
+                    "url_storage": pendiente["clave"],
+                    "fecha_carga": ahora,
+                    "subido_por": usuario["_id"],
+                }
+            },
             "$set": {"fecha_actualizacion": ahora},
         },
     )

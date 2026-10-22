@@ -1,5 +1,6 @@
 """Regresiones de la auditoría de seguridad (ronda 1): escalamiento por alcance, autoedición,
 técnico asignado, bloqueo por cuenta, cupo de IA, tamaño de cuerpo y eco de valores en errores."""
+
 import io
 
 import pytest
@@ -13,17 +14,37 @@ from .test_analitica_ia import ANALISIS
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
-PERMISOS_GESTOR = ["usuarios:gestionar", "roles:gestionar", "incidencias:ver", "incidencias:buscar",
-                   "analitica:ver", "seguimiento:registrar"]
+PERMISOS_GESTOR = [
+    "usuarios:gestionar",
+    "roles:gestionar",
+    "incidencias:ver",
+    "incidencias:buscar",
+    "analitica:ver",
+    "seguimiento:registrar",
+]
 
 
 async def _gestor_area(api) -> dict:
     """Gestor delegado con alcance de área (infraestructura): puede administrar, pero no más allá de su área."""
     if not await api.db.roles.find_one({"clave": "gestor_area"}):
-        await api.db.roles.insert_many([
-            {"clave": "gestor_area", "nombre": "Gestor de área", "permisos": PERMISOS_GESTOR, "alcance": "area", "sistema": False},
-            {"clave": "lector_area", "nombre": "Lector de área", "permisos": ["incidencias:ver"], "alcance": "area", "sistema": False},
-        ])
+        await api.db.roles.insert_many(
+            [
+                {
+                    "clave": "gestor_area",
+                    "nombre": "Gestor de área",
+                    "permisos": PERMISOS_GESTOR,
+                    "alcance": "area",
+                    "sistema": False,
+                },
+                {
+                    "clave": "lector_area",
+                    "nombre": "Lector de área",
+                    "permisos": ["incidencias:ver"],
+                    "alcance": "area",
+                    "sistema": False,
+                },
+            ]
+        )
     return await api.usuario_temporal(rol="gestor_area", areas=["infraestructura"])
 
 
@@ -33,7 +54,14 @@ def _h(u: dict) -> dict:
 
 def _nuevo(rol: str, **kw) -> dict:
     import uuid
-    return {"nombre": "Usuario Nuevo", "correo": f"n_{uuid.uuid4().hex[:8]}@e2e.local", "password": "Password-Seguro-1", "rol": rol, **kw}
+
+    return {
+        "nombre": "Usuario Nuevo",
+        "correo": f"n_{uuid.uuid4().hex[:8]}@e2e.local",
+        "password": "Password-Seguro-1",
+        "rol": rol,
+        **kw,
+    }
 
 
 async def test_gestor_no_crea_usuario_con_mas_alcance(api):
@@ -51,9 +79,15 @@ async def test_gestor_no_crea_usuario_con_mas_alcance(api):
 async def test_gestor_no_crea_rol_con_mas_alcance(api):
     g = await _gestor_area(api)
     base = {"nombre": "Rol delegado", "permisos": ["incidencias:ver"]}
-    assert (await api.c.post("/roles", json={**base, "clave": "clon_global", "alcance": "global"}, headers=_h(g))).status_code == 403
-    assert (await api.c.post("/roles", json={**base, "clave": "clon_edificio", "alcance": "edificio"}, headers=_h(g))).status_code == 403
-    assert (await api.c.post("/roles", json={**base, "clave": "clon_propio", "alcance": "propio"}, headers=_h(g))).status_code == 201
+    assert (
+        await api.c.post("/roles", json={**base, "clave": "clon_global", "alcance": "global"}, headers=_h(g))
+    ).status_code == 403
+    assert (
+        await api.c.post("/roles", json={**base, "clave": "clon_edificio", "alcance": "edificio"}, headers=_h(g))
+    ).status_code == 403
+    assert (
+        await api.c.post("/roles", json={**base, "clave": "clon_propio", "alcance": "propio"}, headers=_h(g))
+    ).status_code == 201
 
 
 async def test_gestor_no_modifica_usuarios_con_mas_acceso(api):
@@ -67,8 +101,12 @@ async def test_gestor_no_modifica_usuarios_con_mas_acceso(api):
 
 async def test_autoedicion_de_alcance_bloqueada(api):
     g = await _gestor_area(api)
-    for cambio in ({"areas": ["infraestructura", "computo_redes", "academico"]}, {"edificios": ["Edificio A"]},
-                   {"rol": "admin"}, {"activo": False}):
+    for cambio in (
+        {"areas": ["infraestructura", "computo_redes", "academico"]},
+        {"edificios": ["Edificio A"]},
+        {"rol": "admin"},
+        {"activo": False},
+    ):
         r = await api.c.patch(f"/usuarios/{g['_id']}", json=cambio, headers=_h(g))
         assert r.status_code == 400, (cambio, r.text)
     r = await api.c.patch(f"/usuarios/{api.oid('admin')}", json={"areas": ["academico"]}, headers=api.h("admin"))
@@ -77,8 +115,11 @@ async def test_autoedicion_de_alcance_bloqueada(api):
 
 async def test_solo_el_tecnico_asignado_da_seguimiento(api):
     inc = await api.crear()
-    r = await api.c.patch(f"/incidencias/{inc['_id']}/asignacion", json={"tecnico_id": str(api.oid("tecnico_infra"))},
-                          headers=api.h("coordinador_infra"))
+    r = await api.c.patch(
+        f"/incidencias/{inc['_id']}/asignacion",
+        json={"tecnico_id": str(api.oid("tecnico_infra"))},
+        headers=api.h("coordinador_infra"),
+    )
     assert r.status_code == 200, r.text
     assert (await api.seguimiento(inc["_id"], "en_proceso", quien="tecnico_infra2")).status_code == 403
     assert (await api.doc(inc["_id"]))["estado"] == "abierta"
@@ -109,10 +150,14 @@ async def test_bloqueo_por_cuenta_e_ip(api, password):
 async def test_seguimiento_conserva_ultimas_entradas_y_no_se_congela(api):
     inc = await api.crear()
     from app.routers.incidencias import MAX_HISTORIAL
+
     # historial lleno artificialmente: la incidencia debe seguir pudiendo avanzar
     relleno = [{"fecha": None, "estado_nuevo": "en_espera", "comentario": "relleno", "horas": 0}] * (MAX_HISTORIAL + 5)
     from bson import ObjectId
-    await api.db.incidencias_campus.update_one({"_id": ObjectId(inc["_id"])}, {"$set": {"historial_seguimiento": relleno}})
+
+    await api.db.incidencias_campus.update_one(
+        {"_id": ObjectId(inc["_id"])}, {"$set": {"historial_seguimiento": relleno}}
+    )
     assert (await api.seguimiento(inc["_id"], "en_proceso")).status_code == 200
     d = await api.doc(inc["_id"])
     assert len(d["historial_seguimiento"]) == MAX_HISTORIAL
@@ -121,6 +166,7 @@ async def test_seguimiento_conserva_ultimas_entradas_y_no_se_congela(api):
 
 async def test_tope_de_horas_por_incidencia(api):
     from bson import ObjectId
+
     inc = await api.crear()
     await api.db.incidencias_campus.update_one({"_id": ObjectId(inc["_id"])}, {"$set": {"horas_invertidas": 999.5}})
     assert (await api.seguimiento(inc["_id"], "en_proceso", horas=1)).status_code == 409
@@ -141,6 +187,7 @@ async def test_un_usuario_no_acapara_las_firmas(api):
 async def test_limite_de_escritura_por_usuario(api, monkeypatch):
     monkeypatch.setattr(settings, "limite_escritura", "3/minute")
     from .helpers import cuerpo
+
     t = ASGITransport(app=app, raise_app_exceptions=False, client=("10.90.0.1", 5000))
     async with AsyncClient(transport=t, base_url="http://test") as c:
         a = await api.usuario_temporal()
@@ -154,6 +201,7 @@ async def test_limite_de_escritura_por_usuario(api, monkeypatch):
 async def test_cupo_diario_de_ia(api, monkeypatch):
     async def fake(*_a, **_k):
         return ANALISIS
+
     monkeypatch.setattr(ia_router, "analizar_imagen", fake)
     monkeypatch.setattr(settings, "ia_limite_diario", 2)
     u = await api.usuario_temporal()
@@ -165,10 +213,14 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
 
 async def test_cuerpo_demasiado_grande_413(api):
     grande = b'{"titulo":"' + b"x" * 100_000 + b'"}'
-    r = await api.c.post("/incidencias", content=grande, headers={**api.h("reportante_a"), "Content-Type": "application/json"})
+    r = await api.c.post(
+        "/incidencias", content=grande, headers={**api.h("reportante_a"), "Content-Type": "application/json"}
+    )
     assert r.status_code == 413
     # sin token también se corta antes de parsear
-    r = await api.c.post("/ia/analizar-imagen", content=b"0" * (7 * 1024 * 1024), headers={"Content-Type": "application/octet-stream"})
+    r = await api.c.post(
+        "/ia/analizar-imagen", content=b"0" * (7 * 1024 * 1024), headers={"Content-Type": "application/octet-stream"}
+    )
     assert r.status_code == 413
 
 
@@ -194,6 +246,10 @@ async def test_gestor_delegado_solo_ve_y_edita_su_ambito(api):
     visibles = {u["_id"] for u in r.json()}
     assert str(api.oid("admin")) not in visibles and str(api.oid("reportante_a")) not in visibles
     # reportantes de todo el campus y pares del mismo rol quedan fuera de su gestión
-    assert (await api.c.patch(f"/usuarios/{api.oid('reportante_a')}", json={"activo": False}, headers=_h(g))).status_code == 403
+    assert (
+        await api.c.patch(f"/usuarios/{api.oid('reportante_a')}", json={"activo": False}, headers=_h(g))
+    ).status_code == 403
     par = await api.usuario_temporal(rol="gestor_area", areas=["infraestructura"])
-    assert (await api.c.patch(f"/usuarios/{par['_id']}", json={"nombre": "Par cambiado"}, headers=_h(g))).status_code == 403
+    assert (
+        await api.c.patch(f"/usuarios/{par['_id']}", json={"nombre": "Par cambiado"}, headers=_h(g))
+    ).status_code == 403

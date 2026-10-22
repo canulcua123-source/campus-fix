@@ -42,7 +42,11 @@ def crear_access_token(sub: str, extra: dict[str, Any] | None = None) -> str:
 
 def decodificar_token(token: str) -> dict[str, Any]:
     return jwt.decode(
-        token, settings.jwt_secret, algorithms=[ALGORITMO], audience=AUDIENCIA, issuer=EMISOR,
+        token,
+        settings.jwt_secret,
+        algorithms=[ALGORITMO],
+        audience=AUDIENCIA,
+        issuer=EMISOR,
         options={"require": ["exp", "iat", "sub", "iss", "aud"]},
     )
 
@@ -104,8 +108,13 @@ def filtro_alcance(usuario: dict[str, Any]) -> dict[str, Any]:
 RANGO_ALCANCE = {"propio": 0, "area": 1, "edificio": 1, "global": 2}
 
 
-def puede_otorgar(actor: dict[str, Any], permisos: list[str], alcance: str,
-                  areas: list[str] | None = None, edificios: list[str] | None = None) -> bool:
+def puede_otorgar(
+    actor: dict[str, Any],
+    permisos: list[str],
+    alcance: str,
+    areas: list[str] | None = None,
+    edificios: list[str] | None = None,
+) -> bool:
     """True si `actor` puede otorgar esos permisos y ese alcance (con sus áreas/edificios) a otro usuario o rol."""
     if not set(permisos) <= set(actor["_permisos"]):
         return False

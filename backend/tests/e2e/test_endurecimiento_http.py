@@ -1,4 +1,5 @@
 """Capa HTTP: CORS estricto, cabeceras de seguridad, Cache-Control y límites globales de peticiones (#82)."""
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
@@ -12,7 +13,9 @@ ORIGEN_OK = "http://localhost:5173"
 
 
 def _cliente(ip: str) -> AsyncClient:
-    return AsyncClient(transport=ASGITransport(app=app, raise_app_exceptions=False, client=(ip, 5000)), base_url="http://test")
+    return AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False, client=(ip, 5000)), base_url="http://test"
+    )
 
 
 def _h(u: dict) -> dict:
@@ -42,17 +45,30 @@ async def test_docs_sin_csp_estricta(api):
 
 async def test_cors_solo_origen_permitido_y_sin_credenciales():
     async with _cliente("10.95.0.1") as c:
-        ok = await c.options("/incidencias", headers={
-            "Origin": ORIGEN_OK, "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "authorization,content-type"})
+        ok = await c.options(
+            "/incidencias",
+            headers={
+                "Origin": ORIGEN_OK,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
         assert ok.headers.get("access-control-allow-origin") == ORIGEN_OK
         assert "access-control-allow-credentials" not in ok.headers
         assert "PUT" not in ok.headers.get("access-control-allow-methods", "")
-        malo = await c.options("/incidencias", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"})
+        malo = await c.options(
+            "/incidencias", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"}
+        )
         assert "access-control-allow-origin" not in malo.headers
         # una cabecera que la PWA no usa no se autoriza
-        raro = await c.options("/incidencias", headers={
-            "Origin": ORIGEN_OK, "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "x-admin-override"})
+        raro = await c.options(
+            "/incidencias",
+            headers={
+                "Origin": ORIGEN_OK,
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "x-admin-override",
+            },
+        )
         assert raro.status_code == 400
 
 
@@ -91,7 +107,9 @@ async def test_consultas_pesadas_tienen_limite_propio(api, monkeypatch):
     monkeypatch.setattr(settings, "limite_consulta_pesada", "2/minute")
     u = await api.usuario_temporal(rol="directivo")
     async with _cliente("10.95.4.1") as c:
-        busqueda = [(await c.get("/incidencias/buscar", params={"q": "switch"}, headers=_h(u))).status_code for _ in range(3)]
+        busqueda = [
+            (await c.get("/incidencias/buscar", params={"q": "switch"}, headers=_h(u))).status_code for _ in range(3)
+        ]
         assert busqueda == [200, 200, 429]
         analitica = [(await c.get("/analitica/tags", headers=_h(u))).status_code for _ in range(3)]
         assert analitica == [200, 200, 429]

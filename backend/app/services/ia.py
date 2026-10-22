@@ -28,9 +28,7 @@ Instrucciones:
 Responde únicamente con el JSON que cumple el esquema."""
 
 
-async def analizar_imagen(
-    imagen_bytes: bytes, media_type: str, contexto: str | None = None
-) -> AnalisisImagen:
+async def analizar_imagen(imagen_bytes: bytes, media_type: str, contexto: str | None = None) -> AnalisisImagen:
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key or None)
     b64 = base64.standard_b64encode(imagen_bytes).decode()
     # Con extra="forbid" cada objeto del schema trae additionalProperties: false y,
