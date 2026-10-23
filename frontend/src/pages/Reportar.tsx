@@ -21,7 +21,7 @@ function detalleVacio(c: Categoria): IncidenciaForm['detalle_especifico'] {
     case 'infraestructura':
       return { categoria: c, tipo_dano: 'otro', riesgo_seguridad: 'bajo', requiere_insumos: false, requiere_contratista: false }
     case 'academico':
-      return { categoria: c, plataforma: 'lms', codigo_curso: '', periodo: '', estudiantes_impactados: 0 }
+      return { categoria: c, plataforma: 'lms', codigo_curso: '', periodo: '', estudiantes_impactados: 0, horas: 0 }
   }
 }
 
@@ -214,6 +214,9 @@ export default function Reportar() {
             <label className="etiqueta" htmlFor="impactados">Estudiantes impactados</label>
             <input id="impactados" type="number" inputMode="numeric" {...d('estudiantes_impactados', num)} />
             <Err msg={errD?.estudiantes_impactados?.message} />
+            <label className="etiqueta" htmlFor="horas-academico">Horas</label>
+            <input id="horas-academico" type="number" inputMode="numeric" {...d('horas', num)} />
+            <Err msg={errD?.horas?.message} />
           </>
         )}
 

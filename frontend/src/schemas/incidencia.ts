@@ -89,6 +89,7 @@ const detalleAcademico = z.object({
   codigo_curso: z.string('Requerido').regex(/^[A-Z]{2,4}-\d{3}$/, 'Formato esperado: MAT-101'),
   periodo: z.string('Requerido').regex(/^\d{4}-[12]$/, 'Formato esperado: 2026-1'),
   estudiantes_impactados: z.number('Requerido').int('Debe ser entero').min(0, 'No puede ser negativo').max(100000, 'Máximo 100000'),
+  horas: z.number().int('Debe ser entero').min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas'),
 })
 
 export const detalleEspecificoSchema = z.discriminatedUnion('categoria', [detalleComputo, detalleInfra, detalleAcademico])
