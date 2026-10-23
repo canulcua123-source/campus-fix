@@ -5,9 +5,11 @@ import { useRef, useState } from 'react'
 import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import { crearIncidencia } from '../api/incidencias'
+import { useSubirEvidencia } from '../hooks/useSubirEvidencia'
 import {
   CATEGORIAS, PRIORIDADES, analisisImagenSchema, incidenciaSchema,
-  type AnalisisImagen, type Categoria, type IncidenciaForm,
+  type AnalisisImagen, type Categoria, type IncidenciaCreada, type IncidenciaForm,
 } from '../schemas/incidencia'
 
 const NOMBRES_CATEGORIA: Record<Categoria, string> = {
@@ -38,11 +40,15 @@ export default function Reportar() {
   const entrada = useRef<HTMLInputElement>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
+  const [foto, setFoto] = useState<File | null>(null)
   const [analizando, setAnalizando] = useState(false)
   const [ia, setIa] = useState<AnalisisImagen | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const [tagsTexto, setTagsTexto] = useState('')
+  const [creada, setCreada] = useState<IncidenciaCreada | null>(null)
+  const [errorFoto, setErrorFoto] = useState<string | null>(null)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
 
   const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = useForm<IncidenciaForm>({
     resolver: zodResolver(incidenciaSchema),
@@ -53,6 +59,7 @@ export default function Reportar() {
     },
   })
   const categoria = useWatch({ control, name: 'detalle_especifico.categoria' })
+  const { mutateAsync: subirFoto } = useSubirEvidencia()
 
   // register de campos del detalle (la unión discriminada no se resuelve en tipos de ruta)
   const d = (nombre: string, opts?: RegisterOptions) =>
@@ -69,6 +76,7 @@ export default function Reportar() {
     setAviso(null)
     try {
       const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
+      setFoto(comprimida)
       setVista(URL.createObjectURL(comprimida))
       const fd = new FormData()
       fd.append('imagen', comprimida, 'incidencia.jpg')
@@ -93,11 +101,30 @@ export default function Reportar() {
     }
   }
 
+  async function adjuntarFoto(incidenciaId: string) {
+    if (!foto) return
+    setErrorFoto(null)
+    setSubiendoFoto(true)
+    try {
+      await subirFoto({ incidenciaId, archivo: foto, nombre: 'incidencia.jpg' })
+      navigate('/mis-tickets')
+    } catch (e) {
+      setErrorFoto(e instanceof Error ? e.message : 'No se pudo adjuntar la foto')
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
   async function enviar(datos: IncidenciaForm) {
     setErrorEnvio(null)
     try {
-      await api('/incidencias', { method: 'POST', json: datos })
-      navigate('/mis-tickets')
+      const nueva = await crearIncidencia(datos)
+      if (!foto) {
+        navigate('/mis-tickets')
+        return
+      }
+      setCreada(nueva)
+      await adjuntarFoto(nueva._id)
     } catch (e) {
       setErrorEnvio(e instanceof Error ? e.message : 'No se pudo crear la incidencia')
     }
@@ -105,13 +132,39 @@ export default function Reportar() {
 
   const errD = errors.detalle_especifico as Record<string, { message?: string }> | undefined
 
+  if (creada) {
+    return (
+      <>
+        <h1 className="titulo-pagina">Incidencia creada</h1>
+        <div className="card">
+          <p className="m-0">Tu reporte <strong>{creada.codigo}</strong> quedó registrado.</p>
+          {subiendoFoto && <p className="mt-2 text-muted" role="status">Subiendo la foto como evidencia…</p>}
+          {errorFoto && (
+            <div className="mt-3" role="alert">
+              <p className="m-0 font-semibold">No se pudo adjuntar la foto, reintentar</p>
+              <p className="mb-0 mt-1 text-sm text-muted">{errorFoto}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn" disabled={subiendoFoto} onClick={() => adjuntarFoto(creada._id)}>
+                  Reintentar foto
+                </button>
+                <button type="button" className="btn btn-secundario" onClick={() => navigate('/mis-tickets')}>
+                  Continuar sin foto
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </>
+    )
+  }
+
   if (paso === 'foto') {
     return (
       <>
         <h1 className="titulo-pagina">Reportar</h1>
         <div className="card flex flex-col items-center gap-4 py-10 text-center">
           <p className="m-0 text-muted">Toma una foto del problema y la IA te ayudará a llenar el reporte.</p>
-          <input ref={entrada} type="file" accept="image/*" capture="environment" hidden onChange={(e) => alElegirFoto(e.target.files?.[0])} />
+          <input ref={entrada} type="file" accept="image/*" capture="environment" hidden aria-label="Foto de la incidencia" onChange={(e) => alElegirFoto(e.target.files?.[0])} />
           <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={() => entrada.current?.click()}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
           </button>
