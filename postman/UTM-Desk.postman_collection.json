@@ -988,6 +988,54 @@
               ]
             }
           }
+        },
+        {
+          "name": "archivo falso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 415', function () { pm.response.to.have.status(415); });",
+                  "pm.test('Mensaje de formato no permitido', function () { const j = pm.response.json(); pm.expect(j.detail).to.include('JPEG, PNG o WebP'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Envía contenido que no es una imagen bajo un nombre y Content-Type JPEG; debe responder 415.",
+            "url": {
+              "raw": "{{base_url}}/ia/analizar-imagen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "analizar-imagen"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagen",
+                  "type": "file",
+                  "src": "postman/fixtures/no-es-imagen.jpg",
+                  "contentType": "image/jpeg",
+                  "description": "Fixture de texto que simula un JPEG por nombre y Content-Type"
+                }
+              ]
+            }
+          }
         }
       ]
     },
