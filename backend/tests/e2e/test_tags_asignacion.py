@@ -24,8 +24,11 @@ async def test_tags_agregar_quitar(api):
     assert (await api.doc(inc["_id"]))["tags"] == ["prueba"]
 
 
-@pytest.mark.parametrize("tags", [["a"], ["con-guion"], ["$where"], [], [f"t{i:02d}" for i in range(16)], [{"$ne": 1}]],
-                         ids=["corto", "guion", "operador", "vacio", "16", "objeto"])
+@pytest.mark.parametrize(
+    "tags",
+    [["a"], ["con-guion"], ["$where"], [], [f"t{i:02d}" for i in range(16)], [{"$ne": 1}]],
+    ids=["corto", "guion", "operador", "vacio", "16", "objeto"],
+)
 async def test_tags_invalidos(api, tags):
     inc = await api.crear()
     antes = (await api.doc(inc["_id"]))["tags"]
@@ -58,8 +61,11 @@ async def test_tags_permisos_y_alcance(api):
 
 # ---------- asignación ----------
 
+
 async def _asignar(api, inc_id, tecnico_id, quien="coordinador_infra"):
-    return await api.c.patch(f"/incidencias/{inc_id}/asignacion", json={"tecnico_id": str(tecnico_id)}, headers=api.h(quien))
+    return await api.c.patch(
+        f"/incidencias/{inc_id}/asignacion", json={"tecnico_id": str(tecnico_id)}, headers=api.h(quien)
+    )
 
 
 async def test_asignar_ok(api):
@@ -90,8 +96,9 @@ async def test_asignar_tecnico_invalido_400(api):
     for nombre, tid in casos.items():
         r = await _asignar(api, inc["_id"], tid)
         assert r.status_code == 400, f"{nombre}: {r.status_code} {r.text}"
-    r = await api.c.patch(f"/incidencias/{inc['_id']}/asignacion", json={"tecnico_id": {"$ne": None}},
-                          headers=api.h("coordinador_infra"))
+    r = await api.c.patch(
+        f"/incidencias/{inc['_id']}/asignacion", json={"tecnico_id": {"$ne": None}}, headers=api.h("coordinador_infra")
+    )
     assert r.status_code == 400
     assert "tecnico_asignado" not in await api.doc(inc["_id"])
 

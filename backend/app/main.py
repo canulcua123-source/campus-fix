@@ -91,7 +91,10 @@ async def _write_error(_: Request, exc: WriteError):
     if exc.code == 121:  # falla de $jsonSchema en MongoDB
         return JSONResponse(
             status_code=400,
-            content={"error": "validacion", "detalle": [{"msg": "El documento no cumple el esquema de la base de datos"}]},
+            content={
+                "error": "validacion",
+                "detalle": [{"msg": "El documento no cumple el esquema de la base de datos"}],
+            },
         )
     return JSONResponse(status_code=500, content={"error": "interno"})
 

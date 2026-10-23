@@ -2,6 +2,7 @@
 
 Las variables de entorno se fijan ANTES de importar `app` (las env vars ganan sobre backend/.env).
 """
+
 import os
 import sys
 

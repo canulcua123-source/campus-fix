@@ -39,9 +39,7 @@ class DetalleAcademico(BaseModel):
     estudiantes_impactados: int = Field(ge=0, le=100000)
 
 
-DetalleEspecifico = Annotated[
-    DetalleComputo | DetalleInfra | DetalleAcademico, Field(discriminator="categoria")
-]
+DetalleEspecifico = Annotated[DetalleComputo | DetalleInfra | DetalleAcademico, Field(discriminator="categoria")]
 
 
 class Ubicacion(BaseModel):

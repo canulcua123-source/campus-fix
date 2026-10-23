@@ -1,4 +1,5 @@
 """CORS y rate limit del login. El archivo se llama zz_ para correr al final."""
+
 import pytest
 from httpx import ASGITransport
 

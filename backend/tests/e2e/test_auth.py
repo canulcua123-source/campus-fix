@@ -82,11 +82,18 @@ async def test_ataques_token(api):
     await api.db.usuarios.delete_one({"_id": borrado["_id"]})
     tokens = {
         "basura": "esto.no.es.un.jwt",
-        "firma_incorrecta": jwt.encode({"sub": sub, "exp": ahora + timedelta(minutes=5)}, "otro-secreto-" * 4, algorithm="HS256"),
-        "expirado": jwt.encode({"sub": sub, "iat": ahora - timedelta(hours=1), "exp": ahora - timedelta(minutes=1)},
-                               settings.jwt_secret, algorithm="HS256"),
+        "firma_incorrecta": jwt.encode(
+            {"sub": sub, "exp": ahora + timedelta(minutes=5)}, "otro-secreto-" * 4, algorithm="HS256"
+        ),
+        "expirado": jwt.encode(
+            {"sub": sub, "iat": ahora - timedelta(hours=1), "exp": ahora - timedelta(minutes=1)},
+            settings.jwt_secret,
+            algorithm="HS256",
+        ),
         "alg_none": _token_none(sub),
-        "sub_no_oid": jwt.encode({"sub": "admin", "exp": ahora + timedelta(minutes=5)}, settings.jwt_secret, algorithm="HS256"),
+        "sub_no_oid": jwt.encode(
+            {"sub": "admin", "exp": ahora + timedelta(minutes=5)}, settings.jwt_secret, algorithm="HS256"
+        ),
         "usuario_borrado": borrado["token"],
         "usuario_inactivo": api.u["inactivo"]["token"],
         "usuario_inexistente": crear_access_token(str(ObjectId())),

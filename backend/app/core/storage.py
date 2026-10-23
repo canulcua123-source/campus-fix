@@ -1,4 +1,5 @@
 """URLs firmadas del almacenamiento de evidencias (API S3: Backblaze B2 o Cloudflare R2)."""
+
 from functools import lru_cache
 
 from urllib.parse import quote
@@ -59,7 +60,9 @@ def url_lectura(clave: str, nombre_archivo: str) -> str:
 def promover(origen: str, destino: str) -> None:
     """Copia el objeto verificado de staging/ a su ruta definitiva y borra el temporal."""
     cliente = _requerir_cliente()
-    cliente.copy_object(Bucket=settings.r2_bucket, Key=destino, CopySource={"Bucket": settings.r2_bucket, "Key": origen})
+    cliente.copy_object(
+        Bucket=settings.r2_bucket, Key=destino, CopySource={"Bucket": settings.r2_bucket, "Key": origen}
+    )
     cliente.delete_object(Bucket=settings.r2_bucket, Key=origen)
 
 
