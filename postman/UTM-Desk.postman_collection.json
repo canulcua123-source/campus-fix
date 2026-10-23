@@ -4,6 +4,24 @@
     "description": "Banco formal de pruebas de la API UTM Desk. Ejecutar en orden con el environment UTM-Desk.local.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response.code === 429) {",
+          "  pm.test('Contrato del 429', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('limite'); pm.expect(j.detalle).to.be.a('string'); });",
+          "  const retryAfter = pm.response.headers.get('Retry-After');",
+          "  if (retryAfter !== undefined && retryAfter !== null) {",
+          "    pm.test('Retry-After numérico cuando está presente', function () { pm.expect(retryAfter).to.match(/^\\d+$/); });",
+          "  }",
+          "  pm.test('El 429 no refleja credenciales', function () { const texto = pm.response.text(); const correo = pm.variables.get('correo'); const password = pm.variables.get('password'); if (correo) pm.expect(texto).not.to.include(correo); if (password) pm.expect(texto).not.to.include(password); });",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
       "name": "Auth",
@@ -18,7 +36,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Devuelve access_token y usuario', function () { const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.expect(j.usuario).to.have.property('rol'); pm.expect(j.usuario.permisos).to.be.an('array'); pm.environment.set('token', j.access_token); });"
+                  "pm.test('Devuelve access_token y usuario sin refresh en JSON', function () { const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.expect(j.usuario).to.have.property('rol'); pm.expect(j.usuario.permisos).to.be.an('array'); pm.expect(j).not.to.have.property('refresh_token'); pm.environment.set('token', j.access_token); });",
+                  "pm.test('Cookie refresh HttpOnly con atributos seguros', function () { const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('HttpOnly'); pm.expect(c).to.include('Path=/auth'); pm.expect(c.toLowerCase()).to.match(/samesite=(lax|none)/); });"
                 ]
               }
             }
@@ -54,6 +73,36 @@
           }
         },
         {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rota cookie y devuelve solo access token', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('access_token', 'token_type'); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.environment.set('token', j.access_token); const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('HttpOnly'); pm.expect(c).to.include('Path=/auth'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Lee el refresh exclusivamente de la cookie HttpOnly, lo rota y actualiza {{token}} con el nuevo access token.",
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          }
+        },
+        {
           "name": "Perfil actual (/auth/me)",
           "event": [
             {
@@ -85,6 +134,36 @@
               "path": [
                 "auth",
                 "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 204 sin cuerpo', function () { pm.response.to.have.status(204); pm.expect(pm.response.text()).to.eql(''); });",
+                  "pm.test('Expira la cookie refresh', function () { const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('Max-Age=0'); pm.expect(c).to.include('Path=/auth'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Revoca la familia de refresh actual y elimina la cookie. Es idempotente si no existe una sesion vigente.",
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
               ]
             }
           }
@@ -415,7 +494,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-                  "pm.test('Mensaje de error presente', function () { const j = pm.response.json(); pm.expect(j.detail || j.error || j.message).to.exist; });"
+                  "pm.test('Contrato de error 409', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -859,7 +938,7 @@
       "description": "Indicadores agregados.",
       "item": [
         {
-          "name": "Analítica por edificio",
+          "name": "Edificios",
           "event": [
             {
               "listen": "test",
@@ -890,12 +969,17 @@
               "path": [
                 "analitica",
                 "edificios"
+              ],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
               ]
             }
           }
         },
         {
-          "name": "Analítica de tags",
+          "name": "Etiquetas",
           "event": [
             {
               "listen": "test",
@@ -926,7 +1010,189 @@
               "path": [
                 "analitica",
                 "tags"
+              ],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
               ]
+            }
+          }
+        },
+        {
+          "name": "Resumen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de KPIs', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('abiertas', 'en_proceso', 'criticas', 'resueltas_periodo'); Object.values(j).forEach(v => { pm.expect(v).to.be.a('number'); pm.expect(v).to.be.at.least(0); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "KPIs sin filtros. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"]
+            }
+          }
+        },
+        {
+          "name": "Resumen - periodo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ejemplo con periodo UTC inclusivo por fechas calendario.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01" },
+                { "key": "hasta", "value": "2026-12-31" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - categoría",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ejemplo filtrado por una categoría válida.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?categoria=infraestructura",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [{ "key": "categoria", "value": "infraestructura" }]
+            }
+          }
+        },
+        {
+          "name": "Resumen - filtros combinados",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ejemplo con periodo y categoría; los filtros nunca amplían el alcance autorizado.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31&categoria=infraestructura",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01" },
+                { "key": "hasta", "value": "2026-12-31" },
+                { "key": "categoria", "value": "infraestructura" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - filtro inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Fecha inexistente: debe responder 400 con el contrato común.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-02-30",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [{ "key": "desde", "value": "2026-02-30" }]
+            }
+          }
+        },
+        {
+          "name": "Resumen - sin autenticación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Solicitud sin JWT: debe responder 401.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"]
+            }
+          }
+        },
+        {
+          "name": "Resumen - sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_reportante}}" }],
+            "description": "Reportante sin analitica:ver: debe responder 403.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"]
             }
           }
         }
@@ -1098,7 +1364,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-                  "pm.test('Detalle de conflicto', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 409', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1331,7 +1597,7 @@
     },
     {
       "name": "Pruebas negativas",
-      "description": "Casos de error esperados: validación, autenticación, permisos y no encontrado.",
+      "description": "Casos de error esperados: validación, autenticación, permisos, no encontrado y conflictos; todos verifican {error, detalle}.",
       "item": [
         {
           "name": "Detalle de otra categoría",
@@ -1342,7 +1608,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1390,7 +1656,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1438,7 +1704,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1486,7 +1752,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 401', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_autenticado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1515,7 +1781,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 401', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_autenticado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1549,7 +1815,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 403', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('sin_permiso'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1585,7 +1851,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 404', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_encontrado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1621,7 +1887,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 400', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1657,7 +1923,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 403', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('sin_permiso'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }

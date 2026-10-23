@@ -115,7 +115,8 @@ export type IncidenciaIn = IncidenciaForm
 export const seguimientoSchema = z.object({
   estado_nuevo: z.enum(ESTADOS, 'Selecciona el nuevo estado'),
   comentario: z.string('Requerido').min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres'),
-  horas: z.number('Indica las horas').min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas'),
+  horas: z.number('Indica las horas').finite().min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas')
+    .multipleOf(0.25, 'Usa incrementos de 0.25 horas'),
 })
 export type SeguimientoIn = z.infer<typeof seguimientoSchema>
 

@@ -93,9 +93,10 @@ async def sembrar_usuarios(db, admin: dict) -> dict[str, dict]:
     usuarios: dict[str, dict] = {}
     for nombre, (rol, areas, edificios, activo) in defs.items():
         doc = {
+            "schema_version": 1,
             "correo": f"{nombre}@e2e.local", "nombre": nombre.replace("_", " ").title(), "rol": rol,
             "password_hash": h, "activo": activo, "areas": areas, "edificios": edificios,
-            "fecha_creacion": datetime.now(timezone.utc),
+            "fecha_alta": datetime.now(timezone.utc),
         }
         res = await db.usuarios.insert_one(doc)
         usuarios[nombre] = {"_id": res.inserted_id, "correo": doc["correo"], "nombre": doc["nombre"], "rol": rol,
@@ -143,8 +144,9 @@ class Api:
         return inc
 
     async def usuario_temporal(self, rol: str = "reportante", **extra) -> dict:
-        doc = {"correo": f"tmp_{uuid.uuid4().hex[:10]}@e2e.local", "nombre": "Temporal E2E", "rol": rol,
+        doc = {"schema_version": 1, "correo": f"tmp_{uuid.uuid4().hex[:10]}@e2e.local",
+               "nombre": "Temporal E2E", "rol": rol,
                "password_hash": hashear_password(PASSWORD), "activo": True, "areas": [], "edificios": [],
-               "fecha_creacion": datetime.now(timezone.utc), **extra}
+               "fecha_alta": datetime.now(timezone.utc), **extra}
         res = await self.db.usuarios.insert_one(doc)
         return {"_id": res.inserted_id, "correo": doc["correo"], "token": crear_access_token(str(res.inserted_id))}

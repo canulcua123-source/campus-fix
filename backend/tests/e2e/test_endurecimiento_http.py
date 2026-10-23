@@ -40,13 +40,13 @@ async def test_docs_sin_csp_estricta(api):
     assert r.headers["x-content-type-options"] == "nosniff"
 
 
-async def test_cors_solo_origen_permitido_y_sin_credenciales():
+async def test_cors_solo_origen_permitido_y_con_credenciales():
     async with _cliente("10.95.0.1") as c:
         ok = await c.options("/incidencias", headers={
             "Origin": ORIGEN_OK, "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": "authorization,content-type"})
         assert ok.headers.get("access-control-allow-origin") == ORIGEN_OK
-        assert "access-control-allow-credentials" not in ok.headers
+        assert ok.headers.get("access-control-allow-credentials") == "true"
         assert "PUT" not in ok.headers.get("access-control-allow-methods", "")
         malo = await c.options("/incidencias", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"})
         assert "access-control-allow-origin" not in malo.headers
@@ -61,6 +61,11 @@ def test_cors_rechaza_comodin():
         Settings(cors_origins="*", jwt_secret="x" * 40)
     with pytest.raises(ValidationError):
         Settings(cors_origins="http://localhost:5173,*", jwt_secret="x" * 40)
+
+
+async def test_cookie_samesite_none_exige_secure():
+    with pytest.raises(ValidationError):
+        Settings(refresh_cookie_samesite="none", refresh_cookie_secure=False, jwt_secret="x" * 40)
 
 
 async def test_limite_general_por_usuario(api, monkeypatch):

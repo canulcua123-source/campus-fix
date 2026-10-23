@@ -23,6 +23,139 @@ CATEGORIAS = ["computo_redes", "infraestructura", "academico"]
 ESTADOS = ["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
 PRIORIDADES = ["baja", "media", "alta", "critica"]
 TIPOS_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+ALCANCES = ["propio", "area", "edificio", "global"]
+TIPOS_REPORTANTE = ["docente", "estudiante", "administrativo"]
+
+
+def esquema_usuarios() -> dict:
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "schema_version", "correo", "nombre", "password_hash", "rol", "activo", "fecha_alta",
+            ],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "objectId"},
+                "schema_version": {"bsonType": "int", "enum": [1]},
+                "correo": {
+                    "bsonType": "string",
+                    "maxLength": 254,
+                    "pattern": r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+                },
+                "nombre": {"bsonType": "string", "minLength": 3, "maxLength": 80},
+                "password_hash": {"bsonType": "string", "minLength": 1},
+                "rol": {"bsonType": "string", "pattern": r"^[a-z_]{3,30}$"},
+                "activo": {"bsonType": "bool"},
+                "areas": {
+                    "bsonType": "array",
+                    "maxItems": 3,
+                    "uniqueItems": True,
+                    "items": {"enum": CATEGORIAS},
+                },
+                "edificios": {
+                    "bsonType": "array",
+                    "maxItems": 20,
+                    "uniqueItems": True,
+                    "items": {"bsonType": "string", "minLength": 1, "maxLength": 60},
+                },
+                "tipo_reportante": {"enum": TIPOS_REPORTANTE},
+                "fecha_alta": {"bsonType": "date"},
+            },
+        }
+    }
+
+
+def esquema_roles() -> dict:
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["clave", "nombre", "descripcion", "permisos", "alcance"],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "objectId"},
+                "clave": {"bsonType": "string", "pattern": r"^[a-z_]{3,30}$"},
+                "nombre": {"bsonType": "string", "minLength": 3, "maxLength": 50},
+                "descripcion": {"bsonType": "string", "maxLength": 200},
+                "permisos": {
+                    "bsonType": "array",
+                    "minItems": 1,
+                    "maxItems": len(CATALOGO_PERMISOS),
+                    "uniqueItems": True,
+                    "items": {"enum": CATALOGO_PERMISOS},
+                },
+                "alcance": {"enum": ALCANCES},
+                "sistema": {"bsonType": "bool"},
+            },
+        }
+    }
+
+
+def _campo_categoria(tipo: str, propiedades: dict | None = None, requeridos: list[str] | None = None) -> dict:
+    return {
+        "bsonType": "object",
+        "required": ["nombre", "tipo", "requerido", *(requeridos or [])],
+        "additionalProperties": False,
+        "properties": {
+            "nombre": {"bsonType": "string", "pattern": r"^[a-z_][a-z0-9_]{0,49}$"},
+            "tipo": {"enum": [tipo]},
+            "requerido": {"bsonType": "bool"},
+            **(propiedades or {}),
+        },
+    }
+
+
+def esquema_categorias() -> dict:
+    numero = {"bsonType": ["int", "long", "double"]}
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["clave", "nombre", "prefijo", "area_responsable", "version", "activa", "campos"],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "objectId"},
+                "clave": {"enum": CATEGORIAS},
+                "nombre": {"bsonType": "string", "minLength": 3, "maxLength": 80},
+                "prefijo": {"bsonType": "string", "pattern": r"^[A-Z]{3}$"},
+                "area_responsable": {"bsonType": "string", "minLength": 3, "maxLength": 100},
+                "version": {"bsonType": "int", "minimum": 1},
+                "activa": {"bsonType": "bool"},
+                "campos": {
+                    "bsonType": "array",
+                    "minItems": 1,
+                    "maxItems": 30,
+                    "uniqueItems": True,
+                    "items": {
+                        "oneOf": [
+                            _campo_categoria("ip"),
+                            _campo_categoria("booleano"),
+                            _campo_categoria("lista_texto"),
+                            _campo_categoria("entero", {"min": numero, "max": numero}),
+                            _campo_categoria(
+                                "texto",
+                                {
+                                    "max_length": {"bsonType": "int", "minimum": 1},
+                                    "patron": {"bsonType": "string", "minLength": 1},
+                                },
+                            ),
+                            _campo_categoria(
+                                "enum",
+                                {
+                                    "opciones": {
+                                        "bsonType": "array",
+                                        "minItems": 1,
+                                        "uniqueItems": True,
+                                        "items": {"bsonType": "string", "minLength": 1},
+                                    }
+                                },
+                                ["opciones"],
+                            ),
+                        ]
+                    },
+                },
+            },
+        }
+    }
 
 
 def _detalle(categoria: str, props: dict, requeridos: list[str]) -> dict:
@@ -203,13 +336,16 @@ async def sembrar_base(db) -> dict:
         password = os.environ.get("SEED_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
         generado = "SEED_ADMIN_PASSWORD" not in os.environ or not os.environ["SEED_ADMIN_PASSWORD"]
         admin = {
+            "schema_version": 1,
             "correo": "admin@utm.local", "nombre": "Administrador", "rol": "admin",
             "password_hash": hashear_password(password), "activo": True,
-            "areas": [], "edificios": [], "fecha_creacion": datetime.now(timezone.utc),
+            "areas": [], "edificios": [], "fecha_alta": datetime.now(timezone.utc),
         }
         res = await db.usuarios.insert_one(admin)
         admin["_id"] = res.inserted_id
-        print("+ usuario admin@utm.local" + (f"  contraseña generada: {password}" if generado else ""))
+        print("+ usuario admin@utm.local")
+        if generado:
+            print("! contraseña local generada; define SEED_ADMIN_PASSWORD para controlar su valor")
     return admin
 
 
@@ -308,8 +444,12 @@ async def main() -> None:
     db = cliente[settings.mongodb_db]
     try:
         await asegurar_coleccion(db, "incidencias_campus", esquema_incidencias())
-        for nombre in ("usuarios", "roles", "categorias"):
-            await asegurar_coleccion(db, nombre)
+        for nombre, validador in (
+            ("usuarios", esquema_usuarios()),
+            ("roles", esquema_roles()),
+            ("categorias", esquema_categorias()),
+        ):
+            await asegurar_coleccion(db, nombre, validador)
         await crear_indices(db)
         admin = await sembrar_base(db)
         if "--seed-demo" in sys.argv or "--reset-demo" in sys.argv:

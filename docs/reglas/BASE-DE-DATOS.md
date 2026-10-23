@@ -4,7 +4,7 @@ MongoDB Atlas M0 (512 MB, sin respaldos automáticos) en producción y `mongo:7.
 
 Archivos clave: `backend/scripts/init_db.py` (`esquema_incidencias`, `asegurar_coleccion`, `crear_indices`, `sembrar_base`, `sembrar_demo`), `backend/app/core/db.py` (`get_db`, cliente con `tz_aware=True`), `backend/scripts/limpiar_huerfanos.py`, `backend/tests/e2e/conftest.py` (guard de base local).
 
-Colecciones actuales: `incidencias_campus` (con `$jsonSchema` estricto), `usuarios`, `roles`, `categorias`.
+Colecciones actuales: `incidencias_campus`, `usuarios`, `roles` y `categorias`, todas con `$jsonSchema`, `validationLevel: "strict"` y `validationAction: "error"`.
 
 ---
 
@@ -62,6 +62,22 @@ Un arreglo nuevo debe tener tope en Pydantic **y** en `$jsonSchema` (o `$slice`)
 
 **BD-07 · Nombres:** colecciones y campos en español, `snake_case`; fechas con prefijo `fecha_`; referencias con sufijo `_id`.
 
+### Contratos de las colecciones auxiliares
+
+Los validadores se encuentran únicamente en `scripts/init_db.py`:
+
+| Colección | Campos requeridos | Campos opcionales |
+|---|---|---|
+| `usuarios` | `schema_version`, `correo`, `nombre`, `password_hash`, `rol`, `activo`, `fecha_alta` | `areas`, `edificios`, `tipo_reportante` |
+| `roles` | `clave`, `nombre`, `descripcion`, `permisos`, `alcance` | `sistema` |
+| `categorias` | `clave`, `nombre`, `prefijo`, `area_responsable`, `version`, `activa`, `campos` | Ninguno |
+
+`usuarios.schema_version` vale `1`; `fecha_alta` es una fecha BSON. `areas` admite únicamente las tres categorías vigentes y `edificios` contiene cadenas. En `roles`, los permisos pertenecen a `CATALOGO_PERMISOS`, no se repiten y el alcance es `propio`, `area`, `edificio` o `global`. En `categorias`, cada elemento de `campos` usa una rama distinta según `tipo`: `enum` requiere `opciones`; `entero` admite `min`/`max`; `texto` admite `max_length`/`patron`; los demás tipos no aceptan opciones ajenas.
+
+### Contrato de `historial_seguimiento`
+
+La estructura vigente conserva el cambio mínimo y no almacena `estado_anterior`. Cada entrada de creación o transición contiene `fecha` (BSON date), `usuario_id` (ObjectId), `estado_nuevo`, `comentario` y `horas`; una asignación puede añadir `tipo: "asignacion"`. El estado anterior se obtiene de la entrada previa, mientras que la primera entrada siempre indica `estado_nuevo: "abierta"`. Esto evita duplicar información y conserva la actualización atómica que valida el estado permitido en el filtro de MongoDB. No se guarda `estado_anterior: null`. El arreglo continúa limitado a las últimas 200 entradas mediante `$push` y `$slice`.
+
 ## 2. Índices
 
 Índices actuales (`crear_indices()`):
@@ -77,6 +93,8 @@ Un arreglo nuevo debe tener tope en Pydantic **y** en `$jsonSchema` (o `$slice`)
 | `{estado:1, "ubicacion.edificio":1}` | Pipeline 1 (`/analitica/edificios`) |
 | `{fecha_creacion:-1}` | Listados recientes |
 | `usuarios.correo`, `roles.clave`, `categorias.clave` únicos | Unicidad |
+
+Los pipelines de analítica comienzan con `$match` y combinan el alcance autorizado y los filtros del cliente mediante `$and`. `/analitica/resumen` usa una sola agregación con `$facet`: `fecha_creacion` para abiertas, en proceso y críticas, y `fecha_resolucion` para resueltas. El filtro superior `hasta` se convierte al inicio UTC del día siguiente y se aplica con `$lt`, por lo que incluye el día indicado completo sin depender de la hora almacenada.
 
 **BD-08 · Un índice nuevo solo si hay una consulta frecuente que lo necesita.** Cada índice ocupa espacio y frena las escrituras. En el PR escribe la consulta que sirve y el `explain` antes/después:
 
@@ -127,6 +145,8 @@ Los scripts de `scripts/` sí pueden usar `delete_many`/`insert_many`, siempre f
 
 **BD-17 · Migraciones de datos** en un script en `scripts/` (p. ej. `scripts/migrar_v2.py`): idempotente, filtra por `schema_version` (`{"schema_version": 1}` → actualiza y pone `2`), imprime cuántos documentos cambió, y tiene modo simulación por defecto (como `limpiar_huerfanos.py` con `--borrar`).
 
+Para T-008, un administrador antiguo puede tener `fecha_creacion` y no tener `schema_version`. Antes de instalar el validador estricto, ejecuta `python scripts/migrar_admin_t008.py` para simular y, tras el respaldo y revisión, `python scripts/migrar_admin_t008.py --aplicar`. La migración actúa solo sobre `admin@utm.local`, copia la fecha BSON existente a `fecha_alta`, asigna la versión `1` y elimina el nombre de campo antiguo en la misma actualización. No modifica el hash, rol, permisos ni estado y no se ejecuta automáticamente.
+
 **BD-18 · Probar en Docker antes que nada:**
 
 ```bash
@@ -151,7 +171,7 @@ pytest tests/e2e -q                       # la suite recrea utm_desk_test con el
 | `python scripts/init_db.py --seed-demo` | Además 24 incidencias con `demo: true` (≥ 8 resueltas, 18 con evidencia, fechas de los últimos 5–30 días, folios `…-9000` a `…-9023`). Si ya existen, no hace nada |
 | `python scripts/init_db.py --reset-demo` | Borra **solo** `{"demo": true}` y las vuelve a crear |
 
-Reglas: todo dato sintético lleva `demo: true` (así se borra sin tocar datos reales); nunca marques datos reales como demo; los datos demo son deterministas (`random.Random(42)`). Fuera de `localhost`, el script exige `SEED_ADMIN_PASSWORD` para crear el admin; en local, si no se define, imprime una contraseña generada.
+Reglas: todo dato sintético lleva `demo: true` (así se borra sin tocar datos reales); nunca marques datos reales como demo; los datos demo son deterministas (`random.Random(42)`). Fuera de `localhost`, el script exige `SEED_ADMIN_PASSWORD` para crear el admin. También conviene definirla explícitamente en local: si se genera una contraseña aleatoria, el script no la imprime ni expone hashes o secretos en los logs.
 
 ## 6. Acceso a Atlas
 

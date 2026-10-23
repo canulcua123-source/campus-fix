@@ -1,12 +1,25 @@
-import pytest
+from datetime import datetime, timedelta, timezone
 
+import pytest
+from redis.exceptions import RedisError
+
+import app.routers.analitica as analitica_router
 import app.routers.ia as ia_router
+from app.core import cache as cache_core
 from app.core.config import settings
+from app.core.db import get_redis
 from app.schemas.ia import AnalisisImagen
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 FILTRO_RESUELTAS = {"estado": {"$in": ["resuelta", "cerrada"]}, "fecha_resolucion": {"$type": "date"}}
+
+
+async def _limpiar_cache_analitica():
+    redis = get_redis()
+    claves = [clave async for clave in redis.scan_iter(match="analitica:v1:*")]
+    if claves:
+        await redis.delete(*claves)
 
 
 async def _preparar(api):
@@ -18,6 +31,7 @@ async def _preparar(api):
 
 async def test_analitica_edificios(api):
     await _preparar(api)
+    await _limpiar_cache_analitica()
     r = await api.c.get("/analitica/edificios", headers=api.h("directivo"))
     assert r.status_code == 200, r.text
     filas = r.json()
@@ -41,6 +55,7 @@ async def test_analitica_edificios(api):
 
 async def test_analitica_tags(api):
     await _preparar(api)
+    await _limpiar_cache_analitica()
     r = await api.c.get("/analitica/tags", headers=api.h("admin"))
     assert r.status_code == 200, r.text
     filas = r.json()
@@ -62,9 +77,152 @@ async def test_analitica_tags(api):
     ("coordinador_infra", 200), ("directivo", 200), ("admin", 200),
 ])
 async def test_analitica_permisos(api, quien, esperado):
-    for ruta in ("/analitica/edificios", "/analitica/tags"):
+    for ruta in ("/analitica/edificios", "/analitica/tags", "/analitica/resumen"):
         assert (await api.c.get(ruta, headers=api.h(quien))).status_code == esperado, ruta
-    assert (await api.c.get("/analitica/tags")).status_code == 401
+    assert (await api.c.get("/analitica/resumen")).status_code == 401
+
+
+async def test_resumen_cuenta_por_estado(api):
+    await _limpiar_cache_analitica()
+    antes = (await api.c.get("/analitica/resumen", headers=api.h("directivo"))).json()
+
+    await api.crear(prioridad="critica")
+    en_proceso = await api.crear()
+    await api.a_estado(en_proceso["_id"], "en_proceso")
+    await api.crear_en("resuelta", prioridad="critica")
+    await _limpiar_cache_analitica()
+
+    r = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+    assert r.status_code == 200, r.text
+    despues = r.json()
+    assert despues["abiertas"] == antes["abiertas"] + 1
+    assert despues["en_proceso"] == antes["en_proceso"] + 1
+    assert despues["criticas"] == antes["criticas"] + 2
+    assert despues["resueltas_periodo"] == antes["resueltas_periodo"] + 1
+    assert all(isinstance(valor, int) and valor >= 0 for valor in despues.values())
+
+
+async def test_resumen_filtra_periodo(api):
+    hoy = datetime.now(timezone.utc).date()
+    manana = hoy + timedelta(days=1)
+    parametros_hoy = {"desde": hoy.isoformat(), "hasta": hoy.isoformat(), "categoria": "infraestructura"}
+    parametros_manana = {
+        "desde": manana.isoformat(),
+        "hasta": manana.isoformat(),
+        "categoria": "infraestructura",
+    }
+    await _limpiar_cache_analitica()
+    antes_hoy = (
+        await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))
+    ).json()
+    antes_manana = (
+        await api.c.get("/analitica/resumen", params=parametros_manana, headers=api.h("directivo"))
+    ).json()
+
+    await api.crear_en("resuelta")
+    await _limpiar_cache_analitica()
+
+    despues_hoy = (
+        await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))
+    ).json()
+    despues_manana = (
+        await api.c.get("/analitica/resumen", params=parametros_manana, headers=api.h("directivo"))
+    ).json()
+    assert despues_hoy["resueltas_periodo"] == antes_hoy["resueltas_periodo"] + 1
+    assert despues_manana["resueltas_periodo"] == antes_manana["resueltas_periodo"]
+
+
+async def test_resumen_alcance_coordinador(api):
+    await api.crear(categoria="computo_redes", prioridad="critica")
+    await _limpiar_cache_analitica()
+    parametros = {"categoria": "computo_redes"}
+
+    global_ = await api.c.get("/analitica/resumen", params=parametros, headers=api.h("directivo"))
+    coordinador = await api.c.get(
+        "/analitica/resumen",
+        params=parametros,
+        headers=api.h("coordinador_infra"),
+    )
+
+    assert global_.status_code == coordinador.status_code == 200
+    assert global_.json()["abiertas"] > 0
+    assert global_.json()["criticas"] > 0
+    assert coordinador.json() == {
+        "abiertas": 0,
+        "en_proceso": 0,
+        "criticas": 0,
+        "resueltas_periodo": 0,
+    }
+
+
+async def test_cache_separada_por_alcance(api):
+    await _limpiar_cache_analitica()
+
+    assert (await api.c.get("/analitica/resumen", headers=api.h("directivo"))).status_code == 200
+    assert (await api.c.get("/analitica/resumen", headers=api.h("coordinador_infra"))).status_code == 200
+
+    claves = [clave async for clave in get_redis().scan_iter(match="analitica:v1:*")]
+    assert len(claves) == 2
+    assert claves[0] != claves[1]
+
+
+@pytest.mark.parametrize(
+    "parametros",
+    [
+        {"desde": "2026-02-30"},
+        {"desde": "22-10-2026"},
+        {"desde": "2026-10-22T00:00:00Z"},
+        {"desde": "2026-10-23", "hasta": "2026-10-22"},
+        {"categoria": "otra"},
+        [("categoria", "academico"), ("categoria", "infraestructura")],
+        {"otro": "valor"},
+    ],
+    ids=["inexistente", "formato", "instante", "invertido", "categoria", "duplicado", "inesperado"],
+)
+async def test_filtro_fecha_invalida_400(api, parametros):
+    r = await api.c.get("/analitica/resumen", params=parametros, headers=api.h("directivo"))
+    assert r.status_code == 400, r.text
+    assert r.json()["error"] == "validacion"
+    assert isinstance(r.json()["detalle"], str | list)
+
+
+async def test_analitica_cache_hit(api, monkeypatch):
+    await _limpiar_cache_analitica()
+    llamadas = 0
+
+    async def agregar_falso(_pipeline):
+        nonlocal llamadas
+        llamadas += 1
+        return [{"abiertas": 7, "en_proceso": 2, "criticas": 1, "resueltas_periodo": 4}]
+
+    monkeypatch.setattr(analitica_router, "_agregar", agregar_falso)
+    primera = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+    segunda = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json() == segunda.json()
+    assert llamadas == 1
+    claves = [clave async for clave in get_redis().scan_iter(match="analitica:v1:*")]
+    assert len(claves) == 1
+    clave = claves[0]
+    ttl = await get_redis().ttl(clave)
+    assert 0 < ttl <= 300
+
+
+async def test_analitica_sin_redis_responde(api, monkeypatch):
+    await _limpiar_cache_analitica()
+
+    class RedisCaido:
+        async def get(self, _clave):
+            raise RedisError("fallo simulado")
+
+        async def set(self, _clave, _contenido, *, ex):
+            raise RedisError("fallo simulado")
+
+    monkeypatch.setattr(cache_core, "get_redis", lambda: RedisCaido())
+    r = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+    assert r.status_code == 200, r.text
+    assert set(r.json()) == {"abiertas", "en_proceso", "criticas", "resueltas_periodo"}
 
 
 # ---------- IA ----------

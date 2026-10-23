@@ -22,8 +22,9 @@ async def test_crear_rol_y_duplicado(api):
 @pytest.mark.parametrize("over", [
     {"clave": "Mal-Clave"}, {"clave": "ab"}, {"clave": {"$ne": ""}},
     {"permisos": ["incidencias:volar"]}, {"permisos": ["incidencias:ver", "incidencias:ver"]}, {"permisos": []},
-    {"alcance": "universo"}, {"nombre": "ab"},
-], ids=["clave_patron", "clave_corta", "clave_nosql", "permiso_desconocido", "permiso_dup", "sin_permisos", "alcance", "nombre"])
+    {"alcance": "universo"}, {"nombre": "ab"}, {"campo_desconocido": True},
+], ids=["clave_patron", "clave_corta", "clave_nosql", "permiso_desconocido", "permiso_dup", "sin_permisos",
+        "alcance", "nombre", "campo_extra"])
 async def test_crear_rol_invalido(api, over):
     body = {**_rol(clave="rol_invalido"), **over}
     r = await api.c.post("/roles", json=body, headers=api.h("admin"))

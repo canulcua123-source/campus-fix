@@ -9,6 +9,8 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | Método y ruta | Permiso | Respuesta OK |
 |---|---|---|
 | `POST /auth/login` | público (10/min por IP) | 200 `{access_token, token_type, usuario}` |
+| `POST /auth/refresh` | cookie HttpOnly (10/min por IP) | 200 `{access_token, token_type}` |
+| `POST /auth/logout` | cookie HttpOnly | 204 sin cuerpo |
 | `GET /auth/me` | autenticado | 200 |
 | `GET /health` | público | 200 `{"status":"ok"}` |
 | `POST /incidencias` | `incidencias:crear` | **201** `{_id, codigo, estado}` |
@@ -22,12 +24,15 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `POST /incidencias/{id}/evidencias` | `evidencias:subir` | **201** `{ok, evidencia_id}` |
 | `GET /incidencias/{id}/evidencias/{evidencia_id}/url` | `incidencias:ver` | 200 `{url, expira_en}` |
 | `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `AnalisisImagen` |
-| `GET /analitica/edificios`, `GET /analitica/tags` | `analitica:ver` | 200 |
+| `GET /analitica/edificios`, `GET /analitica/tags` | `analitica:ver` | 200 lista |
+| `GET /analitica/resumen` | `analitica:ver` | 200 `{abiertas, en_proceso, criticas, resueltas_periodo}` |
 | `GET /roles`, `POST /roles` | `roles:gestionar` | 200 / **201** |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200 |
 | `GET /categorias` | autenticado | 200 |
 
 La documentación interactiva vive en **`/docs`** (OpenAPI de FastAPI). Es la fuente de verdad del contrato: si no aparece bien ahí, el endpoint no está terminado.
+
+Los tres endpoints de `/analitica` aceptan `desde`, `hasta` y `categoria`. Las fechas son días calendario ISO `AAAA-MM-DD` en UTC y ambos extremos son inclusivos. El periodo filtra por `fecha_creacion` en abiertas, en proceso, críticas y etiquetas; filtra por `fecha_resolucion` en resueltas y edificios. Una categoría incompatible con el alcance autorizado produce resultados vacíos o ceros, nunca amplía el alcance. Los resultados se guardan como JSON en Redis durante 300 segundos con claves separadas por endpoint, alcance y filtros; si Redis falla, la consulta autorizada se calcula en MongoDB sin caché.
 
 ---
 
@@ -91,19 +96,55 @@ if doc["reportante"]["usuario_id"] != usuario["_id"]:
 
 ## 3. Forma de los errores
 
-**API-08 · Formas de error que existen hoy** (no inventes otras):
+**API-08 · Una sola forma para todos los errores:**
 
-| Origen | Código | Cuerpo |
+```json
+{
+  "error": "codigo_estable",
+  "detalle": "Mensaje claro en español"
+}
+```
+
+`error` siempre es una cadena estable para que el cliente decida cómo presentar o tratar el fallo. `detalle` es una cadena, excepto en validaciones de entrada y de `$jsonSchema`, donde es una lista de objetos con `type`, `loc` y `msg`. Los manejadores comunes viven en `app/core/errores.py` y se registran en `main.py`; esto incluye las excepciones HTTP de FastAPI y Starlette, por lo que rutas inexistentes y errores generados por routers tienen el mismo contrato.
+
+| Código | `error` | Ejemplo de `detalle` |
 |---|---|---|
-| Validación de Pydantic / FastAPI (`_validacion` en `main.py`) | 400 | `{"error":"validacion","detalle":[{"type":"string_too_short","loc":["body","titulo"],"msg":"..."}]}` |
-| `$jsonSchema` de MongoDB, código 121 (`_write_error`) | 400 | `{"error":"validacion","detalle":[{"msg":"El documento no cumple el esquema de la base de datos"}]}` |
-| `HTTPException(status, "mensaje")` en routers | 400–503 | `{"detail":"mensaje en español"}` |
-| `DuplicateKeyError` no capturado (`_duplicado`) | 409 | `{"error":"duplicado","detalle":"Registro duplicado"}` |
-| Middleware de cuerpo | 411 / 413 | `{"error":"longitud_requerida"}` / `{"error":"cuerpo_demasiado_grande"}` |
-| slowapi | 429 | `{"error":"Rate limit exceeded: 10 per 1 minute"}` |
-| `WriteError` distinto de 121 | 500 | `{"error":"interno"}` |
+| 400 | `validacion` | `[{"type":"missing","loc":["body","titulo"],"msg":"Campo obligatorio"}]` o `"Identificador inválido"` |
+| 401 | `no_autenticado` | `"No autenticado"` / `"Token inválido o expirado"` |
+| 403 | `sin_permiso` | `"No tienes permiso para realizar esta acción"` |
+| 404 | `no_encontrado` | `"Incidencia no encontrada"` |
+| 409 | `conflicto` | `"Transición de estado no permitida"` |
+| 409 por `DuplicateKeyError` | `duplicado` | `"Registro duplicado"` |
+| 411 | `longitud_requerida` | `"Se requiere la cabecera Content-Length"` |
+| 413 | `cuerpo_demasiado_grande` | `"El cuerpo de la solicitud es demasiado grande"` |
+| 415 | `tipo_no_soportado` | `"Tipo de contenido no soportado"` |
+| 429 | `limite` | `"Demasiadas solicitudes. Intenta de nuevo más tarde."` |
+| 503 | `no_disponible` | `"El servicio no está disponible temporalmente"` |
 
-Regla para código nuevo: errores de negocio con `raise HTTPException(código, "Mensaje en español para el usuario")`. El mensaje se muestra tal cual en la PWA, así que debe ser claro y no técnico.
+FastAPI genera internamente HTTP 422 cuando Pydantic rechaza el body, los parámetros o la ruta. El manejador lo transforma en HTTP 400 y conserva la ubicación necesaria para asociar el error a un campo:
+
+```json
+{
+  "error": "validacion",
+  "detalle": [
+    {
+      "type": "missing",
+      "loc": ["body", "titulo"],
+      "msg": "Campo obligatorio"
+    }
+  ]
+}
+```
+
+La lista nunca incluye `input`, `ctx`, `url` ni valores enviados por el cliente. Un `WriteError` de MongoDB con código 121 también produce HTTP 400 y un detalle general de validación. Un `DuplicateKeyError` produce HTTP 409 sin nombres de índices, campos internos, consultas ni valores duplicados. Otros errores de escritura devuelven un mensaje interno genérico.
+
+Los 429 de SlowAPI, el límite global, el bloqueo de login y el límite de firmas incluyen `Retry-After` cuando el mecanismo que aplicó el límite proporciona un tiempo fiable. SlowAPI y el límite global consultan `get_window_stats()` y convierten su marca temporal absoluta de reinicio en segundos restantes. El bloqueo de login usa el TTL de las claves de IP y cuenta que hayan excedido su cuota; si ambas bloquean, usa el mayor TTL porque la petición solo será admisible cuando las dos hayan vencido. El límite diario de firmas calcula los segundos hasta la siguiente medianoche UTC, que es cuando cambia la fecha de la clave; el TTL de 48 horas solo conserva el contador y no define la ventana diaria.
+
+Redis devuelve `-1` si una clave no tiene expiración y `-2` si ya no existe. Nunca se convierten esos valores en una espera ficticia: un bloqueo de login sin expiración se conserva pero omite `Retry-After`, mientras que una clave de login ya expirada deja de bloquear. Si falla una consulta auxiliar después de detectar el exceso, se conserva el 429, se registra la causa y se omite la cabecera no fiable. Por ello, los clientes validan `Retry-After` como segundos enteros cuando está presente, pero toleran su ausencia. Si Redis o el almacenamiento de `limits` falla antes de poder decidir el límite, el manejador de dependencia devuelve 503 con detalle genérico y registra la excepción para diagnóstico.
+
+Los `HTTPException` conservan cabeceras relevantes como `WWW-Authenticate` y cualquier `Retry-After` definido por el endpoint. Las respuestas de error mantienen CORS, las cabeceras de seguridad y `Cache-Control: no-store`.
+
+Regla para código nuevo: usa `raise HTTPException(código, "Mensaje en español para el usuario")`. No construyas respuestas de error ad hoc, no devuelvas errores con HTTP 200 y no incluyas mensajes técnicos o valores de la solicitud. Si agregas un código nuevo, define primero su `error` estable en el manejador común y documenta el contrato.
 
 ```python
 # ✅ raise HTTPException(409, "La incidencia está cerrada")
@@ -111,7 +152,7 @@ Regla para código nuevo: errores de negocio con `raise HTTPException(código, "
 # ❌ return JSONResponse({"ok": False, "msg": "..."}, 200)    # error con 200
 ```
 
-**API-09 · Los errores no reflejan lo que mandó el cliente.** `_validacion` elimina `input`, `ctx` y `url` del detalle para no devolver contraseñas u otros valores. No pongas valores enviados en los mensajes (`f"El correo {correo} no existe"` ❌). Login responde igual "Credenciales inválidas" exista o no el correo.
+**API-09 · Los errores no reflejan lo que mandó el cliente.** `manejar_validacion` elimina `input`, `ctx` y `url` del detalle para no devolver contraseñas u otros valores. No pongas valores enviados en los mensajes (`f"El correo {correo} no existe"` ❌); usa textos constantes como `"El rol indicado no existe"`. Login responde igual "Credenciales inválidas" exista o no el correo.
 
 ## 4. JSON
 
@@ -119,7 +160,7 @@ Regla para código nuevo: errores de negocio con `raise HTTPException(código, "
 
 **API-11 · Ids como string.** Todo `ObjectId` sale como string de 24 hex; la clave del documento es `_id` (así lo devuelven `a_json` y `crear_incidencia`). Los ids de evidencia son UUID v4 en string. Un id que llega en la ruta se valida con `_oid()` (400 si está malformado).
 
-**API-12 · Serializar siempre con `a_json()`** (`app/core/serial.py`): convierte `ObjectId` anidados a string y **elimina `password_hash` a cualquier profundidad**. Además, proyecta para no leer de más (`PROYECCION = {"password_hash": 0}` en `usuarios.py`, `PROYECCION_LISTA` en `incidencias.py`).
+**API-12 · Serializar siempre con `a_json()`** (`app/core/serial.py`): convierte `ObjectId` anidados a string, convierte fechas con zona a UTC terminado en `Z` y **elimina `password_hash` a cualquier profundidad**. Además, proyecta para no leer de más (`PROYECCION = {"password_hash": 0}` en `usuarios.py`, `PROYECCION_LISTA` en `incidencias.py`).
 
 ```python
 # ✅ return [a_json(d) async for d in cursor]
@@ -128,7 +169,7 @@ Regla para código nuevo: errores de negocio con `raise HTTPException(código, "
 
 **API-13 · Nunca devolver secretos:** `password_hash`, tokens de otros usuarios, claves del bucket, `ANTHROPIC_API_KEY`, URLs firmadas de subida de otro usuario, contenido de `.env`. La suite e2e usa `ClienteSeguro`, que falla si cualquier respuesta contiene `password_hash`.
 
-**API-14 · Fechas en ISO 8601 UTC.** En MongoDB se guardan como `date` BSON con `datetime.now(timezone.utc)` (nunca hora local ni string). En JSON salen en UTC; el contrato acordado es ISO 8601 con zona (`2026-10-19T14:02:00Z`). Hoy los endpoints sin `response_model` las emiten como `2026-10-19T14:02:00.123000+00:00` (mismo instante; los parsers de JS aceptan ambas). La PWA convierte a `America/Mexico_City` solo al mostrar (UX-28). El único cálculo con zona local en el backend es el día del folio (`generar_codigo` usa `ZONA`).
+**API-14 · Fechas en ISO 8601 UTC.** En MongoDB se guardan como `date` BSON con `datetime.now(timezone.utc)` (nunca hora local ni string). `a_json()` convierte cualquier offset explícito a UTC y el JSON siempre termina en `Z` (`2026-10-19T14:02:00Z` o con su fracción de segundo). Una fecha sin zona horaria se rechaza para evitar interpretar un instante ambiguo. La PWA convierte a `America/Mexico_City` solo al mostrar (UX-28). El único cálculo con zona local en el backend es el día del folio (`generar_codigo` usa `ZONA`).
 
 **API-15 · Sin `null` en las respuestas de documentos.** Un campo que no aplica no se envía (p. ej. `fecha_resolucion` y `tecnico_asignado` no existen hasta que aplican). Los schemas de entrada usan `model_dump(exclude_none=True)`.
 
@@ -146,6 +187,7 @@ Regla para código nuevo: errores de negocio con `raise HTTPException(código, "
 | Evidencias por incidencia | 10 (guardadas + firmas pendientes); 5 pendientes por usuario | `MAX_EVIDENCIAS` |
 | Historial de seguimiento | últimas 200 entradas (`$slice`) | `MAX_HISTORIAL` |
 | Horas acumuladas por incidencia | 1000 | `MAX_HORAS` |
+| Horas por entrada de seguimiento | 0–24, en incrementos de 0.25 | `SeguimientoIn` |
 | Tags por incidencia | 15 | `IncidenciaIn`, `TagsIn`, `$jsonSchema` |
 
 Un endpoint que necesite más de 64 KB se agrega a `MAX_BODY` en `main.py` con justificación en el PR.
@@ -155,6 +197,7 @@ Un endpoint que necesite más de 64 KB se agrega a `MAX_BODY` en `main.py` con j
 | Límite | Valor | Clave |
 |---|---|---|
 | Login | 10/minuto | IP (`limiter` por defecto) |
+| Refresh | 10/minuto | IP (`limiter`; el refresh no viaja como Bearer) |
 | Login fallido | 10 en 15 min por (correo, IP); 50 en 15 min por correo | Redis `login:fallos:*` |
 | Escrituras (`POST /incidencias`, `PATCH .../seguimiento`) | `LIMITE_ESCRITURA` = 60/minuto | usuario (`clave_usuario`) |
 | Firmas de evidencia | 50 por usuario al día | Redis `firmas:usuario:*` |
@@ -193,6 +236,38 @@ doc = await col.find_one({"_id": oid}); if doc["estado"] == "abierta": await col
 **API-24 · Todo endpoint nuevo o modificado actualiza Postman** (`postman/UTM-Desk.postman_collection.json`) en el mismo PR: una petición del caso feliz en su carpeta y, en "Pruebas negativas", al menos los casos 400, 403 y 404 (fuera de alcance). Usa variables del entorno `UTM-Desk.local` (`{{base_url}}`, `{{token}}`, `{{token_reportante}}`, `{{incidencia_id}}`…), nunca valores pegados. Postman CLI está disponible para correr la colección.
 
 **API-25 · Entradas siempre con schema Pydantic**, `extra="forbid"` y límites en todo campo (ver CREAR-API.md). Nunca `dict` o `Request.json()` crudos: un body crudo permite inyectar operadores de MongoDB (`{"$ne": ""}`) — RNF-13.
+
+## 8. Sesión con refresh token (T-014)
+
+`POST /auth/login` conserva el access token en el JSON y emite un JWT de refresh independiente exclusivamente en la cookie `refresh_token`. La cookie es `HttpOnly`, usa `Path=/auth`, `SameSite=Lax` por defecto y `Secure=true` en producción. Su expiración coincide con `JWT_REFRESH_DAYS`. El entorno e2e local declara `REFRESH_COOKIE_SECURE=false` porque usa HTTP; esa configuración no se debe reutilizar en producción.
+
+`POST /auth/refresh` no acepta body ni una cabecera alternativa: lee la cookie, valida firma, `iss`, `aud`, `iat`, `exp`, `type=refresh`, `jti` y `family_id`, comprueba que el usuario siga activo y rota el token en Redis. Devuelve solo `{access_token, token_type}` y reemplaza la cookie. Ausencia, alteración, expiración, revocación o tipo incorrecto responden 401 con el contrato `{error, detalle}`.
+
+`POST /auth/logout` revoca la familia cuando la cookie representa una sesión conocida, expira la cookie y devuelve exactamente 204 sin cuerpo. Sin cookie o con una cookie ya inválida también es idempotente y devuelve 204. Si Redis no está disponible para revocar una sesión válida, el endpoint falla de forma segura con 503 en vez de aparentar que la revocación ocurrió.
+
+Cada familia y cada `jti` se conserva en Redis hasta el vencimiento absoluto de la familia. La rotación es un script Lua indivisible: exige familia activa y token activo, marca el `jti` anterior como usado y registra el nuevo. Si reaparece un `jti` usado o revocado, el mismo script marca la familia como revocada; todos sus descendientes dejan de funcionar. Un JWT falsificado o un `jti` desconocido no puede revocar una familia.
+
+```mermaid
+sequenceDiagram
+    participant PWA
+    participant API
+    participant Redis
+    PWA->>API: POST /auth/refresh + cookie A
+    API->>API: valida JWT y usuario activo
+    API->>Redis: Lua: familia activa + A activo
+    Redis-->>API: A usado, B activo (atómico)
+    API-->>PWA: 200 access token + Set-Cookie B
+    PWA->>API: reutiliza cookie A
+    API->>Redis: Lua detecta A usado
+    Redis-->>API: familia revocada
+    API-->>PWA: 401
+    PWA->>API: intenta cookie B
+    API-->>PWA: 401
+```
+
+La protección CSRF combina `SameSite=Lax` con validación estricta de `Origin` en refresh y logout. Los clientes no navegador pueden omitir `Origin`; si un navegador lo envía, debe coincidir exactamente con `CORS_ORIGINS`. Si un despliegue realmente necesita `SameSite=None`, debe conservar `Secure=true`, HTTPS y la validación de `Origin`. CORS permite credenciales solo a la lista explícita de orígenes, nunca a `*`.
+
+La integración posterior del frontend debe usar `credentials: "include"` en login, refresh y logout. Hasta que esa coordinación se implemente, el access token continúa en memoria y no debe persistirse en `localStorage`, `sessionStorage` ni cookies accesibles desde JavaScript.
 
 ---
 

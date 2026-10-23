@@ -55,10 +55,14 @@ async def test_correo_duplicado_409(api):
     {"password": "corta123"},
     {"nombre": "ab"},
     {"correo": "no-es-correo"},
+    {"correo": "usuario@externo.edu.mx"},
+    {"correo": "usuario@evile2e.local"},
     {"correo": {"$ne": ""}},
     {"rol": {"$ne": ""}},
+    {"campo_desconocido": "valor"},
 ], ids=["rol_desconocido", "area_sin_areas", "area_vacia", "area_invalida", "edificio_sin", "edificio_vacio",
-        "password_corta", "nombre_corto", "correo_invalido", "correo_nosql", "rol_nosql"])
+        "password_corta", "nombre_corto", "correo_invalido", "correo_externo", "correo_parecido",
+        "correo_nosql", "rol_nosql", "campo_extra"])
 async def test_crear_usuario_invalido_400(api, over):
     antes = await api.db.usuarios.count_documents({})
     r = await _crear(api, **over)

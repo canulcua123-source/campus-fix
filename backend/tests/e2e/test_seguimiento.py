@@ -41,6 +41,23 @@ async def test_mismo_estado_409(api):
     assert r.status_code == 409
 
 
+async def test_historial_conserva_contrato_documentado(api):
+    inc = await api.crear("reportante_a", "infraestructura")
+    creado = (await api.doc(inc["_id"]))["historial_seguimiento"][-1]
+    assert set(creado) == {"fecha", "usuario_id", "estado_nuevo", "comentario", "horas"}
+    assert isinstance(creado["fecha"], datetime)
+    assert isinstance(creado["usuario_id"], ObjectId)
+    assert creado["estado_nuevo"] == "abierta"
+    assert "estado_anterior" not in creado
+
+    r = await api.seguimiento(inc["_id"], "en_proceso", quien="tecnico_infra")
+    assert r.status_code == 200, r.text
+    transicion = (await api.doc(inc["_id"]))["historial_seguimiento"][-1]
+    assert set(transicion) == {"fecha", "usuario_id", "estado_nuevo", "comentario", "horas"}
+    assert transicion["estado_nuevo"] == "en_proceso"
+    assert "estado_anterior" not in transicion
+
+
 async def test_resolucion_horas_reapertura(api):
     inc = await api.crear("reportante_a", "infraestructura")
     i = inc["_id"]

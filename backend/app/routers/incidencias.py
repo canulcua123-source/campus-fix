@@ -3,7 +3,7 @@ import json
 import math
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Annotated, Any, Literal
 
@@ -15,6 +15,7 @@ from pymongo.errors import DuplicateKeyError
 from app.core import storage
 from app.core.config import settings
 from app.core.db import get_db, get_redis
+from app.core.errores import cabeceras_retry_after
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import filtro_alcance, permisos_del_usuario, require_permiso
 from app.core.serial import a_json
@@ -331,9 +332,16 @@ async def firmar_evidencia(
 ):
     inc = await _en_alcance(incidencia_id, usuario, {"codigo": 1, "evidencias_adjuntas.evidencia_id": 1})
     redis = get_redis()
-    clave_dia = f"firmas:usuario:{usuario['_id']}:{datetime.now(timezone.utc):%Y-%m-%d}"
+    ahora = datetime.now(timezone.utc)
+    clave_dia = f"firmas:usuario:{usuario['_id']}:{ahora:%Y-%m-%d}"
     if await redis.incr(clave_dia) > MAX_FIRMAS_DIA:
-        raise HTTPException(429, f"Límite de {MAX_FIRMAS_DIA} archivos por día alcanzado")
+        reinicio = (ahora + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        segundos = max(0, math.ceil((reinicio - datetime.now(timezone.utc)).total_seconds()))
+        raise HTTPException(
+            429,
+            f"Límite de {MAX_FIRMAS_DIA} archivos por día alcanzado",
+            headers=cabeceras_retry_after(segundos),
+        )
     await redis.expire(clave_dia, 2 * 24 * 3600)
     # Cupo: evidencias guardadas + firmas pendientes (10 min) no pueden pasar de MAX_EVIDENCIAS,
     # y un mismo usuario no puede acaparar más de la mitad de los lugares pendientes.

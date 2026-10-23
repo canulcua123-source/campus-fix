@@ -21,8 +21,10 @@ async def _gestor_area(api) -> dict:
     """Gestor delegado con alcance de área (infraestructura): puede administrar, pero no más allá de su área."""
     if not await api.db.roles.find_one({"clave": "gestor_area"}):
         await api.db.roles.insert_many([
-            {"clave": "gestor_area", "nombre": "Gestor de área", "permisos": PERMISOS_GESTOR, "alcance": "area", "sistema": False},
-            {"clave": "lector_area", "nombre": "Lector de área", "permisos": ["incidencias:ver"], "alcance": "area", "sistema": False},
+            {"clave": "gestor_area", "nombre": "Gestor de área", "descripcion": "Rol e2e",
+             "permisos": PERMISOS_GESTOR, "alcance": "area", "sistema": False},
+            {"clave": "lector_area", "nombre": "Lector de área", "descripcion": "Rol e2e",
+             "permisos": ["incidencias:ver"], "alcance": "area", "sistema": False},
         ])
     return await api.usuario_temporal(rol="gestor_area", areas=["infraestructura"])
 

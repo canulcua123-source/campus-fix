@@ -73,7 +73,7 @@ class SeguimientoIn(BaseModel):
 
     estado_nuevo: Estado
     comentario: str = Field(min_length=5, max_length=1000)
-    horas: float = Field(ge=0, le=24)
+    horas: float = Field(ge=0, le=24, multiple_of=0.25, allow_inf_nan=False)
 
 
 TRANSICIONES: dict[str, list[str]] = {

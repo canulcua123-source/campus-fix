@@ -154,13 +154,14 @@ npm run dev                             # http://localhost:5173
 | `MONGODB_URI` / `MONGODB_DB` | Base de datos | `mongodb://localhost:27017` / `utm_desk` |
 | `MONGODB_ADMIN_URI` | Solo `init_db.py` en Atlas (usuario con dbAdmin) | vacío |
 | `REDIS_URL` | Folio, caché, límites | `redis://localhost:6379/0` |
+| `DOMINIO_CORREO` | Dominio exacto de las cuentas institucionales, sin `@` | `utm.edu.mx` |
 | `JWT_SECRET` | Firma de tokens (≥ 32 caracteres o la API no arranca) | `openssl rand -hex 32` |
 | `CORS_ORIGINS` | Orígenes del frontend | `http://localhost:5173` |
 | `STORAGE_ENDPOINT` / `STORAGE_REGION` | Backblaze B2 (S3) | vacío |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | Llaves del bucket | vacío |
 | `IA_HABILITADA` / `IA_MODELO` / `ANTHROPIC_API_KEY` | Análisis de foto | `false` en local |
 
-Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`).
+Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`) y `VITE_DOMINIO_CORREO` (debe coincidir con `DOMINIO_CORREO`).
 
 ### Producción detrás del balanceador del hosting
 

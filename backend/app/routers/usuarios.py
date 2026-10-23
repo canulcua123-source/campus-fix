@@ -1,13 +1,15 @@
 import asyncio
+import re
 from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pymongo.errors import DuplicateKeyError
 
 from app.core.db import get_db
+from app.core.config import settings
 from app.core.security import hashear_password, permisos_del_usuario, puede_otorgar, require_permiso
 from app.core.serial import a_json
 
@@ -17,9 +19,12 @@ Categoria = Literal["computo_redes", "infraestructura", "academico"]
 Edificio = Annotated[str, Field(min_length=1, max_length=60)]
 TipoReportante = Literal["docente", "estudiante", "administrativo"]
 PROYECCION = {"password_hash": 0}
+PATRON_CORREO_INSTITUCIONAL = rf"^[^@\s]+@{re.escape(settings.dominio_correo)}$"
 
 
 class UsuarioPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     nombre: str | None = Field(default=None, min_length=3, max_length=80)
     rol: str | None = Field(default=None, pattern=r"^[a-z_]{3,30}$")
     areas: list[Categoria] | None = Field(default=None, max_length=3)
@@ -30,21 +35,21 @@ class UsuarioPatch(BaseModel):
 
 class UsuarioIn(UsuarioPatch):
     nombre: str = Field(min_length=3, max_length=80)
-    correo: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    correo: str = Field(min_length=3, max_length=254, pattern=PATRON_CORREO_INSTITUCIONAL)
     password: str = Field(min_length=10, max_length=128)
     rol: str = Field(pattern=r"^[a-z_]{3,30}$")
 
-    @field_validator("correo")
+    @field_validator("correo", mode="before")
     @classmethod
-    def _minusculas(cls, v: str) -> str:
-        return v.strip().lower()
+    def _minusculas(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
 
 
 async def _validar_asignacion(rol: str, areas: list | None, edificios: list | None, creador: dict) -> dict[str, Any]:
     """Valida el rol y devuelve los campos de alcance a guardar (solo los que aplican al alcance del rol)."""
     doc_rol = await get_db().roles.find_one({"clave": rol})
     if doc_rol is None:
-        raise HTTPException(400, f"El rol {rol!r} no existe")
+        raise HTTPException(400, "El rol indicado no existe")
     alcance = doc_rol.get("alcance", "propio")
     campos: dict[str, Any] = {}
     if alcance == "area":
