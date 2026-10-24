@@ -1,14 +1,15 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
-
-from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.core.db import get_redis
 from app.core.security import require_permiso
 from app.schemas.ia import AnalisisImagen
-from app.services.ia import IAError, analizar_imagen
+from app.services import ia as ia_service
+
+analizar_imagen = ia_service.analizar_imagen
 
 router = APIRouter(prefix="/ia", tags=["ia"])
 
@@ -40,9 +41,12 @@ async def analizar(
         raise HTTPException(503, "El análisis con IA no está disponible por hoy")
     await get_redis().expire(clave_global, 2 * 24 * 3600)
     try:
-        return await analizar_imagen(datos, imagen.content_type, contexto)
+        return await ia_service.con_reintento_transitorio(lambda: analizar_imagen(datos, imagen.content_type, contexto))
     except Exception as e:  # IAError, errores de red/API, JSON inválido
-        raise HTTPException(503, "No fue posible analizar la imagen con IA") from e
+        raise HTTPException(
+            503,
+            "No fue posible analizar la imagen; llena el formulario manualmente",
+        ) from e
 
 
-__all__ = ["router", "IAError"]
+__all__ = ["router"]

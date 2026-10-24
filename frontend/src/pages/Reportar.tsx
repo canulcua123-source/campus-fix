@@ -1,12 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import imageCompression from 'browser-image-compression'
 import { Camera, Sparkles } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import { analizarImagen } from '../api/ia'
 import {
-  CATEGORIAS, PRIORIDADES, analisisImagenSchema, incidenciaSchema,
+  CATEGORIAS, PRIORIDADES, incidenciaSchema,
   type AnalisisImagen, type Categoria, type IncidenciaForm,
 } from '../schemas/incidencia'
 
@@ -36,6 +37,9 @@ function normalizarTag(t: string): string {
 export default function Reportar() {
   const navigate = useNavigate()
   const entrada = useRef<HTMLInputElement>(null)
+  const montado = useRef(false)
+  const operacionIA = useRef<AbortController | null>(null)
+  const vistaUrl = useRef<string | null>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
   const [analizando, setAnalizando] = useState(false)
@@ -54,6 +58,15 @@ export default function Reportar() {
   })
   const categoria = useWatch({ control, name: 'detalle_especifico.categoria' })
 
+  useEffect(() => {
+    montado.current = true
+    return () => {
+      montado.current = false
+      operacionIA.current?.abort()
+      if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
+    }
+  }, [])
+
   // register de campos del detalle (la unión discriminada no se resuelve en tipos de ruta)
   const d = (nombre: string, opts?: RegisterOptions) =>
     register(`detalle_especifico.${nombre}` as 'detalle_especifico.categoria', opts as never)
@@ -63,16 +76,37 @@ export default function Reportar() {
     setValue('detalle_especifico', detalleVacio(c))
   }
 
+  function cancelarAnalisis() {
+    operacionIA.current?.abort()
+    operacionIA.current = null
+    setAnalizando(false)
+  }
+
+  function continuarManual() {
+    cancelarAnalisis()
+    setPaso('formulario')
+  }
+
+  function abrirCamara() {
+    entrada.current?.click()
+  }
+
   async function alElegirFoto(archivo: File | undefined) {
     if (!archivo) return
+    cancelarAnalisis()
+    const control = new AbortController()
+    operacionIA.current = control
     setAnalizando(true)
     setAviso(null)
+    setPaso('formulario')
     try {
       const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
-      setVista(URL.createObjectURL(comprimida))
-      const fd = new FormData()
-      fd.append('imagen', comprimida, 'incidencia.jpg')
-      const sugerencia = analisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
+      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
+      if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
+      vistaUrl.current = URL.createObjectURL(comprimida)
+      setVista(vistaUrl.current)
+      const sugerencia = await analizarImagen({ imagen: comprimida }, { signal: control.signal })
+      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setIa(sugerencia)
       if (!sugerencia.es_incidencia_valida) {
         setAviso('La IA no reconoció una incidencia en la foto. Completa el formulario manualmente.')
@@ -86,14 +120,18 @@ export default function Reportar() {
         if (sugerencia.categoria !== 'no_determinada') cambiarCategoria(sugerencia.categoria)
       }
     } catch {
+      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setAviso('No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
     } finally {
-      setAnalizando(false)
-      setPaso('formulario')
+      if (montado.current && operacionIA.current === control) {
+        operacionIA.current = null
+        setAnalizando(false)
+      }
     }
   }
 
   async function enviar(datos: IncidenciaForm) {
+    cancelarAnalisis()
     setErrorEnvio(null)
     try {
       await api('/incidencias', { method: 'POST', json: datos })
@@ -101,6 +139,10 @@ export default function Reportar() {
     } catch (e) {
       setErrorEnvio(e instanceof Error ? e.message : 'No se pudo crear la incidencia')
     }
+  }
+
+  function enviarFormulario(evento: FormEvent<HTMLFormElement>) {
+    void handleSubmit(enviar)(evento)
   }
 
   const errD = errors.detalle_especifico as Record<string, { message?: string }> | undefined
@@ -111,11 +153,11 @@ export default function Reportar() {
         <h1 className="titulo-pagina">Reportar</h1>
         <div className="card flex flex-col items-center gap-4 py-10 text-center">
           <p className="m-0 text-muted">Toma una foto del problema y la IA te ayudará a llenar el reporte.</p>
-          <input ref={entrada} type="file" accept="image/*" capture="environment" hidden onChange={(e) => alElegirFoto(e.target.files?.[0])} />
-          <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={() => entrada.current?.click()}>
+          <input ref={entrada} type="file" accept="image/*" capture="environment" hidden aria-label="Foto de la incidencia" onChange={(e) => alElegirFoto(e.target.files?.[0])} />
+          <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
           </button>
-          <button className="btn btn-secundario" onClick={() => setPaso('formulario')}>Llenar sin foto</button>
+          <button className="btn btn-secundario" onClick={continuarManual}>Llenar sin foto</button>
         </div>
       </>
     )
@@ -125,6 +167,7 @@ export default function Reportar() {
     <>
       <h1 className="titulo-pagina">Nueva incidencia</h1>
       {vista && <img src={vista} alt="Foto de la incidencia" className="mb-3 max-h-56 rounded-card object-cover" />}
+      {analizando && <p role="status" className="card mb-3 text-sm">Analizando la foto… Puedes continuar llenando el formulario.</p>}
       {aviso && <p role="status" className="card mb-3 text-sm">{aviso}</p>}
       {ia?.es_incidencia_valida && (
         <div className="mb-3 flex flex-wrap gap-2">
@@ -137,7 +180,7 @@ export default function Reportar() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(enviar)} className="card">
+      <form onSubmit={enviarFormulario} className="card">
         <label className="etiqueta" htmlFor="titulo">Título</label>
         <input id="titulo" {...register('titulo')} />
         <Err msg={errors.titulo?.message} />
