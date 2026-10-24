@@ -26,5 +26,6 @@ export const analisisImagenSchema = z.strictObject({
   campos_detectados: z.array(z.strictObject({ nombre: z.string(), valor: z.string() })),
   confianza: z.number().min(0).max(1),
   advertencias: z.array(z.string()),
+  cache: z.boolean(),
 })
 export type AnalisisImagen = z.infer<typeof analisisImagenSchema>

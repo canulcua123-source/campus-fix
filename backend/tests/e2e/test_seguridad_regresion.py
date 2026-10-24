@@ -205,10 +205,14 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
     monkeypatch.setattr(ia_router, "analizar_imagen", fake)
     monkeypatch.setattr(settings, "ia_limite_diario", 2)
     u = await api.usuario_temporal()
-    archivos = lambda: {"imagen": ("f.jpg", io.BytesIO(b"\xff\xd8\xff" + b"0" * 100), "image/jpeg")}  # noqa: E731
-    for _ in range(2):
-        assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 200
-    assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 429
+
+    def archivos(numero: int):
+        datos = b"\xff\xd8\xff" + bytes([numero]) + b"0" * 100
+        return {"imagen": ("f.jpg", io.BytesIO(datos), "image/jpeg")}
+
+    for numero in range(2):
+        assert (await api.c.post("/ia/analizar-imagen", files=archivos(numero), headers=_h(u))).status_code == 200
+    assert (await api.c.post("/ia/analizar-imagen", files=archivos(2), headers=_h(u))).status_code == 429
 
 
 async def test_cuerpo_demasiado_grande_413(api):

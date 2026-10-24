@@ -139,10 +139,11 @@ describe('otras entradas espejo de pydantic', () => {
 describe('respuesta de IA (AnalisisImagen, extra=forbid)', () => {
   const ia = {
     es_incidencia_valida: true, categoria: 'no_determinada', titulo: 't', descripcion: 'd', prioridad_sugerida: 'baja',
-    tags: [], campos_detectados: [{ nombre: 'ip', valor: '10.0.0.1' }], confianza: 0.8, advertencias: [],
+    tags: [], campos_detectados: [{ nombre: 'ip', valor: '10.0.0.1' }], confianza: 0.8, advertencias: [], cache: false,
   }
   it('acepta válida y rechaza confianza fuera de 0..1 o campos extra', () => {
     expect(analisisImagenSchema.safeParse(ia).success).toBe(true)
+    expect(analisisImagenSchema.safeParse({ ...ia, cache: undefined }).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, confianza: 1.1 }).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, extra: 1 }).success).toBe(false)
   })

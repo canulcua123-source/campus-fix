@@ -10,6 +10,10 @@ class IAError(Exception):
     pass
 
 
+PROVEEDOR_IA = "anthropic"
+PROMPT_VERSION = "v1"
+
+
 PROMPT_SISTEMA = """Eres un asistente de la mesa de ayuda del campus universitario UTM Desk.
 Recibes la foto de una posible incidencia y debes clasificarla en una de estas categorías:
 - computo_redes: fallas de cómputo y redes (switches, access points, cableado, equipos de laboratorio, servidores, impresoras de red).

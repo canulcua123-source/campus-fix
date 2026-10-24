@@ -24,3 +24,9 @@ class AnalisisImagen(BaseModel):
     campos_detectados: list[CampoDetectado]
     confianza: float = Field(ge=0, le=1)
     advertencias: list[str]
+
+
+class RespuestaAnalisisImagen(AnalisisImagen):
+    """Respuesta del endpoint, incluyendo el origen del análisis."""
+
+    cache: bool
