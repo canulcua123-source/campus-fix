@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pymongo import ASCENDING, DESCENDING, AsyncMongoClient  # noqa: E402
+from pymongo.uri_parser import parse_uri  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 from app.core.security import hashear_password  # noqa: E402
@@ -350,6 +351,19 @@ async def sembrar_base(db) -> dict:
 
 
 EDIFICIOS = ["A", "B", "C", "Biblioteca", "Laboratorios"]
+CANTIDAD_INCIDENCIAS_DEMO = 24
+SEMILLA_DEMO = 42
+INDICES_UBICACION_RECURRENTE = {0, 7, 14}
+UBICACION_RECURRENTE = {"edificio": "A", "piso": 1, "aula": "101"}
+HOSTS_MONGODB_LOCALES = {"localhost", "127.0.0.1", "::1"}
+
+
+def es_uri_mongodb_local(uri: str) -> bool:
+    """Indica si todos los nodos de una URI MongoDB son de la máquina local."""
+    if not uri.lower().startswith("mongodb://"):
+        return False
+    nodos = parse_uri(uri)["nodelist"]
+    return bool(nodos) and all(host.lower().rstrip(".") in HOSTS_MONGODB_LOCALES for host, _puerto in nodos)
 
 
 def _detalle_demo(rnd: random.Random, categoria: str) -> dict:
@@ -383,19 +397,21 @@ RUTAS_DEMO = {
 }
 
 
-async def sembrar_demo(db, admin: dict, reiniciar: bool = False) -> None:
-    if reiniciar:
-        borradas = (await db.incidencias_campus.delete_many({"demo": True})).deleted_count
-        print(f"- {borradas} incidencias demo eliminadas")
-    elif await db.incidencias_campus.count_documents({"demo": True}):
-        print("= demo ya sembrado (usa --reset-demo para regenerarlo)")
-        return
-    rnd = random.Random(42)
-    ahora = datetime.now(timezone.utc)
+def generar_documentos_demo(
+    admin: dict,
+    fecha_referencia: datetime | None = None,
+    semilla: int = SEMILLA_DEMO,
+) -> list[dict]:
+    """Genera en memoria el conjunto reproducible de incidencias de demostración."""
+    rnd = random.Random(semilla)
+    ahora = fecha_referencia or datetime.now(timezone.utc)
+    if ahora.tzinfo is None or ahora.utcoffset() is None:
+        raise ValueError("fecha_referencia debe incluir zona horaria")
+    ahora = ahora.astimezone(timezone.utc)
     prefijos = {"computo_redes": "RED", "infraestructura": "INF", "academico": "ACA"}
     tags_pool = ["red", "wifi", "switch", "luminaria", "filtracion", "lms", "calificaciones", "aire_acondicionado", "urgente", "laboratorio"]
     docs = []
-    for i in range(24):
+    for i in range(CANTIDAD_INCIDENCIAS_DEMO):
         categoria = CATEGORIAS[i % 3]
         estado = "resuelta" if i < 8 else ESTADOS[i % 5]  # >= 8 resueltas garantizadas
         # Fechas dentro de los últimos 30 días: el TTL de 60 días no las borra antes de la defensa.
@@ -411,12 +427,21 @@ async def sembrar_demo(db, admin: dict, reiniciar: bool = False) -> None:
                               "comentario": f"Cambio a {paso} (demo)", "horas": horas})
             if paso == "resuelta":
                 fecha_resolucion = momento
+        ubicacion = (
+            dict(UBICACION_RECURRENTE)
+            if i in INDICES_UBICACION_RECURRENTE
+            else {
+                "edificio": EDIFICIOS[i % len(EDIFICIOS)],
+                "piso": rnd.randint(1, 3),
+                "aula": f"{rnd.randint(1, 3)}0{rnd.randint(1, 9)}",
+            }
+        )
         doc = {
             "schema_version": 1, "demo": True, "codigo": codigo,
             "titulo": rnd.choice(TITULOS[categoria]),
             "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
             "categoria": categoria, "estado": estado, "prioridad": PRIORIDADES[i % 4],
-            "ubicacion": {"edificio": EDIFICIOS[i % 5], "piso": rnd.randint(1, 3), "aula": f"{rnd.randint(1, 3)}0{rnd.randint(1, 9)}"},
+            "ubicacion": ubicacion,
             "reportante": {"usuario_id": admin["_id"], "nombre": admin["nombre"]},
             "detalle_especifico": _detalle_demo(rnd, categoria),
             "tags": rnd.sample(tags_pool, rnd.randint(2, 4)),
@@ -435,12 +460,33 @@ async def sembrar_demo(db, admin: dict, reiniciar: bool = False) -> None:
                 "fecha_carga": creada, "subido_por": admin["_id"],
             }]
         docs.append(doc)
+    return docs
+
+
+async def sembrar_demo(db, admin: dict, reiniciar: bool = False) -> None:
+    existentes = await db.incidencias_campus.count_documents({"demo": True})
+    if reiniciar:
+        borradas = (await db.incidencias_campus.delete_many({"demo": True})).deleted_count
+        print(f"- {borradas} incidencias demo eliminadas")
+    elif existentes:
+        if existentes == CANTIDAD_INCIDENCIAS_DEMO:
+            print("= demo ya sembrado (usa --reset-demo para regenerarlo)")
+        else:
+            print(
+                f"! demo parcial detectado: {existentes}/{CANTIDAD_INCIDENCIAS_DEMO}; "
+                "usa --reset-demo únicamente en un entorno local autorizado"
+            )
+        return
+    docs = generar_documentos_demo(admin)
     await db.incidencias_campus.insert_many(docs)
     print(f"+ {len(docs)} incidencias demo")
 
 
 async def main() -> None:
-    cliente = AsyncMongoClient(settings.mongodb_admin_uri or settings.mongodb_uri)
+    uri = settings.mongodb_admin_uri or settings.mongodb_uri
+    if "--reset-demo" in sys.argv and not es_uri_mongodb_local(uri):
+        raise SystemExit("--reset-demo solo está permitido con MongoDB local")
+    cliente = AsyncMongoClient(uri)
     db = cliente[settings.mongodb_db]
     try:
         await asegurar_coleccion(db, "incidencias_campus", esquema_incidencias())

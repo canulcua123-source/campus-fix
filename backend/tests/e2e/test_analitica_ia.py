@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from bson import ObjectId
 from redis.exceptions import RedisError
 
 import app.routers.analitica as analitica_router
@@ -223,6 +224,173 @@ async def test_analitica_sin_redis_responde(api, monkeypatch):
     r = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
     assert r.status_code == 200, r.text
     assert set(r.json()) == {"abiertas", "en_proceso", "criticas", "resueltas_periodo"}
+
+
+async def test_aulas_cronicas_detecta_3_en_30_dias(api):
+    ubicacion_cronica = {"edificio": "T011 Crónico", "piso": 1, "aula": "101"}
+    ubicacion_dos = {"edificio": "T011 Solo Dos", "piso": 1, "aula": "101"}
+    ubicacion_otro_piso = {"edificio": "T011 Crónico", "piso": 2, "aula": "101"}
+    ubicacion_otra_area = {"edificio": "T011 Redes", "piso": 1, "aula": "101"}
+
+    for _ in range(3):
+        await api.crear(ubicacion=ubicacion_cronica)
+    for _ in range(2):
+        await api.crear(ubicacion=ubicacion_dos)
+        await api.crear(ubicacion=ubicacion_otro_piso)
+    for _ in range(3):
+        await api.crear(categoria="computo_redes", ubicacion=ubicacion_otra_area)
+
+    antigua = await api.crear(ubicacion=ubicacion_cronica)
+    futura = await api.crear(ubicacion=ubicacion_cronica)
+    ahora = datetime.now(timezone.utc)
+    await api.db.incidencias_campus.update_one(
+        {"_id": ObjectId(antigua["_id"])},
+        {"$set": {"fecha_creacion": ahora - timedelta(days=31)}},
+    )
+    await api.db.incidencias_campus.update_one(
+        {"_id": ObjectId(futura["_id"])},
+        {"$set": {"fecha_creacion": ahora + timedelta(days=1)}},
+    )
+
+    await _limpiar_cache_analitica()
+    respuesta = await api.c.get("/analitica/aulas-cronicas", headers=api.h("directivo"))
+
+    assert respuesta.status_code == 200, respuesta.text
+    filas = respuesta.json()
+    cronica = next(
+        fila
+        for fila in filas
+        if (fila["edificio"], fila.get("piso"), fila["aula"]) == ("T011 Crónico", 1, "101")
+    )
+    assert cronica["total"] == 3
+    assert not any(fila["edificio"] == "T011 Solo Dos" for fila in filas)
+    assert not any(
+        fila["edificio"] == "T011 Crónico" and fila.get("piso") == 2
+        for fila in filas
+    )
+
+    coordinador = await api.c.get(
+        "/analitica/aulas-cronicas",
+        headers=api.h("coordinador_infra"),
+    )
+    assert coordinador.status_code == 200, coordinador.text
+    assert "T011 Redes" not in {fila["edificio"] for fila in coordinador.json()}
+
+
+async def test_carga_tecnicos_suma_horas(api):
+    tecnico_id = str(api.oid("tecnico_infra"))
+    tecnico_redes_id = str(api.oid("tecnico_redes"))
+
+    await _limpiar_cache_analitica()
+    antes = await api.c.get("/analitica/carga-tecnicos", headers=api.h("coordinador_infra"))
+    assert antes.status_code == 200, antes.text
+    fila_antes = next(
+        (fila for fila in antes.json() if fila["tecnico_id"] == tecnico_id),
+        {"incidencias_activas": 0, "horas_acumuladas": 0.0},
+    )
+
+    primera = await api.crear()
+    segunda = await api.crear()
+    for incidencia in (primera, segunda):
+        asignacion = await api.c.patch(
+            f"/incidencias/{incidencia['_id']}/asignacion",
+            json={"tecnico_id": tecnico_id},
+            headers=api.h("coordinador_infra"),
+        )
+        assert asignacion.status_code == 200, asignacion.text
+    assert (await api.seguimiento(primera["_id"], "en_proceso", horas=1.25)).status_code == 200
+    assert (await api.seguimiento(segunda["_id"], "en_espera", horas=2.5)).status_code == 200
+
+    sin_asignar = await api.crear()
+    assert (await api.seguimiento(sin_asignar["_id"], "en_proceso", horas=4)).status_code == 200
+
+    terminal = await api.crear()
+    asignacion_terminal = await api.c.patch(
+        f"/incidencias/{terminal['_id']}/asignacion",
+        json={"tecnico_id": tecnico_id},
+        headers=api.h("coordinador_infra"),
+    )
+    assert asignacion_terminal.status_code == 200
+    await api.a_estado(terminal["_id"], "cerrada")
+
+    redes = await api.crear(categoria="computo_redes")
+    asignacion_redes = await api.c.patch(
+        f"/incidencias/{redes['_id']}/asignacion",
+        json={"tecnico_id": tecnico_redes_id},
+        headers=api.h("admin"),
+    )
+    assert asignacion_redes.status_code == 200
+
+    await _limpiar_cache_analitica()
+    despues = await api.c.get("/analitica/carga-tecnicos", headers=api.h("coordinador_infra"))
+
+    assert despues.status_code == 200, despues.text
+    fila_despues = next(fila for fila in despues.json() if fila["tecnico_id"] == tecnico_id)
+    assert fila_despues["incidencias_activas"] == fila_antes["incidencias_activas"] + 2
+    assert fila_despues["horas_acumuladas"] == pytest.approx(fila_antes["horas_acumuladas"] + 3.75)
+    assert tecnico_redes_id not in {fila["tecnico_id"] for fila in despues.json()}
+
+
+async def test_tendencia_por_mes(api):
+    datos = [
+        ("infraestructura", datetime(2024, 1, 15, tzinfo=timezone.utc)),
+        ("computo_redes", datetime(2024, 1, 20, tzinfo=timezone.utc)),
+        ("infraestructura", datetime(2025, 1, 10, tzinfo=timezone.utc)),
+        ("academico", datetime(2025, 2, 5, tzinfo=timezone.utc)),
+    ]
+    for categoria, fecha in datos:
+        incidencia = await api.crear(categoria=categoria)
+        await api.db.incidencias_campus.update_one(
+            {"_id": ObjectId(incidencia["_id"])},
+            {"$set": {"fecha_creacion": fecha}},
+        )
+
+    await _limpiar_cache_analitica()
+    parametros = {"desde": "2024-01-01", "hasta": "2025-02-28"}
+    respuesta = await api.c.get(
+        "/analitica/tendencia",
+        params=parametros,
+        headers=api.h("directivo"),
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    filas = respuesta.json()
+    assert [(fila["periodo"], fila["categoria"]) for fila in filas] == sorted(
+        (fila["periodo"], fila["categoria"]) for fila in filas
+    )
+    assert {(fila["periodo"], fila["categoria"], fila["total"]) for fila in filas} == {
+        ("2024-01", "computo_redes", 1),
+        ("2024-01", "infraestructura", 1),
+        ("2025-01", "infraestructura", 1),
+        ("2025-02", "academico", 1),
+    }
+
+    infra = await api.c.get(
+        "/analitica/tendencia",
+        params={**parametros, "categoria": "infraestructura"},
+        headers=api.h("coordinador_infra"),
+    )
+    fuera_de_alcance = await api.c.get(
+        "/analitica/tendencia",
+        params={**parametros, "categoria": "computo_redes"},
+        headers=api.h("coordinador_infra"),
+    )
+    assert {(fila["periodo"], fila["total"]) for fila in infra.json()} == {
+        ("2024-01", 1),
+        ("2025-01", 1),
+    }
+    assert fuera_de_alcance.json() == []
+
+
+async def test_analitica_f2_403_reportante(api):
+    for ruta in (
+        "/analitica/aulas-cronicas",
+        "/analitica/carga-tecnicos",
+        "/analitica/tendencia",
+    ):
+        respuesta = await api.c.get(ruta, headers=api.h("reportante_a"))
+        assert respuesta.status_code == 403, (ruta, respuesta.text)
+        assert respuesta.json()["error"] == "sin_permiso"
 
 
 # ---------- IA ----------

@@ -1195,6 +1195,96 @@
               "path": ["analitica", "resumen"]
             }
           }
+        },
+        {
+          "name": "Aulas crónicas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de aulas crónicas', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.property('edificio').that.is.a('string'); pm.expect(f).to.have.property('aula').that.is.a('string'); pm.expect(f).to.have.property('total').that.is.a('number').and.at.least(3); if (Object.prototype.hasOwnProperty.call(f, 'piso')) pm.expect(f.piso).to.be.a('number'); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ubicaciones con al menos tres incidencias creadas en la ventana UTC de los últimos 30 días. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/aulas-cronicas",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "aulas-cronicas"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Carga de técnicos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de carga por técnico', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.all.keys('tecnico_id', 'incidencias_activas', 'horas_acumuladas'); pm.expect(f.tecnico_id).to.match(/^[0-9a-f]{24}$/); pm.expect(f.incidencias_activas).to.be.a('number').and.at.least(1); pm.expect(f.horas_acumuladas).to.be.a('number').and.at.least(0); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Incidencias activas asignadas y horas persistidas acumuladas por técnico. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/carga-tecnicos",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "carga-tecnicos"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tendencia mensual",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de tendencia mensual', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.all.keys('periodo', 'categoria', 'total'); pm.expect(f.periodo).to.match(/^\\d{4}-(0[1-9]|1[0-2])$/); pm.expect(['computo_redes', 'infraestructura', 'academico']).to.include(f.categoria); pm.expect(f.total).to.be.a('number').and.at.least(1); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Conteo mensual por categoría usando fecha_creacion en UTC. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/tendencia",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "tendencia"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
+              ]
+            }
+          }
         }
       ]
     },

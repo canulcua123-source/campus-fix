@@ -96,6 +96,8 @@ La estructura vigente conserva el cambio mínimo y no almacena `estado_anterior`
 
 Los pipelines de analítica comienzan con `$match` y combinan el alcance autorizado y los filtros del cliente mediante `$and`. `/analitica/resumen` usa una sola agregación con `$facet`: `fecha_creacion` para abiertas, en proceso y críticas, y `fecha_resolucion` para resueltas. El filtro superior `hasta` se convierte al inicio UTC del día siguiente y se aplica con `$lt`, por lo que incluye el día indicado completo sin depender de la hora almacenada.
 
+Los pipelines F2 conservan el mismo `$match` inicial. `/analitica/aulas-cronicas` intersecta el periodo solicitado con los últimos 30 días UTC y agrupa por edificio, piso y aula; `/analitica/carga-tecnicos` usa los estados no terminales (`abierta`, `en_proceso`, `en_espera`), excluye documentos sin `tecnico_asignado.usuario_id` y suma `horas_invertidas` sin desplegar el historial; `/analitica/tendencia` agrupa `fecha_creacion` por año-mes y categoría con zona `UTC`. El índice `{categoria:1, estado:1, "ubicacion.edificio":1}` puede aprovechar sus prefijos cuando el alcance o el filtro fijan categoría y estado; `{fecha_creacion:-1}` cubre el rango temporal. La selección real del plan debe comprobarse en MongoDB local con `aggregate(..., explain=True)` o el comando `explain` equivalente, sin `hint` ni filtros artificiales.
+
 **BD-08 · Un índice nuevo solo si hay una consulta frecuente que lo necesita.** Cada índice ocupa espacio y frena las escrituras. En el PR escribe la consulta que sirve y el `explain` antes/después:
 
 ```python

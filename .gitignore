@@ -6,3 +6,8 @@ __pycache__
 dist
 .DS_Store
 ~$*.docx
+
+# Respaldos MongoDB: siempre deben permanecer fuera del repositorio.
+utm_desk_*.archive.gz
+utm_desk_*.archive.gz.sha256
+utm_desk_*.archive.gz.part.*

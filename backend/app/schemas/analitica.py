@@ -83,3 +83,28 @@ class AnaliticaTag(BaseModel):
 
     tag: str = Field(min_length=2, max_length=30)
     total: int = Field(ge=0)
+
+
+class AulaCronica(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    edificio: str = Field(min_length=1, max_length=60)
+    piso: int | None = Field(default=None, ge=-5, le=50)
+    aula: str = Field(min_length=1, max_length=60)
+    total: int = Field(ge=3)
+
+
+class CargaTecnico(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tecnico_id: str = Field(pattern=r"^[0-9a-f]{24}$")
+    incidencias_activas: int = Field(ge=1)
+    horas_acumuladas: float = Field(ge=0, allow_inf_nan=False)
+
+
+class TendenciaMensual(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    periodo: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    categoria: CategoriaAnalitica
+    total: int = Field(ge=1)

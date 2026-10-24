@@ -26,13 +26,18 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `AnalisisImagen` |
 | `GET /analitica/edificios`, `GET /analitica/tags` | `analitica:ver` | 200 lista |
 | `GET /analitica/resumen` | `analitica:ver` | 200 `{abiertas, en_proceso, criticas, resueltas_periodo}` |
+| `GET /analitica/aulas-cronicas` | `analitica:ver` | 200 lista `{edificio, piso?, aula, total}` |
+| `GET /analitica/carga-tecnicos` | `analitica:ver` | 200 lista `{tecnico_id, incidencias_activas, horas_acumuladas}` |
+| `GET /analitica/tendencia` | `analitica:ver` | 200 lista `{periodo, categoria, total}` |
 | `GET /roles`, `POST /roles` | `roles:gestionar` | 200 / **201** |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200 |
 | `GET /categorias` | autenticado | 200 |
 
 La documentación interactiva vive en **`/docs`** (OpenAPI de FastAPI). Es la fuente de verdad del contrato: si no aparece bien ahí, el endpoint no está terminado.
 
-Los tres endpoints de `/analitica` aceptan `desde`, `hasta` y `categoria`. Las fechas son días calendario ISO `AAAA-MM-DD` en UTC y ambos extremos son inclusivos. El periodo filtra por `fecha_creacion` en abiertas, en proceso, críticas y etiquetas; filtra por `fecha_resolucion` en resueltas y edificios. Una categoría incompatible con el alcance autorizado produce resultados vacíos o ceros, nunca amplía el alcance. Los resultados se guardan como JSON en Redis durante 300 segundos con claves separadas por endpoint, alcance y filtros; si Redis falla, la consulta autorizada se calcula en MongoDB sin caché.
+Los seis endpoints de `/analitica` aceptan `desde`, `hasta` y `categoria`. Las fechas son días calendario ISO `AAAA-MM-DD` en UTC y ambos extremos son inclusivos. El periodo filtra por `fecha_creacion` en abiertas, en proceso, críticas, etiquetas, aulas crónicas, carga de técnicos y tendencia; filtra por `fecha_resolucion` en resueltas y edificios. Una categoría incompatible con el alcance autorizado produce resultados vacíos o ceros, nunca amplía el alcance. Los resultados se guardan como JSON en Redis durante 300 segundos con claves separadas por endpoint, alcance y filtros; si Redis falla, la consulta autorizada se calcula en MongoDB sin caché.
+
+`/analitica/aulas-cronicas` intersecta los filtros solicitados con la ventana cerrada `[ahora UTC - 30 días, ahora UTC]`; nunca cuenta fechas futuras ni permite ampliar los 30 días. La identidad del aula es `(edificio, piso, aula)` y solo se devuelve con tres o más incidencias. `/analitica/carga-tecnicos` considera activas `abierta`, `en_proceso` y `en_espera`, excluye incidencias sin asignación y suma una sola vez el campo persistido `horas_invertidas`. `/analitica/tendencia` agrupa `fecha_creacion` por `AAAA-MM` y categoría en UTC, sin rellenar meses sin datos.
 
 ---
 
