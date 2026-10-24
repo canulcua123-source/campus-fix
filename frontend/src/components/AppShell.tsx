@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { Camera, LogOut } from 'lucide-react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/store'
 import { InstallPrompt } from './InstallPrompt'
 import { navegacionPara, PERFIL_ITEM, REPORTAR, type ItemNav } from './navegacion'
@@ -34,6 +35,47 @@ const itemLateral = (i: ItemNav) => (
     {i.etiqueta}
   </NavLink>
 )
+
+function BuscadorGlobal() {
+  const navigate = useNavigate()
+  const ubicacion = useLocation()
+  const [busqueda, setBusqueda] = useState(() => new URLSearchParams(ubicacion.search).get('q') ?? '')
+
+  useEffect(() => {
+    const termino = busqueda.trim()
+    if (termino.length < 2) return
+    const destino = `/buscar?q=${encodeURIComponent(termino)}`
+    if (`${ubicacion.pathname}${ubicacion.search}` === destino) return
+    const temporizador = window.setTimeout(() => navigate(destino), 300)
+    return () => window.clearTimeout(temporizador)
+  }, [busqueda, navigate, ubicacion.pathname, ubicacion.search])
+
+  return (
+    <form
+      role="search"
+      className="ml-auto flex min-w-[min(100%,18rem)] flex-1 gap-2 sm:max-w-md"
+      onSubmit={(evento) => {
+        evento.preventDefault()
+        const termino = busqueda.trim()
+        if (termino.length >= 2) navigate(`/buscar?q=${encodeURIComponent(termino)}`)
+      }}
+    >
+      <label className="sr-only" htmlFor="busqueda-global">Buscar incidencias</label>
+      <input
+        id="busqueda-global"
+        type="search"
+        value={busqueda}
+        onChange={(evento) => {
+          const valor = evento.target.value
+          setBusqueda(valor)
+          if (valor.trim().length < 2 && ubicacion.pathname === '/buscar') navigate('/buscar', { replace: true })
+        }}
+        placeholder="Buscar incidencias"
+        autoComplete="off"
+      />
+    </form>
+  )
+}
 
 /** Menú lateral (≥ 1024 px). */
 export function NavegacionLateral({
@@ -78,7 +120,10 @@ export function AppShell() {
   const usuario = useAuth((s) => s.usuario)
   const cerrarSesion = useAuth((s) => s.cerrarSesion)
   const navigate = useNavigate()
+  const ubicacion = useLocation()
   const permisos = usuario?.permisos ?? []
+  const puedeBuscar = permisos.includes('incidencias:buscar')
+
   const salir = () => {
     cerrarSesion()
     navigate('/login')
@@ -89,7 +134,10 @@ export function AppShell() {
       <NavegacionLateral permisos={permisos} nombre={usuario?.nombre} onSalir={salir} />
       <div className="min-w-0 flex-1">
         <OfflineBanner />
-        <header className="topbar nav-chrome">UTM Desk</header>
+        <header className="topbar nav-chrome flex flex-wrap items-center gap-2">
+          <span className="font-semibold">UTM Desk</span>
+          {puedeBuscar && <BuscadorGlobal key={`${ubicacion.pathname}${ubicacion.search}`} />}
+        </header>
         <main className="app-main">
           <InstallPrompt />
           <Outlet />

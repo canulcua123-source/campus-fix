@@ -5,6 +5,7 @@ import { AppShell } from './components/AppShell'
 import AdminCategorias from './pages/AdminCategorias'
 import AdminRoles from './pages/AdminRoles'
 import Bandeja from './pages/Bandeja'
+import Buscar from './pages/Buscar'
 import Dashboard from './pages/Dashboard'
 import DetalleIncidencia from './pages/DetalleIncidencia'
 import Inicio from './pages/Inicio'
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="mis-tickets" element={<RequirePermiso permiso="incidencias:ver"><MisTickets /></RequirePermiso>} />
         <Route path="incidencias/:id" element={<RequirePermiso permiso="incidencias:ver"><DetalleIncidencia /></RequirePermiso>} />
         <Route path="bandeja" element={<RequirePermiso permiso="seguimiento:registrar"><Bandeja /></RequirePermiso>} />
+        <Route path="buscar" element={<RequirePermiso permiso="incidencias:buscar"><Buscar /></RequirePermiso>} />
         <Route path="dashboard" element={<RequirePermiso permiso="analitica:ver"><Dashboard /></RequirePermiso>} />
         <Route path="admin/roles" element={<RequirePermiso permiso="roles:gestionar"><AdminRoles /></RequirePermiso>} />
         <Route path="admin/categorias" element={<RequirePermiso permiso="categorias:gestionar"><AdminCategorias /></RequirePermiso>} />
