@@ -1,8 +1,14 @@
-import re
-import unicodedata
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator
+from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator, model_validator
+
+from app.dominio.categorias import CATEGORIAS_SISTEMA
+from app.dominio.estados import TRANSICIONES as _TRANSICIONES
+from app.dominio.tags import normalizar_tag as _normalizar_tag
+from app.dominio.tags import normalizar_tags
+
+TRANSICIONES = _TRANSICIONES
+normalizar_tag = _normalizar_tag
 
 Prioridad = Literal["baja", "media", "alta", "critica"]
 Estado = Literal["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
@@ -44,6 +50,23 @@ DetalleEspecifico = Annotated[
 ]
 
 
+class DetalleDinamicoEntrada(BaseModel):
+    """Contenedor temporal; el router aplica la definicion estricta del catalogo."""
+
+    model_config = ConfigDict(extra="allow")
+
+    categoria: str = Field(min_length=3, max_length=30, pattern=r"^[a-z][a-z0-9_]*$")
+
+    @model_validator(mode="after")
+    def _no_suplanta_categoria_sistema(self):
+        if self.categoria in CATEGORIAS_SISTEMA:
+            raise ValueError("Las categorias del sistema usan su contrato estatico")
+        return self
+
+
+DetalleEntrada = DetalleEspecifico | DetalleDinamicoEntrada
+
+
 class Ubicacion(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -59,13 +82,19 @@ class IncidenciaIn(BaseModel):
     descripcion: str = Field(min_length=10, max_length=2000)
     prioridad: Prioridad
     ubicacion: Ubicacion
-    detalle_especifico: DetalleEspecifico
+    detalle_especifico: DetalleEntrada = Field(
+        union_mode="left_to_right",
+        description=(
+            "Las categorias del sistema usan contratos estaticos; las personalizadas "
+            "se validan estrictamente contra la definicion activa del catalogo."
+        ),
+    )
     tags: list[str] = Field(default_factory=list, max_length=15)
 
     @field_validator("tags")
     @classmethod
     def _tags(cls, v: list[str]) -> list[str]:
-        return sorted({normalizar_tag(t) for t in v})
+        return normalizar_tags(v)
 
 
 class SeguimientoIn(BaseModel):
@@ -76,28 +105,6 @@ class SeguimientoIn(BaseModel):
     horas: float = Field(ge=0, le=24, multiple_of=0.25, allow_inf_nan=False)
 
 
-TRANSICIONES: dict[str, list[str]] = {
-    "abierta": ["en_proceso", "en_espera"],
-    "en_proceso": ["en_espera", "resuelta"],
-    "en_espera": ["en_proceso"],
-    "resuelta": ["cerrada", "en_proceso"],
-    "cerrada": [],
-}
-
-_RE_TAG = re.compile(r"^[a-z0-9_]{2,30}$")
-
-
-def normalizar_tag(texto: str) -> str:
-    """minúsculas, sin acentos, espacios -> _ ; ValueError si no cumple ^[a-z0-9_]{2,30}$."""
-    sin_acentos = "".join(
-        c for c in unicodedata.normalize("NFD", texto.strip().lower()) if unicodedata.category(c) != "Mn"
-    )
-    tag = re.sub(r"\s+", "_", sin_acentos)
-    if not _RE_TAG.match(tag):
-        raise ValueError(f"Tag inválido: {texto!r}")
-    return tag
-
-
 class TagsIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -106,4 +113,4 @@ class TagsIn(BaseModel):
     @field_validator("tags")
     @classmethod
     def _tags(cls, v: list[str]) -> list[str]:
-        return sorted({normalizar_tag(t) for t in v})
+        return normalizar_tags(v)

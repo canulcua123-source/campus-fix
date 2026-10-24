@@ -4,23 +4,28 @@ import math
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 from typing import Annotated, Any, Literal
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import UUID4, BaseModel, ConfigDict, Field, field_validator
+from fastapi.exceptions import RequestValidationError
+from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pymongo.errors import DuplicateKeyError
 
-from app.core import storage
+from app.core.cache_categorias import modelo_detalle_cacheado, obtener_definicion_cacheada
 from app.core.config import settings
 from app.core.db import get_db, get_redis
 from app.core.errores import cabeceras_retry_after
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import filtro_alcance, permisos_del_usuario, require_permiso
 from app.core.serial import a_json
+from app.core.storage import get_storage
+from app.dominio.categorias import CATEGORIAS_SISTEMA
+from app.dominio.detalle import DefinicionDetalleError
+from app.dominio.estados import origenes_permitidos
+from app.dominio.folio import fecha_local_campus, formatear_folio, prefijo_folio
+from app.dominio.puertos import StorageNoDisponibleError, StoragePort
 from app.schemas.incidencia import (
-    TRANSICIONES,
     Estado,
     IncidenciaIn,
     Prioridad,
@@ -29,9 +34,8 @@ from app.schemas.incidencia import (
 )
 
 router = APIRouter(prefix="/incidencias", tags=["incidencias"])
+_STORAGE_DIRECTO = get_storage()
 
-PREFIJOS = {"computo_redes": "RED", "infraestructura": "INF", "academico": "ACA"}
-Categoria = Literal["computo_redes", "infraestructura", "academico"]
 TipoMime = Literal["image/jpeg", "image/png", "image/webp", "application/pdf"]
 EXTENSIONES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf"}
 MAX_EVIDENCIAS = 10
@@ -45,7 +49,6 @@ local v = tonumber(redis.call('GET', KEYS[1]) or '0')
 if v > 0 then redis.call('DECR', KEYS[1]) end
 return v
 """
-ZONA = ZoneInfo("America/Mexico_City")
 FIRMA_TTL = 600
 PROYECCION_LISTA = {
     "codigo": 1, "titulo": 1, "categoria": 1, "estado": 1, "prioridad": 1,
@@ -71,19 +74,23 @@ def _clave_contador(categoria: str, local: datetime) -> str:
     return f"contador:incidencias:{local:%Y-%m-%d}:{categoria}"
 
 
-async def generar_codigo(categoria: str, ahora: datetime) -> str:
-    local = ahora.astimezone(ZONA)  # el "día" del folio es el del campus, no UTC
+async def generar_codigo(categoria: str, ahora: datetime, prefijo_categoria: str | None = None) -> str:
+    local = fecha_local_campus(ahora)  # el "día" del folio es el del campus, no UTC
     clave = _clave_contador(categoria, local)
     redis = get_redis()
     n = await redis.incr(clave)
     await redis.expire(clave, 2 * 24 * 3600)
-    return f"INC-{local:%Y}-{local:%m%d}-{PREFIJOS[categoria]}-{n:04d}"
+    return formatear_folio(categoria, n, ahora, prefijo_categoria)
 
 
-async def _resincronizar_contador(categoria: str, ahora: datetime) -> None:
+async def _resincronizar_contador(
+    categoria: str,
+    ahora: datetime,
+    prefijo_categoria: str | None = None,
+) -> None:
     """Si Redis perdió el contador, lo coloca en el último consecutivo guardado en MongoDB."""
-    local = ahora.astimezone(ZONA)
-    prefijo = f"INC-{local:%Y}-{local:%m%d}-{PREFIJOS[categoria]}-"
+    local = fecha_local_campus(ahora)
+    prefijo = prefijo_folio(categoria, ahora, prefijo_categoria)
     ultimo = await get_db().incidencias_campus.find_one(
         {"codigo": {"$regex": f"^{re.escape(prefijo)}"}}, {"codigo": 1}, sort=[("codigo", -1)]
     )
@@ -91,20 +98,88 @@ async def _resincronizar_contador(categoria: str, ahora: datetime) -> None:
         await get_redis().set(_clave_contador(categoria, local), int(ultimo["codigo"][-4:]), ex=2 * 24 * 3600)
 
 
-@router.post("", status_code=201)
+async def _categoria_activa(clave: str) -> dict[str, Any]:
+    categoria = await get_db().categorias.find_one(
+        {"clave": clave, "activa": True},
+        {"_id": 0, "clave": 1, "version": 1, "prefijo": 1, "area_responsable": 1, "sistema": 1},
+    )
+    if categoria is None:
+        raise HTTPException(400, "La categoría indicada no existe o está inactiva")
+    if type(categoria.get("version")) is not int or categoria["version"] < 1:
+        raise HTTPException(503, "La definición de la categoría no está disponible")
+    if not isinstance(categoria.get("prefijo"), str) or re.fullmatch(r"[A-Z]{3}", categoria["prefijo"]) is None:
+        raise HTTPException(503, "La definición de la categoría no está disponible")
+    return categoria
+
+
+def _errores_detalle(exc: ValidationError) -> list[dict[str, Any]]:
+    errores: list[dict[str, Any]] = []
+    for error in exc.errors(include_url=False, include_context=False, include_input=False):
+        errores.append({**error, "loc": ("body", "detalle_especifico", *error.get("loc", ()))})
+    return errores
+
+
+async def _validar_detalle(datos: IncidenciaIn) -> tuple[dict[str, Any], dict[str, Any]]:
+    bruto = datos.detalle_especifico.model_dump(mode="json", exclude_none=True)
+    clave = bruto["categoria"]
+    categoria = await _categoria_activa(clave)
+    if clave in CATEGORIAS_SISTEMA:
+        return bruto, categoria
+
+    async def cargar_campos() -> list[dict[str, Any]] | None:
+        actual = await get_db().categorias.find_one(
+            {"clave": clave, "version": categoria["version"], "activa": True},
+            {"_id": 0, "campos": 1},
+        )
+        return actual.get("campos") if actual is not None else None
+
+    try:
+        definicion = await obtener_definicion_cacheada(
+            clave,
+            categoria["version"],
+            cargar=cargar_campos,
+        )
+        if definicion is None:
+            raise HTTPException(409, "La categoría cambió; intenta de nuevo")
+        modelo = modelo_detalle_cacheado(definicion)
+        detalle = modelo.model_validate(bruto).model_dump(mode="json", exclude_unset=True, exclude_none=True)
+    except ValidationError as exc:
+        raise RequestValidationError(_errores_detalle(exc)) from exc
+    except DefinicionDetalleError as exc:
+        raise HTTPException(503, "La definición de la categoría no está disponible") from exc
+    return detalle, categoria
+
+
+@router.post(
+    "",
+    status_code=201,
+    summary="Crear una incidencia",
+    description=(
+        "Las tres categorías del sistema conservan sus contratos estáticos. "
+        "Para una categoría personalizada activa, detalle_especifico se valida "
+        "estrictamente contra la versión vigente de su definición en el catálogo."
+    ),
+    responses={
+        400: {"description": "Campos comunes o detalle_especifico inválidos"},
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso incidencias:crear"},
+        409: {"description": "La categoría cambió o no fue posible generar un folio único"},
+    },
+)
 @limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
 async def crear_incidencia(
     request: Request,
     datos: IncidenciaIn, usuario: Annotated[dict, Depends(require_permiso("incidencias:crear"))]
 ):
     ahora = datetime.now(timezone.utc)
-    detalle = datos.detalle_especifico.model_dump(mode="json", exclude_none=True)
+    detalle, definicion_categoria = await _validar_detalle(datos)
     categoria = detalle["categoria"]
     doc = {
         "schema_version": 1,
         "titulo": datos.titulo,
         "descripcion": datos.descripcion,
         "categoria": categoria,
+        "categoria_version": definicion_categoria["version"],
         "estado": "abierta",
         "prioridad": datos.prioridad,
         "ubicacion": datos.ubicacion.model_dump(exclude_none=True),
@@ -120,13 +195,25 @@ async def crear_incidencia(
         "fecha_actualizacion": ahora,
     }
     for intento in range(3):
-        doc["codigo"] = await generar_codigo(categoria, ahora)
+        vigente = await get_db().categorias.find_one(
+            {
+                "clave": categoria,
+                "version": definicion_categoria["version"],
+                "prefijo": definicion_categoria["prefijo"],
+                "activa": True,
+            },
+            {"_id": 1},
+        )
+        if vigente is None:
+            raise HTTPException(409, "La categoría cambió; intenta de nuevo")
+        prefijo_categoria = None if categoria in CATEGORIAS_SISTEMA else definicion_categoria["prefijo"]
+        doc["codigo"] = await generar_codigo(categoria, ahora, prefijo_categoria)
         try:
             res = await get_db().incidencias_campus.insert_one(doc)
             break
         except DuplicateKeyError:
             doc.pop("_id", None)
-            await _resincronizar_contador(categoria, ahora)
+            await _resincronizar_contador(categoria, ahora, prefijo_categoria)
     else:
         raise HTTPException(409, "No fue posible generar un folio único; intenta de nuevo")
     return {"_id": str(res.inserted_id), "codigo": doc["codigo"], "estado": doc["estado"]}
@@ -136,7 +223,10 @@ async def crear_incidencia(
 async def listar_incidencias(
     usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))],
     estado: Estado | None = None,
-    categoria: Categoria | None = None,
+    categoria: Annotated[
+        str | None,
+        Query(min_length=3, max_length=30, pattern=r"^[a-z][a-z0-9_]*$"),
+    ] = None,
     prioridad: Prioridad | None = None,
     edificio: Annotated[str | None, Query(max_length=60)] = None,
     limite: Annotated[int, Query(ge=1, le=100)] = 100,
@@ -178,7 +268,7 @@ async def registrar_seguimiento(
 ):
     if datos.estado_nuevo == "cerrada" and "incidencias:asignar" not in usuario["_permisos"]:
         raise HTTPException(403, "Solo un coordinador puede cerrar incidencias")
-    origenes = [e for e, destinos in TRANSICIONES.items() if datos.estado_nuevo in destinos]
+    origenes = origenes_permitidos(datos.estado_nuevo)
     ahora = datetime.now(timezone.utc)
     sets: dict[str, Any] = {"estado": datos.estado_nuevo, "fecha_actualizacion": ahora}
     update: dict[str, Any] = {
@@ -328,7 +418,10 @@ def _clave(codigo: str, evidencia_id: str, tipo_mime: str) -> str:
 
 @router.post("/{incidencia_id}/evidencias/firma")
 async def firmar_evidencia(
-    incidencia_id: str, datos: EvidenciaFirmaIn, usuario: Annotated[dict, Depends(require_permiso("evidencias:subir"))]
+    incidencia_id: str,
+    datos: EvidenciaFirmaIn,
+    usuario: Annotated[dict, Depends(require_permiso("evidencias:subir"))],
+    almacenamiento: Annotated[StoragePort, Depends(get_storage)] = _STORAGE_DIRECTO,
 ):
     inc = await _en_alcance(incidencia_id, usuario, {"codigo": 1, "evidencias_adjuntas.evidencia_id": 1})
     redis = get_redis()
@@ -358,17 +451,28 @@ async def firmar_evidencia(
     clave = _clave(inc["codigo"], evidencia_id, datos.tipo_mime)
     # Se sube a staging/: una regla de lifecycle borra ahí lo que nunca se registró (huérfanos).
     clave_staging = f"staging/{clave}"
-    url = storage.url_subida(clave_staging, datos.tipo_mime, datos.peso_bytes)
+    try:
+        url = almacenamiento.url_subida(clave_staging, datos.tipo_mime, datos.peso_bytes)
+    except StorageNoDisponibleError as exc:
+        raise HTTPException(503, str(exc)) from exc
     # El servidor recuerda lo que firmó: al registrar solo se acepta esta evidencia, con estos datos.
     pendiente = {"incidencia_id": str(inc["_id"]), "clave": clave, "clave_staging": clave_staging,
                  "usuario_id": str(usuario["_id"]), **datos.model_dump()}
     await redis.set(f"firma:{evidencia_id}", json.dumps(pendiente), ex=FIRMA_TTL)
-    return {"evidencia_id": evidencia_id, "url_storage": clave, "upload_url": url, "expira_en": storage.EXPIRA_SEGUNDOS}
+    return {
+        "evidencia_id": evidencia_id,
+        "url_storage": clave,
+        "upload_url": url,
+        "expira_en": almacenamiento.expira_segundos,
+    }
 
 
 @router.post("/{incidencia_id}/evidencias", status_code=201)
 async def registrar_evidencia(
-    incidencia_id: str, datos: EvidenciaIn, usuario: Annotated[dict, Depends(require_permiso("evidencias:subir"))]
+    incidencia_id: str,
+    datos: EvidenciaIn,
+    usuario: Annotated[dict, Depends(require_permiso("evidencias:subir"))],
+    almacenamiento: Annotated[StoragePort, Depends(get_storage)] = _STORAGE_DIRECTO,
 ):
     inc = await _en_alcance(incidencia_id, usuario, {"_id": 1})
     evidencia_id = str(datos.evidencia_id)
@@ -379,11 +483,17 @@ async def registrar_evidencia(
         raise HTTPException(400, "La evidencia no fue firmada para esta incidencia o la firma expiró")
     await _liberar_cupo(inc["_id"], usuario["_id"])
     if settings.r2_verificar_subida:
-        tamano = await asyncio.to_thread(storage.tamano_objeto, pendiente["clave_staging"])
+        try:
+            tamano = await asyncio.to_thread(almacenamiento.tamano_objeto, pendiente["clave_staging"])
+        except StorageNoDisponibleError as exc:
+            raise HTTPException(503, str(exc)) from exc
         if tamano is None or tamano != pendiente["peso_bytes"]:
             raise HTTPException(400, "El archivo no se subió o no coincide con lo firmado")
         # Copia a la ruta definitiva: la URL de subida (aún vigente) ya no puede reemplazar la evidencia.
-        await asyncio.to_thread(storage.promover, pendiente["clave_staging"], pendiente["clave"])
+        try:
+            await asyncio.to_thread(almacenamiento.promover, pendiente["clave_staging"], pendiente["clave"])
+        except StorageNoDisponibleError as exc:
+            raise HTTPException(503, str(exc)) from exc
     ahora = datetime.now(timezone.utc)
     res = await get_db().incidencias_campus.update_one(
         {
@@ -412,11 +522,17 @@ async def registrar_evidencia(
 
 @router.get("/{incidencia_id}/evidencias/{evidencia_id}/url")
 async def url_evidencia(
-    incidencia_id: str, evidencia_id: str, usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))]
+    incidencia_id: str,
+    evidencia_id: str,
+    usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))],
+    almacenamiento: Annotated[StoragePort, Depends(get_storage)] = _STORAGE_DIRECTO,
 ):
     inc = await _en_alcance(incidencia_id, usuario, {"evidencias_adjuntas": 1})
     ev = next((e for e in inc.get("evidencias_adjuntas", []) if e.get("evidencia_id") == evidencia_id), None)
     if ev is None:
         raise HTTPException(404, "Evidencia no encontrada")
-    url = storage.url_lectura(ev["url_storage"], ev.get("nombre_archivo", "evidencia"))
-    return {"url": url, "expira_en": storage.EXPIRA_SEGUNDOS}
+    try:
+        url = almacenamiento.url_lectura(ev["url_storage"], ev.get("nombre_archivo", "evidencia"))
+    except StorageNoDisponibleError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return {"url": url, "expira_en": almacenamiento.expira_segundos}

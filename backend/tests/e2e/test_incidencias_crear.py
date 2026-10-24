@@ -14,6 +14,51 @@ RE_CODIGO = re.compile(r"^INC-\d{4}-\d{4}-(RED|INF|ACA)-\d{4}$")
 PREFIJO = {"computo_redes": "RED", "infraestructura": "INF", "academico": "ACA"}
 
 
+async def _categoria_dinamica(api, clave: str, prefijo: str) -> None:
+    ahora = datetime.now(timezone.utc)
+    await api.db.categorias.insert_one(
+        {
+            "clave": clave,
+            "nombre": f"Categoría {clave}",
+            "prefijo": prefijo,
+            "area_responsable": "Servicios del campus",
+            "version": 1,
+            "activa": True,
+            "sistema": False,
+            "fecha_creacion": ahora,
+            "fecha_actualizacion": ahora,
+            "campos": [
+                {
+                    "nombre": "tipo_servicio",
+                    "etiqueta": "Tipo de servicio",
+                    "tipo": "lista",
+                    "requerido": True,
+                    "opciones": ["consulta", "urgencia"],
+                },
+                {
+                    "nombre": "pacientes_afectados",
+                    "etiqueta": "Pacientes afectados",
+                    "tipo": "entero",
+                    "requerido": False,
+                    "min": 0,
+                    "max": 100,
+                },
+            ],
+        }
+    )
+
+
+def _cuerpo_dinamico(clave: str, **detalle) -> dict:
+    body = cuerpo("infraestructura")
+    body["titulo"] = "Solicitud de servicio médico"
+    body["detalle_especifico"] = {
+        "categoria": clave,
+        "tipo_servicio": "consulta",
+        **detalle,
+    }
+    return body
+
+
 @pytest.mark.parametrize("categoria", ["computo_redes", "infraestructura", "academico"])
 async def test_crear_por_categoria(api, categoria):
     b = cuerpo(categoria, tags=["Aire Acondicionado", "  Urgente ", "urgente"])
@@ -29,6 +74,7 @@ async def test_crear_por_categoria(api, categoria):
     assert doc["historial_seguimiento"][0]["estado_nuevo"] == "abierta"
     assert sorted(doc["tags"]) == ["aire_acondicionado", "urgente"]
     assert doc["categoria"] == categoria == doc["detalle_especifico"]["categoria"]
+    assert doc["categoria_version"] == 1
     assert sin_nulos(doc) == []
 
 
@@ -64,6 +110,55 @@ async def test_crear_permisos(api, quien, esperado):
 async def test_crear_sin_token(api):
     r = await api.c.post("/incidencias", json=cuerpo())
     assert r.status_code == 401
+
+
+async def test_crear_incidencia_categoria_dinamica_201(api):
+    clave = "servicios_medicos_ok"
+    await _categoria_dinamica(api, clave, "MED")
+    body = _cuerpo_dinamico(clave, pacientes_afectados=4)
+
+    sin_permiso = await api.c.post("/incidencias", json=body, headers=api.h("directivo"))
+    assert sin_permiso.status_code == 403
+    respuesta = await api.c.post("/incidencias", json=body, headers=api.h("reportante_a"))
+    assert respuesta.status_code == 201, respuesta.text
+    assert re.fullmatch(r"INC-\d{4}-\d{4}-MED-\d{4}", respuesta.json()["codigo"])
+
+    doc = await api.doc(respuesta.json()["_id"])
+    assert doc["categoria"] == clave
+    assert doc["categoria_version"] == 1
+    assert doc["detalle_especifico"] == {
+        "categoria": clave,
+        "tipo_servicio": "consulta",
+        "pacientes_afectados": 4,
+    }
+
+
+async def test_detalle_dinamico_campo_extra_400(api):
+    clave = "servicios_medicos_extra"
+    await _categoria_dinamica(api, clave, "MEX")
+    antes = await api.db.incidencias_campus.count_documents({"categoria": clave})
+    respuesta = await api.c.post(
+        "/incidencias",
+        json=_cuerpo_dinamico(clave, campo_inventado="valor"),
+        headers=api.h("reportante_a"),
+    )
+    assert respuesta.status_code == 400, respuesta.text
+    assert respuesta.json()["error"] == "validacion"
+    assert any("campo_inventado" in error["loc"] for error in respuesta.json()["detalle"])
+    assert await api.db.incidencias_campus.count_documents({"categoria": clave}) == antes
+
+
+async def test_detalle_dinamico_requerido_faltante_400(api):
+    clave = "servicios_medicos_falta"
+    await _categoria_dinamica(api, clave, "MFA")
+    body = _cuerpo_dinamico(clave)
+    del body["detalle_especifico"]["tipo_servicio"]
+    antes = await api.db.incidencias_campus.count_documents({"categoria": clave})
+    respuesta = await api.c.post("/incidencias", json=body, headers=api.h("reportante_a"))
+    assert respuesta.status_code == 400, respuesta.text
+    assert respuesta.json()["error"] == "validacion"
+    assert any("tipo_servicio" in error["loc"] for error in respuesta.json()["detalle"])
+    assert await api.db.incidencias_campus.count_documents({"categoria": clave}) == antes
 
 
 def _invalidos():

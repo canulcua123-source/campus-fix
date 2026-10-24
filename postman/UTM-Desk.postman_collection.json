@@ -1682,6 +1682,117 @@
               ]
             }
           }
+        },
+        {
+          "name": "Crear categoría dinámica (201)",
+          "event": [
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+              "const ahora = Date.now();",
+              "pm.collectionVariables.set('categoria_clave', 'servicios_postman_' + String(ahora).slice(-8));",
+              "let numero = ahora % 17576; let prefijo = '';",
+              "for (let i = 0; i < 3; i += 1) { prefijo = String.fromCharCode(65 + (numero % 26)) + prefijo; numero = Math.floor(numero / 26); }",
+              "pm.collectionVariables.set('categoria_prefijo', prefijo);"
+            ]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+              "pm.test('Categoría personalizada creada', function () { const j = pm.response.json(); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); pm.expect(j.version).to.eql(1); pm.expect(j.activa).to.eql(true); pm.expect(j.sistema).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Crea una categoría personalizada. Requiere categorias:gestionar.",
+            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
+            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios de Postman\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"tipo_servicio\", \"etiqueta\": \"Tipo de servicio\", \"tipo\": \"lista\", \"requerido\": true, \"opciones\": [\"limpieza\", \"mobiliario\"]}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Categoría con campo inseguro (400)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+            "pm.test('Contrato de error seguro', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('$ne'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Rechaza un nombre de campo que podría representar un operador MongoDB.",
+            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
+            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"categoria_insegura\",\n  \"nombre\": \"Categoría insegura\",\n  \"prefijo\": \"INS\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"$ne\", \"etiqueta\": \"Campo inseguro\", \"tipo\": \"texto\", \"requerido\": true}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Categoría duplicada (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Conflicto sin datos internos', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('DuplicateKeyError'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Repite la categoría creada anteriormente y comprueba el conflicto.",
+            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
+            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios duplicados\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"detalle\", \"etiqueta\": \"Detalle\", \"tipo\": \"texto\", \"requerido\": true, \"max\": 120}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Editar categoría dinámica",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Edición parcial aplicada', function () { const j = pm.response.json(); pm.expect(j.nombre).to.eql('Servicios de Postman actualizados'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); });"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Edita únicamente los campos enviados; cambiar la definición incrementa version.",
+            "url": {"raw": "{{base_url}}/categorias/{{categoria_clave}}", "host": ["{{base_url}}"], "path": ["categorias", "{{categoria_clave}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"nombre\": \"Servicios de Postman actualizados\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Desactivar categoría dinámica",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Categoría desactivada sin eliminarse', function () { const j = pm.response.json(); pm.expect(j.activa).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Desactiva lógicamente la categoría personalizada; no elimina el documento.",
+            "url": {"raw": "{{base_url}}/categorias/{{categoria_clave}}", "host": ["{{base_url}}"], "path": ["categorias", "{{categoria_clave}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"activa\": false\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Proteger categoría del sistema (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); });"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Comprueba que una categoría original no puede desactivarse.",
+            "url": {"raw": "{{base_url}}/categorias/computo_redes", "host": ["{{base_url}}"], "path": ["categorias", "computo_redes"]},
+            "body": {"mode": "raw", "raw": "{\n  \"activa\": false\n}", "options": {"raw": {"language": "json"}}}
+          }
         }
       ]
     },

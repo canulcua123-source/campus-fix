@@ -21,6 +21,8 @@ from app.core.security import hashear_password  # noqa: E402
 from app.schemas.rol import CATALOGO_PERMISOS  # noqa: E402
 
 CATEGORIAS = ["computo_redes", "infraestructura", "academico"]
+PATRON_CATEGORIA = r"^[a-z][a-z0-9_]{2,29}$"
+PATRON_CATEGORIA_PERSONALIZADA = r"^(?!(?:computo_redes|infraestructura|academico)$)[a-z][a-z0-9_]{2,29}$"
 ESTADOS = ["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
 PRIORIDADES = ["baja", "media", "alta", "critica"]
 TIPOS_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
@@ -99,6 +101,7 @@ def _campo_categoria(tipo: str, propiedades: dict | None = None, requeridos: lis
         "additionalProperties": False,
         "properties": {
             "nombre": {"bsonType": "string", "pattern": r"^[a-z_][a-z0-9_]{0,49}$"},
+            "etiqueta": {"bsonType": "string", "minLength": 1, "maxLength": 80},
             "tipo": {"enum": [tipo]},
             "requerido": {"bsonType": "bool"},
             **(propiedades or {}),
@@ -108,6 +111,14 @@ def _campo_categoria(tipo: str, propiedades: dict | None = None, requeridos: lis
 
 def esquema_categorias() -> dict:
     numero = {"bsonType": ["int", "long", "double"]}
+    entero = {"bsonType": ["int", "long"]}
+    opciones = {
+        "bsonType": "array",
+        "minItems": 1,
+        "maxItems": 50,
+        "uniqueItems": True,
+        "items": {"bsonType": "string", "minLength": 1, "maxLength": 80},
+    }
     return {
         "$jsonSchema": {
             "bsonType": "object",
@@ -115,12 +126,15 @@ def esquema_categorias() -> dict:
             "additionalProperties": False,
             "properties": {
                 "_id": {"bsonType": "objectId"},
-                "clave": {"enum": CATEGORIAS},
+                "clave": {"bsonType": "string", "pattern": r"^[a-z][a-z0-9_]{2,29}$"},
                 "nombre": {"bsonType": "string", "minLength": 3, "maxLength": 80},
                 "prefijo": {"bsonType": "string", "pattern": r"^[A-Z]{3}$"},
                 "area_responsable": {"bsonType": "string", "minLength": 3, "maxLength": 100},
                 "version": {"bsonType": "int", "minimum": 1},
                 "activa": {"bsonType": "bool"},
+                "sistema": {"bsonType": "bool"},
+                "fecha_creacion": {"bsonType": "date"},
+                "fecha_actualizacion": {"bsonType": "date"},
                 "campos": {
                     "bsonType": "array",
                     "minItems": 1,
@@ -131,24 +145,21 @@ def esquema_categorias() -> dict:
                             _campo_categoria("ip"),
                             _campo_categoria("booleano"),
                             _campo_categoria("lista_texto"),
-                            _campo_categoria("entero", {"min": numero, "max": numero}),
+                            _campo_categoria("entero", {"min": entero, "max": entero}),
+                            _campo_categoria("numero", {"min": numero, "max": numero}),
+                            _campo_categoria("lista", {"opciones": opciones}, ["opciones"]),
                             _campo_categoria(
                                 "texto",
                                 {
+                                    "min": {"bsonType": ["int", "long"], "minimum": 0},
+                                    "max": {"bsonType": ["int", "long"], "minimum": 0},
                                     "max_length": {"bsonType": "int", "minimum": 1},
                                     "patron": {"bsonType": "string", "minLength": 1},
                                 },
                             ),
                             _campo_categoria(
                                 "enum",
-                                {
-                                    "opciones": {
-                                        "bsonType": "array",
-                                        "minItems": 1,
-                                        "uniqueItems": True,
-                                        "items": {"bsonType": "string", "minLength": 1},
-                                    }
-                                },
+                                {"opciones": opciones},
                                 ["opciones"],
                             ),
                         ]
@@ -168,6 +179,23 @@ def _detalle(categoria: str, props: dict, requeridos: list[str]) -> dict:
     }
 
 
+def _detalle_personalizado() -> dict:
+    """Invariantes BSON comunes; la API aplica la definicion dinamica exacta."""
+    return {
+        "bsonType": "object",
+        "required": ["categoria"],
+        "additionalProperties": False,
+        "properties": {
+            "categoria": {"bsonType": "string", "pattern": PATRON_CATEGORIA_PERSONALIZADA},
+        },
+        "patternProperties": {
+            r"^(?!categoria$)[a-z][a-z0-9_]{0,49}$": {
+                "bsonType": ["string", "int", "long", "double", "bool"],
+            },
+        },
+    }
+
+
 def esquema_incidencias() -> dict:
     return {
         "$jsonSchema": {
@@ -183,7 +211,8 @@ def esquema_incidencias() -> dict:
                 "codigo": {"bsonType": "string"},
                 "titulo": {"bsonType": "string", "minLength": 5, "maxLength": 120},
                 "descripcion": {"bsonType": "string", "minLength": 10, "maxLength": 2000},
-                "categoria": {"enum": CATEGORIAS},
+                "categoria": {"bsonType": "string", "pattern": PATRON_CATEGORIA},
+                "categoria_version": {"bsonType": "int", "minimum": 1},
                 "estado": {"enum": ESTADOS},
                 "prioridad": {"enum": PRIORIDADES},
                 "ubicacion": {
@@ -243,9 +272,22 @@ def esquema_incidencias() -> dict:
                             "periodo": {"bsonType": "string", "pattern": r"^\d{4}-[12]$"},
                             "estudiantes_impactados": {"bsonType": "int", "minimum": 0},
                         }, ["plataforma", "codigo_curso", "periodo", "estudiantes_impactados"]),
+                        _detalle_personalizado(),
                     ]
                 },
             },
+            "oneOf": [
+                {"properties": {"categoria": {"enum": CATEGORIAS}}},
+                {
+                    "required": ["categoria_version"],
+                    "properties": {
+                        "categoria": {
+                            "bsonType": "string",
+                            "pattern": PATRON_CATEGORIA_PERSONALIZADA,
+                        },
+                    },
+                },
+            ],
         },
         # La categoría del ticket debe coincidir con la del detalle polimórfico
         "$expr": {"$eq": ["$categoria", "$detalle_especifico.categoria"]},

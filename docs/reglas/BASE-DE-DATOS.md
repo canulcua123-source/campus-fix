@@ -25,7 +25,7 @@ Colecciones actuales: `incidencias_campus`, `usuarios`, `roles` y `categorias`, 
 // ❌ { evidencias_adjuntas: [{ contenido_base64: "/9j/4AAQ..." }] }
 ```
 
-**BD-02 · Polimorfismo con `detalle_especifico`.** Los campos propios de cada categoría van dentro de `detalle_especifico`, que lleva su propio `categoria` como discriminador. Debe coincidir con el `categoria` de la raíz: lo exige el `$expr` de `esquema_incidencias()` y el `Field(discriminator="categoria")` de Pydantic. Prohibido poner campos de una categoría en la raíz del documento. Una categoría nueva = nueva rama en `oneOf` del `$jsonSchema`, nueva clase `Detalle...` en `app/schemas/incidencia.py`, su prefijo en `PREFIJOS`, su entrada en `categorias_sistema()` y su Zod.
+**BD-02 · Polimorfismo con `detalle_especifico`.** Los campos propios de cada categoría van dentro de `detalle_especifico`, que lleva su propio `categoria` como discriminador. Debe coincidir con el `categoria` de la raíz: lo exige el `$expr` de `esquema_incidencias()`. Las tres categorías del sistema conservan su unión Pydantic discriminada y sus ramas BSON exactas. Las categorías personalizadas se validan en la API con un modelo estricto generado desde el catálogo; MongoDB conserva para ellas las invariantes estructurales comunes. Prohibido poner campos de una categoría en la raíz del documento.
 
 **BD-03 · Sin `null`.** Un campo que no aplica **no existe**: `fecha_resolucion` y `tecnico_asignado` aparecen solo cuando aplican; al reabrir se quita con `$unset`. Al construir documentos usa `model_dump(exclude_none=True)`.
 
@@ -215,6 +215,41 @@ mongorestore --uri "mongodb://localhost:27017" --gzip --archive=respaldos/utm_de
 - Nunca escribas `fecha_resolucion` a mano ni con fechas pasadas: borrarías la incidencia en el siguiente ciclo. Los datos demo usan fechas de los últimos 30 días para no expirar antes de la defensa.
 - `fecha_resolucion` debe ser `date` BSON; si fuera string, el TTL la ignora.
 - Cambiar el plazo se hace con `collMod` en `init_db.py` (no con otro `create_index`), con aprobación del DBA.
+
+## 9. Categorías dinámicas en incidencias (T-020)
+
+Al crear una incidencia, la API toma la clave de `detalle_especifico.categoria` y comprueba en MongoDB que el documento de `categorias` exista y siga activo. Para `computo_redes`, `infraestructura` y `academico` continúa usando `DetalleComputo`, `DetalleInfra` y `DetalleAcademico`; no se reinterpretan sus definiciones históricas ni se relajan sus enumeraciones, patrones, límites o `extra="forbid"`.
+
+Para una categoría personalizada, `app/dominio/detalle.py` compila la definición mediante `pydantic.create_model()` con `extra="forbid"` y tipos estrictos. `categoria` es un discriminador literal y no puede definirse como campo administrable. Las reglas aplicadas son:
+
+| Tipo | Validación | Límites/opciones | Valor BSON |
+|---|---|---|---|
+| `texto` | cadena estricta | `min`/`max` son longitudes | string |
+| `numero` | entero o decimal estricto y finito; no acepta booleanos | `min`/`max` numéricos | int/long/double |
+| `entero` | entero estricto; no acepta decimales ni booleanos | `min`/`max` enteros | int/long |
+| `booleano` | solo `true` o `false` | sin límites | bool |
+| `ip` | IPv4 o IPv6 válida | sin límites | string normalizado |
+| `lista` | selección única estricta | una de las `opciones` configuradas | string |
+
+Un campo con `requerido: true` debe existir. Uno opcional puede omitirse, pero un `null` explícito no sustituye un valor válido. La serialización usa `exclude_unset=True` y `exclude_none=True`, por lo que no se crean valores nulos de relleno. Los campos desconocidos, requeridos ausentes y tipos incorrectos producen HTTP 400 con la ubicación dentro de `body.detalle_especifico`.
+
+Cada incidencia nueva guarda `categoria_version`, tomada del mismo snapshot lógico de la definición que se usó para validar. El cliente no puede enviarla. La API vuelve a comprobar `clave`, `version`, `prefijo` y `activa` antes de insertar; si cambiaron durante la solicitud responde 409. No se promete una transacción entre las colecciones, pero nunca se etiqueta un detalle validado con una versión distinta. Las incidencias históricas de las categorías base pueden carecer de `categoria_version` y continúan siendo válidas.
+
+### Caché e invalidación
+
+MongoDB sigue siendo la fuente de verdad para actividad, versión y prefijo. Redis conserva solo `campos` con una clave separada por categoría y versión (`categorias:definicion:v1:<clave>:<version>`) durante 300 segundos; las clases Pydantic compiladas se reutilizan en una caché LRU de proceso limitada a 128 entradas y también incluyen la huella del contenido. `POST /categorias` y `PATCH /categorias/{clave}` invalidan las versiones conocidas después de confirmar la escritura.
+
+Si Redis falla, la creación consulta los campos en MongoDB y valida normalmente. Una entrada corrupta se ignora. La comprobación de `activa` y `version` nunca procede únicamente de la caché, por lo que una definición obsoleta no puede reactivar una categoría ni utilizarse bajo una versión nueva. Entre procesos pueden permanecer clases antiguas en memoria, pero dejan de ser seleccionables al cambiar la versión.
+
+`area_responsable` continúa siendo metadato descriptivo del catálogo. T-020 no inventa una traducción a `usuarios.areas`: el alcance `area` sigue comparando la clave de la incidencia con las áreas autorizadas. Así una categoría nueva no amplía permisos; el reportante conserva el alcance propio y los roles globales su alcance vigente.
+
+### Alcance del `$jsonSchema` e índice wildcard
+
+`esquema_incidencias()` mantiene las tres ramas exactas del sistema y agrega una cuarta rama estructural para categorías personalizadas. Esta rama exige una clave segura, `categoria_version` positiva, discriminador coherente y valores escalares compatibles con los seis tipos. No afirma validar contra otra colección: la obligatoriedad, opciones y límites dinámicos se comprueban en la API. `validationLevel: "strict"` y `validationAction: "error"` permanecen sin cambios.
+
+T-020 evaluó el índice `{"detalle_especifico.$**": 1}` descrito como posibilidad en el documento funcional. No se define por ahora: el catálogo técnico vigente de índices no lo incluye, la API no ejecuta consultas por campos dinámicos y Atlas M0 tiene almacenamiento limitado. Crearlo hoy aumentaría el coste de todas las escrituras sin una consulta demostrable ni un `explain()` que lo justifique. Si se incorpora un filtro real en el futuro, el DBA debe medirlo en MongoDB local, añadirlo idempotentemente en `crear_indices()` y aprobar su aplicación. No sustituiría los índices compuestos, de texto, TTL o de folio existentes.
+
+Los cambios de validador están preparados en `backend/scripts/init_db.py`, pero requieren respaldo, revisión y aprobación del DBA antes de ejecutar `collMod` en un entorno autorizado. No se aplican desde los routers. Como T-013 genera sus artefactos desde `init_db.py`, `entrega/script_maestro.js` deberá regenerarse posteriormente mediante el exportador aprobado; T-020 no modifica los archivos de `entrega/`.
 
 ---
 
