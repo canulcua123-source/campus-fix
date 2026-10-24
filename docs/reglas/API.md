@@ -21,7 +21,7 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `POST /incidencias/{id}/evidencias/firma` | `evidencias:subir` | 200 `{evidencia_id, url_storage, upload_url, expira_en}` |
 | `POST /incidencias/{id}/evidencias` | `evidencias:subir` | **201** `{ok, evidencia_id}` |
 | `GET /incidencias/{id}/evidencias/{evidencia_id}/url` | `incidencias:ver` | 200 `{url, expira_en}` |
-| `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `AnalisisImagen` |
+| `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `AnalisisImagen`; 413 si supera 5 MB; 415 si la firma no es JPEG/PNG/WebP; 422 si está corrupta o fuera de 200–2600 px |
 | `GET /analitica/edificios`, `GET /analitica/tags` | `analitica:ver` | 200 |
 | `GET /roles`, `POST /roles` | `roles:gestionar` | 200 / **201** |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200 |
@@ -68,6 +68,8 @@ La documentación interactiva vive en **`/docs`** (OpenAPI de FastAPI). Es la fu
 | **409** | Conflicto con el estado actual: duplicado, transición no permitida, límite de evidencias, carrera | `DuplicateKeyError`, "Transición de estado no permitida" |
 | **411** | POST/PUT/PATCH/DELETE con `Transfer-Encoding` y sin `Content-Length` | middleware `_limitar_body` |
 | **413** | Cuerpo mayor al permitido | middleware `_limitar_body` |
+| **415** | El contenido real del archivo usa un formato no permitido | `/ia/analizar-imagen` tras revisar *magic bytes* |
+| **422** | El formato es permitido, pero la imagen está corrupta o sus dimensiones son inválidas | `/ia/analizar-imagen` tras decodificar con Pillow |
 | **429** | Límite de frecuencia o cupo diario | slowapi, cupo de IA, firmas por día, bloqueo de login |
 | **503** | Dependencia externa no disponible o apagada (almacenamiento, IA) | `_requerir_cliente()`, IA deshabilitada |
 
@@ -149,6 +151,10 @@ Regla para código nuevo: errores de negocio con `raise HTTPException(código, "
 | Tags por incidencia | 15 | `IncidenciaIn`, `TagsIn`, `$jsonSchema` |
 
 Un endpoint que necesite más de 64 KB se agrega a `MAX_BODY` en `main.py` con justificación en el PR.
+
+`POST /ia/analizar-imagen` no confía en el nombre, la extensión ni el `Content-Type` declarado. Lee como máximo 5 MB,
+detecta JPEG/PNG/WebP por *magic bytes* y usa Pillow para comprobar la decodificación y dimensiones reales. Un archivo mayor
+devuelve 413; una firma no permitida, 415; y una imagen corrupta o con ancho/alto fuera de 200–2600 px, 422.
 
 **API-18 · Límites de frecuencia existentes** (no los quites; los nuevos se agregan aquí):
 

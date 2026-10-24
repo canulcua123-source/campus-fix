@@ -11,3 +11,4 @@ slowapi
 anthropic
 python-multipart
 email-validator
+Pillow
