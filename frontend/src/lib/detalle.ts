@@ -92,11 +92,11 @@ export interface AutoresTimeline {
 }
 
 export function autorDe(entrada: EntradaHistorial, autores: AutoresTimeline): string {
+  if (entrada.autor_nombre) return entrada.autor_nombre
   if (autores.usuarioActual && entrada.usuario_id === autores.usuarioActual) return 'Tú'
   if (entrada.usuario_id === autores.reportante.usuario_id) return autores.reportante.nombre
   if (autores.tecnico && entrada.usuario_id === autores.tecnico.usuario_id) return autores.tecnico.nombre
-  if (entrada.tipo === 'asignacion') return 'Coordinación'
-  return 'Usuario'
+  return 'Usuario no disponible'
 }
 
 export function esSoloLectura(permisos: readonly string[]): boolean {

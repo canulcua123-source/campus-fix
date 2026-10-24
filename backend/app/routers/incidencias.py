@@ -22,6 +22,7 @@ from app.schemas.incidencia import (
     TRANSICIONES,
     Estado,
     IncidenciaIn,
+    IncidenciaDetalleOut,
     Prioridad,
     SeguimientoIn,
     TagsIn,
@@ -186,9 +187,20 @@ async def buscar(
     return [a_json(d) async for d in cursor]
 
 
-@router.get("/{incidencia_id}")
+@router.get("/{incidencia_id}", response_model=IncidenciaDetalleOut, response_model_exclude_none=True)
 async def detalle(incidencia_id: str, usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))]):
-    return a_json(await _en_alcance(incidencia_id, usuario))
+    doc = await _en_alcance(incidencia_id, usuario)
+    historial = doc.get("historial_seguimiento", [])
+    ids = list({entrada["usuario_id"] for entrada in historial})
+    nombres = {}
+    if ids:
+        cursor = get_db().usuarios.find({"_id": {"$in": ids}}, {"nombre": 1}).limit(MAX_HISTORIAL)
+        nombres = {autor["_id"]: autor["nombre"] async for autor in cursor}
+    # Solo en la respuesta: no altera el historial almacenado ni expone el directorio.
+    for entrada in historial:
+        if entrada["usuario_id"] in nombres:
+            entrada["autor_nombre"] = nombres[entrada["usuario_id"]]
+    return a_json(doc)
 
 
 @router.patch("/{incidencia_id}/seguimiento")

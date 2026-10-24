@@ -25,7 +25,7 @@ export function Timeline({ entradas, usuarioActual, reportante, tecnico }: Timel
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Badge tipo="estado" valor={entrada.estado_nuevo} />
             <span className="text-xs text-muted">{formatearFecha(entrada.fecha)}</span>
-            {entrada.horas > 0 && <span className="text-xs text-muted">· {formatearHoras(entrada.horas)}</span>}
+            <span className="text-xs text-muted">· {formatearHoras(entrada.horas)}</span>
           </div>
           <p className="mb-0 mt-1 text-sm font-semibold text-ink">
             {autorDe(entrada, { usuarioActual, reportante, tecnico })}

@@ -84,9 +84,9 @@ describe('autorDe', () => {
     expect(autorDe(entrada('2026-10-20T09:40:00Z'), { usuarioActual: reportante.usuario_id, reportante, tecnico })).toBe('Tú')
     expect(autorDe(entrada('2026-10-20T09:40:00Z'), { usuarioActual: 'otro', reportante, tecnico })).toBe('Ana López')
     expect(autorDe(entrada('2026-10-20T17:10:00Z', tecnico.usuario_id), { usuarioActual: 'otro', reportante, tecnico })).toBe('Luis Pech')
-    expect(autorDe(entrada('2026-10-20T16:20:00Z', 'u-desconocido'), { usuarioActual: 'otro', reportante, tecnico })).toBe('Usuario')
+    expect(autorDe(entrada('2026-10-20T16:20:00Z', 'u-desconocido'), { usuarioActual: 'otro', reportante, tecnico })).toBe('Usuario no disponible')
     const asignacion = { ...entrada('2026-10-20T16:20:00Z', 'u-coordina'), tipo: 'asignacion' as const }
-    expect(autorDe(asignacion, { usuarioActual: 'otro', reportante, tecnico })).toBe('Coordinación')
+    expect(autorDe(asignacion, { usuarioActual: 'otro', reportante, tecnico })).toBe('Usuario no disponible')
   })
 })
 
