@@ -209,6 +209,7 @@ export const evidenciaAdjuntaSchema = z.object({
 export type EvidenciaAdjunta = z.infer<typeof evidenciaAdjuntaSchema>
 
 export const entradaHistorialSchema = z.object({
+  autor_nombre: z.string().optional(),
   fecha,
   usuario_id: z.string(),
   estado_nuevo: z.enum(ESTADOS),

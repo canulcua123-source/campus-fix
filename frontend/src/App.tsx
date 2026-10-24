@@ -6,6 +6,7 @@ import AdminCategorias from './pages/AdminCategorias'
 import AdminRoles from './pages/AdminRoles'
 import Bandeja from './pages/Bandeja'
 import Dashboard from './pages/Dashboard'
+import DetalleIncidencia from './pages/DetalleIncidencia'
 import Inicio from './pages/Inicio'
 import Login from './pages/Login'
 import MisTickets from './pages/MisTickets'
@@ -23,6 +24,7 @@ export default function App() {
         <Route index element={<Inicio />} />
         <Route path="reportar" element={<RequirePermiso permiso="incidencias:crear"><Reportar /></RequirePermiso>} />
         <Route path="mis-tickets" element={<RequirePermiso permiso="incidencias:ver"><MisTickets /></RequirePermiso>} />
+        <Route path="incidencias/:id" element={<RequirePermiso permiso="incidencias:ver"><DetalleIncidencia /></RequirePermiso>} />
         <Route path="bandeja" element={<RequirePermiso permiso="seguimiento:registrar"><Bandeja /></RequirePermiso>} />
         <Route path="dashboard" element={<RequirePermiso permiso="analitica:ver"><Dashboard /></RequirePermiso>} />
         <Route path="admin/roles" element={<RequirePermiso permiso="roles:gestionar"><AdminRoles /></RequirePermiso>} />
