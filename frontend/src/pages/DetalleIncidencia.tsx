@@ -4,6 +4,7 @@ import { useIncidencia } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { GaleriaEvidencias } from '../components/GaleriaEvidencias'
 import { Timeline } from '../components/Timeline'
+import { EditorTags } from '../components/EditorTags'
 import { Badge, Card, ErrorState, PageHeader, Skeleton } from '../components/ui'
 import {
   datosDetalle, esSoloLectura, formatearFecha, formatearHoras, mensajeErrorDetalle, textoUbicacion,
@@ -55,6 +56,7 @@ export default function DetalleIncidencia() {
   }
 
   const soloLectura = esSoloLectura(usuario?.permisos ?? [])
+  const puedeEditarTags = usuario?.permisos.includes('tags:gestionar') ?? false
   const datos = [
     { etiqueta: 'Ubicación', valor: textoUbicacion(detalle.ubicacion) },
     { etiqueta: 'Reportante', valor: detalle.reportante.nombre },
@@ -77,14 +79,26 @@ export default function DetalleIncidencia() {
         <Badge tipo="estado" valor={detalle.estado} />
         <Badge tipo="prioridad" valor={detalle.prioridad} />
         <Badge tipo="categoria" valor={detalle.categoria} />
-        {detalle.tags.map((tag) => (
-          <span key={tag} className="rounded-full border border-line bg-panel px-3 py-1 text-xs text-muted">#{tag}</span>
-        ))}
+
       </div>
 
       <Card como="section">
         <p className="m-0 whitespace-pre-line text-ink">{detalle.descripcion}</p>
         <p className="mb-0 mt-3 text-sm text-muted">Reportada el {formatearFecha(detalle.fecha_creacion)}</p>
+      </Card>
+
+      <Card como="section" className="mt-3">
+        <h2 className="mb-3 mt-0 text-base font-semibold text-ink">Etiquetas técnicas</h2>
+        {puedeEditarTags ? (
+          <EditorTags incidenciaId={detalle._id} tags={detalle.tags} />
+        ) : (
+          <div className="flex flex-wrap gap-2" aria-label="Etiquetas actuales">
+            {detalle.tags.length === 0 && <p className="m-0 text-sm text-muted">Esta incidencia todavía no tiene etiquetas.</p>}
+            {detalle.tags.map((tag) => (
+              <span key={tag} className="rounded-full border border-line bg-panel-2 px-3 py-2 text-sm text-ink">#{tag}</span>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card como="section" className="mt-3">
