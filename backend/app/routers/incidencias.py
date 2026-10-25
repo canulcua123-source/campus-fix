@@ -24,7 +24,10 @@ from app.dominio.categorias import CATEGORIAS_SISTEMA
 from app.dominio.detalle import DefinicionDetalleError
 from app.dominio.estados import (
     AccionReportanteInvalida,
+    VENTANA_RETIRO,
+    ahora_utc,
     origenes_permitidos,
+    retiro_en_ventana,
     validar_confirmacion_reportante,
     validar_reapertura_reportante,
 )
@@ -43,6 +46,7 @@ from app.schemas.incidencia import (
     TomarIncidenciaIn,
     TomarIncidenciaOut,
 )
+from app.services.vision.duplicados import actualizar_elegibilidad_huella
 
 router = APIRouter(prefix="/incidencias", tags=["incidencias"])
 _STORAGE_DIRECTO = get_storage()
@@ -291,6 +295,12 @@ async def buscar(
 @router.get("/{incidencia_id}", response_model=IncidenciaDetalleOut, response_model_exclude_none=True)
 async def detalle(incidencia_id: str, usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))]):
     doc = await _en_alcance(incidencia_id, usuario)
+    doc["puede_retirar"] = (
+        doc.get("reportante", {}).get("usuario_id") == usuario["_id"]
+        and doc.get("estado") == "abierta"
+        and "tecnico_asignado" not in doc
+        and retiro_en_ventana(doc.get("fecha_creacion"), ahora_utc())
+    )
     historial = doc.get("historial_seguimiento", [])
     ids = list({entrada["usuario_id"] for entrada in historial})
     nombres = {}
@@ -316,6 +326,65 @@ def _entrada_historial(ahora: datetime, usuario: dict, estado: str, comentario: 
 
 def _push_historial(entrada: dict[str, Any]) -> dict[str, Any]:
     return {"$each": [entrada], "$slice": -MAX_HISTORIAL}
+
+
+@router.post(
+    "/{incidencia_id}/retirar",
+    response_model=AccionEstadoOut,
+    summary="Retirar una incidencia propia",
+    description=(
+        "El reportante propietario puede retirar su incidencia durante los primeros 15 minutos, "
+        "mientras siga abierta y sin técnico asignado. Todas las condiciones se verifican en una "
+        "única actualización atómica."
+    ),
+    responses={
+        400: {"description": "Identificador inválido"},
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso incidencias:ver"},
+        404: {"description": "Incidencia inexistente o fuera de alcance"},
+        409: {"description": "Incidencia no elegible o conflicto concurrente"},
+    },
+)
+@limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
+async def retirar_incidencia(
+    request: Request,
+    incidencia_id: str,
+    usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))],
+):
+    ahora = ahora_utc()
+    res = await get_db().incidencias_campus.update_one(
+        {
+            "$and": [
+                {
+                    "_id": _oid(incidencia_id),
+                    "reportante.usuario_id": usuario["_id"],
+                    "estado": "abierta",
+                    "tecnico_asignado": {"$exists": False},
+                    "fecha_creacion": {
+                        "$type": "date",
+                        "$gte": ahora - VENTANA_RETIRO,
+                        "$lte": ahora,
+                    },
+                },
+                filtro_alcance(usuario),
+            ]
+        },
+        {
+            "$set": {"estado": "retirada", "fecha_actualizacion": ahora},
+            "$push": {
+                "historial_seguimiento": _push_historial(
+                    _entrada_historial(ahora, usuario, "retirada", "Reporte retirado por su reportante")
+                )
+            },
+        },
+    )
+    if res.matched_count == 0:
+        actual = await _en_alcance(incidencia_id, usuario, {"reportante.usuario_id": 1})
+        if actual.get("reportante", {}).get("usuario_id") != usuario["_id"]:
+            raise HTTPException(404, "Incidencia no encontrada")
+        raise HTTPException(409, "La incidencia ya no puede retirarse")
+    await actualizar_elegibilidad_huella(get_db(), _oid(incidencia_id), "retirada")
+    return {"ok": True, "estado": "retirada"}
 
 
 async def _diagnosticar_accion_reportante(
@@ -403,6 +472,7 @@ async def confirmar_o_reabrir(
     res = await get_db().incidencias_campus.update_one({"$and": condiciones}, update)
     if res.matched_count == 0:
         await _diagnosticar_accion_reportante(incidencia_id, usuario, datos.accion, ahora)
+    await actualizar_elegibilidad_huella(get_db(), oid, estado_resultante)
     return {"ok": True, "estado": estado_resultante}
 
 
@@ -560,6 +630,7 @@ async def registrar_seguimiento(
         if not asigna and asignado is not None and asignado != usuario["_id"]:
             raise HTTPException(403, "La incidencia está asignada a otro técnico")
         raise HTTPException(409, "Transición de estado no permitida")
+    await actualizar_elegibilidad_huella(get_db(), oid, datos.estado_nuevo)
     return {"ok": True, "estado": datos.estado_nuevo}
 
 
@@ -600,8 +671,8 @@ async def asignar(
     incidencia_id: str, datos: AsignacionIn, usuario: Annotated[dict, Depends(require_permiso("incidencias:asignar"))]
 ):
     incidencia = await _en_alcance(incidencia_id, usuario, {"estado": 1})
-    if incidencia["estado"] == "cerrada":
-        raise HTTPException(409, "La incidencia está cerrada")
+    if incidencia["estado"] in {"cerrada", "retirada"}:
+        raise HTTPException(409, "La incidencia no admite asignación")
     no_valido = HTTPException(400, "Técnico no válido para esta incidencia")
     tecnico = await get_db().usuarios.find_one({"_id": _oid(datos.tecnico_id), "activo": {"$ne": False}})
     if tecnico is None:
@@ -615,7 +686,7 @@ async def asignar(
         raise no_valido
     ahora = datetime.now(timezone.utc)
     res = await get_db().incidencias_campus.update_one(
-        {"_id": incidencia["_id"], "estado": {"$ne": "cerrada"}, **filtro_alcance(usuario)},
+        {"_id": incidencia["_id"], "estado": incidencia["estado"], **filtro_alcance(usuario)},
         {
             "$set": {
                 "tecnico_asignado": {"usuario_id": tecnico["_id"], "nombre": tecnico["nombre"]},

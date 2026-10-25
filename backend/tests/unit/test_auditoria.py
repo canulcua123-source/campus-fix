@@ -219,6 +219,7 @@ async def test_indices_auditoria_cubren_orden_y_filtro_sin_ttl():
         usuarios=ColeccionIndicesFalsa(),
         roles=ColeccionIndicesFalsa(),
         categorias=ColeccionIndicesFalsa(),
+        aulas=ColeccionIndicesFalsa(),
         auditoria=ColeccionIndicesFalsa(),
         list_collection_names=AsyncMock(return_value=["auditoria"]),
     )

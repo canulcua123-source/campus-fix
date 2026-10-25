@@ -69,7 +69,11 @@ async def entorno():
     from scripts.init_db import (
         asegurar_coleccion,
         crear_indices,
+        esquema_adhesiones_reportes,
+        esquema_aulas,
         esquema_categorias,
+        esquema_coincidencias_duplicados,
+        esquema_huellas_reportes,
         esquema_incidencias,
         esquema_roles,
         esquema_usuarios,
@@ -84,6 +88,10 @@ async def entorno():
         ("usuarios", esquema_usuarios()),
         ("roles", esquema_roles()),
         ("categorias", esquema_categorias()),
+        ("aulas", esquema_aulas()),
+        ("huellas_reportes", esquema_huellas_reportes()),
+        ("coincidencias_duplicados", esquema_coincidencias_duplicados()),
+        ("adhesiones_reportes", esquema_adhesiones_reportes()),
     ):
         await asegurar_coleccion(tdb, nombre, validador)
     await crear_indices(tdb)

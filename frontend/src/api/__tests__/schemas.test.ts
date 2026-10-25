@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { analisisImagenSchema } from '../../schemas/ia'
+import { adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema } from '../../schemas/ia'
 import {
   evidenciaFirmaSchema, evidenciaSchema, incidenciaSchema, normalizarTag, seguimientoSchema, tagsSchema,
 } from '../../schemas/incidencia'
@@ -155,5 +155,29 @@ describe('respuesta de IA (AnalisisImagen, extra=forbid)', () => {
     expect(analisisImagenSchema.safeParse(ia).success).toBe(true)
     expect(analisisImagenSchema.safeParse({ ...ia, confianza: 1.1 }).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, extra: 1 }).success).toBe(false)
+  })
+})
+
+describe('contratos T-038 sin datos personales', () => {
+  const coincidencia = {
+    accion: 'duplicado',
+    coincidencia_id: 'A'.repeat(43),
+    codigo: 'INC-2026-INF-0001',
+    categoria: 'infraestructura',
+    reportado_hace_minutos: 10,
+    adhesiones: 0,
+  }
+
+  it('acepta solo la respuesta publica de coincidencia', () => {
+    expect(posibleDuplicadoSchema.safeParse(coincidencia).success).toBe(true)
+    expect(posibleDuplicadoSchema.safeParse({ ...coincidencia, reportante: 'Ana' }).success).toBe(false)
+    expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'A'.repeat(43) }).success).toBe(true)
+    expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'corta' }).success).toBe(false)
+  })
+
+  it('valida la respuesta idempotente de adhesion', () => {
+    const adhesion = { ok: true, codigo: coincidencia.codigo, categoria: coincidencia.categoria, adhesiones: 1, registrada: true }
+    expect(adhesionSchema.safeParse(adhesion).success).toBe(true)
+    expect(adhesionSchema.safeParse({ ...adhesion, usuario_id: 'interno' }).success).toBe(false)
   })
 })

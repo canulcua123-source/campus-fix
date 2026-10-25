@@ -173,6 +173,7 @@ def construir_contexto(fecha_referencia: datetime) -> ContextoEntrega:
             "usuarios": modulo.esquema_usuarios(),
             "roles": modulo.esquema_roles(),
             "categorias": modulo.esquema_categorias(),
+            "aulas": modulo.esquema_aulas(),
         },
         indices=_capturar_indices(modulo),
         roles=modulo.roles_sistema(),
@@ -231,7 +232,7 @@ def construir_script_maestro(contexto: ContextoEntrega) -> str:
 "use strict";
 
 const BASE_ESPERADA = "{BASE_ENTREGA}";
-const COLECCIONES_ESPERADAS = ["incidencias_campus", "usuarios", "roles", "categorias"];
+const COLECCIONES_ESPERADAS = ["incidencias_campus", "usuarios", "roles", "categorias", "aulas"];
 
 function exigir(condicion, mensaje) {{
   if (!condicion) {{

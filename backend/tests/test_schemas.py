@@ -17,7 +17,13 @@ from app.core.serial import a_json  # noqa: E402
 from app.main import app  # noqa: E402
 from app.routers.auth import LoginIn  # noqa: E402
 from app.routers.usuarios import UsuarioIn, UsuarioPatch  # noqa: E402
-from app.schemas.incidencia import TRANSICIONES, IncidenciaIn, SeguimientoIn, normalizar_tag  # noqa: E402
+from app.schemas.incidencia import (  # noqa: E402
+    TRANSICIONES,
+    EntradaHistorialOut,
+    IncidenciaIn,
+    SeguimientoIn,
+    normalizar_tag,
+)
 from app.schemas.rol import RolIn  # noqa: E402
 
 BASE = {
@@ -131,6 +137,19 @@ def test_correo_dominio_y_normalizacion():
             LoginIn(correo=correo, password="secreto")
     with pytest.raises(ValidationError):
         UsuarioIn(**_usuario(correo=f"{'a' * 244}@utm.edu.mx"))
+
+
+def test_retirada_solo_es_valida_en_salidas_de_historial():
+    with pytest.raises(ValidationError):
+        SeguimientoIn(estado_nuevo="retirada", comentario="Intento no permitido", horas=0)
+    entrada = EntradaHistorialOut(
+        fecha=datetime.now(timezone.utc),
+        usuario_id=str(ObjectId()),
+        estado_nuevo="retirada",
+        comentario="Reporte retirado por su reportante",
+        horas=0,
+    )
+    assert entrada.estado_nuevo == "retirada"
 
 
 def test_configuracion_dominio_correo():

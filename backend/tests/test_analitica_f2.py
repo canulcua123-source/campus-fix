@@ -66,6 +66,7 @@ def test_pipeline_carga_tecnicos_usa_activos_horas_persistidas_y_excluye_sin_asi
         "horas_acumuladas": {"$sum": "$horas_invertidas"},
     }
     assert not any("$unwind" in etapa for etapa in pipeline)
+    assert "retirada" not in _ESTADOS_ACTIVOS
 
 
 def test_pipeline_tendencia_agrupa_mes_categoria_en_utc_y_ordena():

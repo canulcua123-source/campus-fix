@@ -38,6 +38,10 @@ export function registrarSeguimiento(id: string, datos: SeguimientoIn) {
   return api(`${ruta(id)}/seguimiento`, { method: 'PATCH', json: validarEntrada(seguimientoSchema, datos), schema: seguimientoOutSchema })
 }
 
+export function retirarIncidencia(id: string) {
+  return api(`${ruta(id)}/retirar`, { method: 'POST', schema: seguimientoOutSchema })
+}
+
 export function agregarTags(id: string, datos: TagsIn) {
   return api(`${ruta(id)}/tags`, { method: 'POST', json: validarEntrada(tagsSchema, datos), schema: okSchema })
 }

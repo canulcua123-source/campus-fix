@@ -23,3 +23,8 @@ def test_transicion_invalida_lanza():
     with pytest.raises(TransicionEstadoInvalida):
         validar_transicion("abierta", "cerrada")
 
+
+def test_retirada_es_terminal_y_no_es_destino_del_flujo_general():
+    assert TRANSICIONES["retirada"] == []
+    assert origenes_permitidos("retirada") == []
+    assert not transicion_permitida("abierta", "retirada")

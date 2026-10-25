@@ -1,6 +1,8 @@
 """Reglas del ciclo de vida de una incidencia."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+VENTANA_RETIRO = timedelta(minutes=15)
 
 TRANSICIONES: dict[str, list[str]] = {
     "abierta": ["en_proceso", "en_espera"],
@@ -8,6 +10,7 @@ TRANSICIONES: dict[str, list[str]] = {
     "en_espera": ["en_proceso"],
     "resuelta": ["cerrada", "en_proceso"],
     "cerrada": [],
+    "retirada": [],
 }
 
 
@@ -33,6 +36,20 @@ def validar_transicion(estado_actual: str, estado_nuevo: str) -> None:
 def origenes_permitidos(estado_nuevo: str) -> list[str]:
     """Obtiene los estados desde los que se puede alcanzar el destino."""
     return [estado for estado, destinos in TRANSICIONES.items() if estado_nuevo in destinos]
+
+
+def ahora_utc() -> datetime:
+    """Reloj del servidor, separado para permitir pruebas deterministas."""
+    return datetime.now(timezone.utc)
+
+
+def retiro_en_ventana(fecha_creacion: datetime | None, ahora: datetime) -> bool:
+    """Comprueba la ventana inclusiva de retiro sin confiar en tiempo del cliente."""
+    if not isinstance(fecha_creacion, datetime) or not isinstance(ahora, datetime):
+        return False
+    if fecha_creacion.tzinfo is None or ahora.tzinfo is None:
+        return False
+    return ahora - VENTANA_RETIRO <= fecha_creacion <= ahora
 
 
 def validar_confirmacion_reportante(estado_actual: str) -> None:

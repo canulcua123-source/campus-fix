@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator, model_validator
@@ -11,7 +12,8 @@ TRANSICIONES = _TRANSICIONES
 normalizar_tag = _normalizar_tag
 
 Prioridad = Literal["baja", "media", "alta", "critica"]
-Estado = Literal["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
+Estado = Literal["abierta", "en_proceso", "en_espera", "resuelta", "cerrada", "retirada"]
+EstadoSeguimiento = Literal["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
 
 
 class DetalleComputo(BaseModel):
@@ -100,7 +102,7 @@ class IncidenciaIn(BaseModel):
 class SeguimientoIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    estado_nuevo: Estado
+    estado_nuevo: EstadoSeguimiento
     comentario: str = Field(min_length=5, max_length=1000)
     horas: float = Field(ge=0, le=24, multiple_of=0.25, allow_inf_nan=False)
 
@@ -151,3 +153,21 @@ class TagsIn(BaseModel):
     @classmethod
     def _tags(cls, v: list[str]) -> list[str]:
         return normalizar_tags(v)
+
+
+class EntradaHistorialOut(BaseModel):
+    fecha: datetime
+    usuario_id: str
+    estado_nuevo: Estado
+    comentario: str
+    horas: float
+    tipo: Literal["asignacion"] | None = None
+    autor_nombre: str | None = Field(default=None, description="Nombre actual del autor, si sigue disponible")
+
+
+class IncidenciaDetalleOut(BaseModel):
+    """Conserva el expediente y valida la forma enriquecida de su historial."""
+
+    model_config = ConfigDict(extra="allow")
+    historial_seguimiento: list[EntradaHistorialOut]
+    puede_retirar: bool

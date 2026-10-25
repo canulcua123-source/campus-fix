@@ -60,6 +60,7 @@ def test_script_incluye_definiciones_canonicas_seguridad_y_requisitos():
         "usuarios",
         "roles",
         "categorias",
+        "aulas",
     }
     assert any(indice.opciones.get("expireAfterSeconds") == 5_184_000 for indice in contexto.indices)
     assert any(

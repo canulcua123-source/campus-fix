@@ -23,11 +23,90 @@ from app.schemas.rol import CATALOGO_PERMISOS  # noqa: E402
 CATEGORIAS = ["computo_redes", "infraestructura", "academico"]
 PATRON_CATEGORIA = r"^[a-z][a-z0-9_]{2,29}$"
 PATRON_CATEGORIA_PERSONALIZADA = r"^(?!(?:computo_redes|infraestructura|academico)$)[a-z][a-z0-9_]{2,29}$"
-ESTADOS = ["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
+ESTADOS = ["abierta", "en_proceso", "en_espera", "resuelta", "cerrada", "retirada"]
 PRIORIDADES = ["baja", "media", "alta", "critica"]
 TIPOS_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
 ALCANCES = ["propio", "area", "edificio", "global"]
 TIPOS_REPORTANTE = ["docente", "estudiante", "administrativo"]
+
+
+def esquema_huellas_reportes() -> dict:
+    """Huella tecnica temporal; deliberadamente no contiene datos personales ni fotos."""
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "aula_id", "categoria", "sha256", "dhash", "incidencia_id", "codigo", "fecha", "elegible",
+            ],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "objectId"},
+                "aula_id": {"bsonType": "string", "pattern": r"^[A-Za-z0-9_-]{22}$"},
+                "categoria": {"bsonType": "string", "pattern": PATRON_CATEGORIA},
+                "sha256": {"bsonType": "string", "pattern": r"^[0-9a-f]{64}$"},
+                "dhash": {"bsonType": "string", "pattern": r"^[0-9a-f]{16}$"},
+                "incidencia_id": {"bsonType": "objectId"},
+                "codigo": {"bsonType": "string", "minLength": 1, "maxLength": 64},
+                "fecha": {"bsonType": "date"},
+                "elegible": {"bsonType": "bool"},
+            },
+        }
+    }
+
+
+def esquema_coincidencias_duplicados() -> dict:
+    """Capacidad opaca, temporal y ligada a un actor mediante HMAC."""
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "huella_id", "actor_clave", "fecha", "expira_en"],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "string", "pattern": r"^[A-Za-z0-9_-]{43}$"},
+                "huella_id": {"bsonType": "objectId"},
+                "actor_clave": {"bsonType": "string", "pattern": r"^[0-9a-f]{64}$"},
+                "fecha": {"bsonType": "date"},
+                "expira_en": {"bsonType": "date"},
+            },
+        }
+    }
+
+
+def esquema_adhesiones_reportes() -> dict:
+    """Una fila por usuario/reporte; el _id HMAC evita PII y hace idempotente la escritura."""
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["_id", "incidencia_id", "codigo", "categoria", "fecha"],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "string", "pattern": r"^[0-9a-f]{64}$"},
+                "incidencia_id": {"bsonType": "objectId"},
+                "codigo": {"bsonType": "string", "minLength": 1, "maxLength": 64},
+                "categoria": {"bsonType": "string", "pattern": PATRON_CATEGORIA},
+                "fecha": {"bsonType": "date"},
+            },
+        }
+    }
+
+
+def esquema_aulas() -> dict:
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["id_publico", "edificio", "piso", "aula", "activa", "fecha_creacion"],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "objectId"},
+                "id_publico": {"bsonType": "string", "pattern": r"^[A-Za-z0-9_-]{22}$"},
+                "edificio": {"bsonType": "string", "minLength": 1, "maxLength": 60},
+                "piso": {"bsonType": ["int", "long"], "minimum": -5, "maximum": 50},
+                "aula": {"bsonType": "string", "minLength": 1, "maxLength": 60},
+                "activa": {"bsonType": "bool"},
+                "fecha_creacion": {"bsonType": "date"},
+            },
+        }
+    }
 
 
 def esquema_usuarios() -> dict:
@@ -424,11 +503,45 @@ async def crear_indices(db) -> None:
     await db.usuarios.create_index("correo", unique=True)
     await db.roles.create_index("clave", unique=True)
     await db.categorias.create_index("clave", unique=True)
+    await db.aulas.create_index("id_publico", unique=True, name="aulas_id_publico_unico")
+    await db.aulas.create_index(
+        [("edificio", ASCENDING), ("piso", ASCENDING), ("aula", ASCENDING)],
+        unique=True,
+        name="aulas_ubicacion_unica",
+    )
     listar_colecciones = getattr(db, "list_collection_names", None)
     if not callable(listar_colecciones):
-        # Algunos dobles y el exportador T-013 modelan solo las colecciones originales.
+        # Algunos dobles de pruebas solo modelan las colecciones cuyos índices verifican.
         return
-    if "auditoria" not in await listar_colecciones():
+    colecciones = await listar_colecciones()
+    if "huellas_reportes" in colecciones:
+        await db.huellas_reportes.create_index(
+            [("aula_id", ASCENDING), ("categoria", ASCENDING), ("fecha", DESCENDING)],
+            name="huellas_aula_categoria_fecha",
+        )
+        await db.huellas_reportes.create_index(
+            "fecha",
+            expireAfterSeconds=24 * 3600,
+            name="huellas_ttl_24h",
+        )
+        await db.huellas_reportes.create_index(
+            "incidencia_id",
+            unique=True,
+            name="huellas_incidencia_unica",
+        )
+    if "coincidencias_duplicados" in colecciones:
+        await db.coincidencias_duplicados.create_index(
+            "expira_en",
+            expireAfterSeconds=0,
+            name="coincidencias_ttl",
+        )
+        await db.coincidencias_duplicados.create_index("huella_id", name="coincidencias_huella")
+    if "adhesiones_reportes" in colecciones:
+        await db.adhesiones_reportes.create_index(
+            [("incidencia_id", ASCENDING), ("fecha", DESCENDING)],
+            name="adhesiones_incidencia_fecha",
+        )
+    if "auditoria" not in colecciones:
         return
     auditoria = db.auditoria
     await auditoria.create_index(
@@ -653,6 +766,10 @@ async def main() -> None:
             ("roles", esquema_roles()),
             ("categorias", esquema_categorias()),
             ("auditoria", esquema_auditoria()),
+            ("aulas", esquema_aulas()),
+            ("huellas_reportes", esquema_huellas_reportes()),
+            ("coincidencias_duplicados", esquema_coincidencias_duplicados()),
+            ("adhesiones_reportes", esquema_adhesiones_reportes()),
         ):
             await asegurar_coleccion(db, nombre, validador)
         await crear_indices(db)

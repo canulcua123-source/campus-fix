@@ -1,14 +1,21 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 
 from datetime import datetime, timezone
 
 from app.core.config import settings
-from app.core.db import get_redis
+from app.core.db import get_db, get_redis
+from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
+from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
 from app.schemas.ia import AnalisisImagen
 from app.services.ia import IAError, analizar_imagen
+from app.services.vision.duplicados import (
+    CoincidenciaNoElegible,
+    CoincidenciaNoEncontrada,
+    confirmar_adhesion,
+)
 
 router = APIRouter(prefix="/ia", tags=["ia"])
 
@@ -43,6 +50,39 @@ async def analizar(
         return await analizar_imagen(datos, imagen.content_type, contexto)
     except Exception as e:  # IAError, errores de red/API, JSON inválido
         raise HTTPException(503, "No fue posible analizar la imagen con IA") from e
+
+
+@router.post(
+    "/duplicados/adhesiones",
+    response_model=AdhesionOut,
+    summary="Confirmar una coincidencia y adherirse al reporte existente",
+    responses={
+        400: {"description": "Identificador de coincidencia invalido"},
+        401: {"description": "Autenticacion requerida"},
+        403: {"description": "Falta un permiso requerido"},
+        404: {"description": "Coincidencia inexistente, expirada o de otro usuario"},
+        409: {"description": "El reporte dejo de admitir adhesiones"},
+    },
+)
+@limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
+async def adherirse_a_duplicado(
+    request: Request,
+    datos: ConfirmarAdhesionIn,
+    usuario: Annotated[dict, Depends(require_permiso("ia:usar"))],
+):
+    if "incidencias:crear" not in usuario["_permisos"]:
+        raise HTTPException(403, "Falta el permiso incidencias:crear")
+    try:
+        return await confirmar_adhesion(
+            get_db(),
+            coincidencia_id=datos.coincidencia_id,
+            usuario_id=usuario["_id"],
+            secreto=settings.jwt_secret,
+        )
+    except CoincidenciaNoEncontrada as exc:
+        raise HTTPException(404, "Coincidencia no encontrada") from exc
+    except CoincidenciaNoElegible as exc:
+        raise HTTPException(409, "El reporte ya no admite adhesiones") from exc
 
 
 __all__ = ["router", "IAError"]

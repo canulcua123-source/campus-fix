@@ -738,6 +738,38 @@
       ]
     },
     {
+      "name": "Retirar mi reporte (T-023)",
+      "description": "Retiro atómico por el reportante original dentro de los primeros 15 minutos, únicamente si la incidencia sigue abierta y sin técnico asignado.",
+      "item": [
+        {
+          "name": "Retirar reporte elegible",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Respuesta de retiro válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('retirada'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"}],
+            "description": "Requiere {{incidencia_retirar_id}} propia, abierta, sin técnico y creada hace 15 minutos o menos.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_retirar_id}}/retirar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_retirar_id}}", "retirar"]}
+          }
+        },
+        {
+          "name": "Retiro no elegible (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"}],
+            "description": "Requiere {{incidencia_retirar_conflicto_id}} vencida, asignada o en estado distinto de abierta.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_retirar_conflicto_id}}/retirar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_retirar_conflicto_id}}", "retirar"]}
+          }
+        }
+      ]
+    },
+    {
       "name": "Asignación",
       "description": "Asignación de incidencias a técnicos.",
       "item": [
@@ -1442,6 +1474,46 @@
                   "description": "Texto opcional (máx. 500)"
                 }
               ]
+            }
+          }
+        },
+        {
+          "name": "Confirmar adhesión a duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta pública de adhesión', function () { const j = pm.response.json(); pm.expect(j.ok).to.eql(true); pm.expect(j.codigo).to.be.a('string'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.adhesiones).to.be.at.least(1); pm.expect(j.registrada).to.be.a('boolean'); pm.expect(j).not.to.have.any.keys('usuario_id', 'reportante', 'correo', 'nombre'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Confirma una coincidencia opaca emitida por G8. Es idempotente por usuario y no crea otra incidencia. T-033 aún debe integrar la emisión de coincidencia_id.",
+            "url": {
+              "raw": "{{base_url}}/ia/duplicados/adhesiones",
+              "host": ["{{base_url}}"],
+              "path": ["ia", "duplicados", "adhesiones"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"coincidencia_id\": \"{{coincidencia_id}}\"\n}",
+              "options": {"raw": {"language": "json"}}
             }
           }
         }
@@ -2342,6 +2414,18 @@
     {
       "key": "incidencia_tomada_id",
       "value": ""
-    }
+    },
+    {
+      "key": "incidencia_retirar_id",
+      "value": ""
+    },
+        {
+            "key": "incidencia_retirar_conflicto_id",
+            "value": ""
+        },
+        {
+            "key": "coincidencia_id",
+            "value": ""
+        }
   ]
 }

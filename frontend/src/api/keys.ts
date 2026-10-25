@@ -19,6 +19,7 @@ export const claves = {
   categorias: ['categorias'] as const,
   roles: ['roles'] as const,
   usuarios: ['usuarios'] as const,
+  aula: (id: string) => ['aulas', id] as const,
 }
 
 /** Quita filtros vacíos para que {} y {estado: undefined} compartan caché. */

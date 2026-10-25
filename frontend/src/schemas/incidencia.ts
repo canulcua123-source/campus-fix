@@ -6,7 +6,8 @@ import { z } from 'zod'
  */
 
 export const PRIORIDADES = ['baja', 'media', 'alta', 'critica'] as const
-export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
+export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada', 'retirada'] as const
+export const ESTADOS_SEGUIMIENTO = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
 export const CATEGORIAS = ['computo_redes', 'infraestructura', 'academico'] as const
 export const TIPOS_DANO = ['filtracion', 'electrico', 'climatizacion', 'cerrajeria', 'luminaria', 'otro'] as const
 export const RIESGOS = ['bajo', 'medio', 'alto'] as const
@@ -25,6 +26,7 @@ export const TRANSICIONES: Record<Estado, readonly Estado[]> = {
   en_espera: ['en_proceso'],
   resuelta: ['cerrada', 'en_proceso'],
   cerrada: [],
+  retirada: [],
 }
 
 export const LIMITES = {
@@ -113,7 +115,7 @@ export type IncidenciaIn = IncidenciaForm
 
 /** SeguimientoIn (PATCH /incidencias/{id}/seguimiento). */
 export const seguimientoSchema = z.object({
-  estado_nuevo: z.enum(ESTADOS, 'Selecciona el nuevo estado'),
+  estado_nuevo: z.enum(ESTADOS_SEGUIMIENTO, 'Selecciona el nuevo estado'),
   comentario: z.string('Requerido').min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres'),
   horas: z.number('Indica las horas').finite().min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas')
     .multipleOf(0.25, 'Usa incrementos de 0.25 horas'),
@@ -230,6 +232,7 @@ export const incidenciaDetalleSchema = incidenciaListaItemSchema.omit({ score: t
   fecha_actualizacion: fecha.optional(),
   fecha_resolucion: fecha.optional(),
   schema_version: z.number().optional(),
+  puede_retirar: z.boolean().default(false),
 })
 export type IncidenciaDetalle = z.infer<typeof incidenciaDetalleSchema>
 

@@ -206,7 +206,7 @@ async def test_autoasignacion_rechaza_actor_no_tecnico_y_conflicto(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("estado", ["resuelta", "cerrada"])
+@pytest.mark.parametrize("estado", ["resuelta", "cerrada", "retirada"])
 async def test_autoasignacion_rechaza_estados_terminales(monkeypatch, estado):
     usuario = _usuario(rol="tecnico", alcance="area")
     documento = {"_id": ObjectId(), "estado": estado}

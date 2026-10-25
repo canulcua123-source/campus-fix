@@ -24,6 +24,7 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `POST /incidencias/{id}/evidencias` | `evidencias:subir` | **201** `{ok, evidencia_id}` |
 | `GET /incidencias/{id}/evidencias/{evidencia_id}/url` | `incidencias:ver` | 200 `{url, expira_en}` |
 | `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `AnalisisImagen` |
+| `POST /ia/duplicados/adhesiones` | `ia:usar` + `incidencias:crear` | 200 `{ok, codigo, categoria, adhesiones, registrada}` |
 | `GET /analitica/edificios`, `GET /analitica/tags` | `analitica:ver` | 200 lista |
 | `GET /analitica/resumen` | `analitica:ver` | 200 `{abiertas, en_proceso, criticas, resueltas_periodo}` |
 | `GET /analitica/aulas-cronicas` | `analitica:ver` | 200 lista `{edificio, piso?, aula, total}` |
