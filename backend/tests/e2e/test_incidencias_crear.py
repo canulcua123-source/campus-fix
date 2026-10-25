@@ -98,10 +98,17 @@ async def test_codigo_incrementa_por_categoria(api):
     assert "-RED-" in c["codigo"]
 
 
-@pytest.mark.parametrize("quien,esperado", [
-    ("reportante_a", 201), ("tecnico_infra", 201), ("coordinador_infra", 201), ("admin", 201),
-    ("directivo", 403), ("jefe_a", 403),
-])
+@pytest.mark.parametrize(
+    "quien,esperado",
+    [
+        ("reportante_a", 201),
+        ("tecnico_infra", 201),
+        ("coordinador_infra", 201),
+        ("admin", 201),
+        ("directivo", 403),
+        ("jefe_a", 403),
+    ],
+)
 async def test_crear_permisos(api, quien, esperado):
     r = await api.c.post("/incidencias", json=cuerpo("infraestructura", edificio="Edificio B"), headers=api.h(quien))
     assert r.status_code == esperado, r.text
@@ -205,22 +212,34 @@ async def test_crear_invalido_400(api, nombre, body):
 
 
 async def test_crear_json_malformado(api):
-    r = await api.c.post("/incidencias", content=b"{no json", headers={**api.h("reportante_a"), "Content-Type": "application/json"})
+    r = await api.c.post(
+        "/incidencias", content=b"{no json", headers={**api.h("reportante_a"), "Content-Type": "application/json"}
+    )
     assert r.status_code == 400
 
 
 # ---------- Validación a nivel BD ($jsonSchema) ----------
 
+
 def _doc_valido(uid: ObjectId) -> dict:
     ahora = datetime.now(timezone.utc)
     return {
-        "schema_version": 1, "codigo": f"INC-DB-{ObjectId()}", "titulo": "Documento directo",
-        "descripcion": "Insertado directamente en la BD", "categoria": "academico", "estado": "abierta",
-        "prioridad": "baja", "ubicacion": {"edificio": "Edificio C", "piso": 2, "aula": "201"},
+        "schema_version": 1,
+        "codigo": f"INC-DB-{ObjectId()}",
+        "titulo": "Documento directo",
+        "descripcion": "Insertado directamente en la BD",
+        "categoria": "academico",
+        "estado": "abierta",
+        "prioridad": "baja",
+        "ubicacion": {"edificio": "Edificio C", "piso": 2, "aula": "201"},
         "reportante": {"usuario_id": uid, "nombre": "X"},
         "detalle_especifico": copy.deepcopy(DETALLES["academico"]),
-        "fecha_creacion": ahora, "fecha_actualizacion": ahora, "tags": [], "historial_seguimiento": [],
-        "evidencias_adjuntas": [], "horas_invertidas": 0,
+        "fecha_creacion": ahora,
+        "fecha_actualizacion": ahora,
+        "tags": [],
+        "historial_seguimiento": [],
+        "evidencias_adjuntas": [],
+        "horas_invertidas": 0,
     }
 
 
@@ -230,7 +249,9 @@ async def test_bd_documento_valido_se_acepta(api):
     await api.db.incidencias_campus.delete_one({"_id": res.inserted_id})
 
 
-@pytest.mark.parametrize("caso", ["faltan_campos", "categoria_no_coincide", "piso_null", "evidencias_11", "tags_duplicados"])
+@pytest.mark.parametrize(
+    "caso", ["faltan_campos", "categoria_no_coincide", "piso_null", "evidencias_11", "tags_duplicados"]
+)
 async def test_bd_rechaza_121(api, caso):
     doc = _doc_valido(api.oid("admin"))
     if caso == "faltan_campos":
@@ -241,8 +262,13 @@ async def test_bd_rechaza_121(api, caso):
     elif caso == "piso_null":
         doc["ubicacion"]["piso"] = None
     elif caso == "evidencias_11":
-        ev = {"nombre_archivo": "a.jpg", "tipo_mime": "image/jpeg", "peso_kb": 1, "url_storage": "x",
-              "fecha_carga": datetime.now(timezone.utc)}
+        ev = {
+            "nombre_archivo": "a.jpg",
+            "tipo_mime": "image/jpeg",
+            "peso_kb": 1,
+            "url_storage": "x",
+            "fecha_carga": datetime.now(timezone.utc),
+        }
         doc["evidencias_adjuntas"] = [dict(ev) for _ in range(11)]
     elif caso == "tags_duplicados":
         doc["tags"] = ["a1", "a1"]

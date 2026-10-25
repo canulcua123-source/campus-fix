@@ -4,6 +4,7 @@ Uso:  python scripts/limpiar_huerfanos.py            # solo lista (simulación)
       python scripts/limpiar_huerfanos.py --borrar   # borra
 Los huérfanos de subidas nunca registradas viven en staging/ y los elimina la regla de lifecycle del bucket.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -31,7 +32,7 @@ async def main() -> None:
     print(f"{len(huerfanos)} objetos huérfanos")
     if borrar:
         for i in range(0, len(huerfanos), 1000):
-            lote = [{"Key": k} for k in huerfanos[i:i + 1000]]
+            lote = [{"Key": k} for k in huerfanos[i : i + 1000]]
             r2.delete_objects(Bucket=settings.r2_bucket, Delete={"Objects": lote})
         print("borrados")
     await cliente_db.close()

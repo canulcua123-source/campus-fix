@@ -326,3 +326,7 @@ La integración posterior del frontend debe usar `credentials: "include"` en log
 - [ ] No rompe el contrato, o actualiza PWA + Postman + versión en el mismo PR.
 - [ ] Aparece correctamente en `/docs`.
 - [ ] Colección de Postman actualizada (caso feliz + 400/403/404).
+
+### Autor de la bitácora
+
+`GET /incidencias/{id}` agrega `autor_nombre?: string` a cada entrada de `historial_seguimiento` cuando el usuario aún existe. Es el nombre actual, consultado después de comprobar el alcance; no se persiste en MongoDB. No incluye correo ni otros campos del usuario. Si el usuario ya no existe, se omite y la interfaz muestra la referencia disponible o «Usuario no disponible».

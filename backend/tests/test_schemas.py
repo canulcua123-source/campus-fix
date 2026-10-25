@@ -35,8 +35,14 @@ def test_computo_valido():
 
 
 def test_academico_con_vlan_falla():
-    d = {"categoria": "academico", "plataforma": "lms", "codigo_curso": "MAT-101", "periodo": "2026-1",
-         "estudiantes_impactados": 3, "vlan": 10}
+    d = {
+        "categoria": "academico",
+        "plataforma": "lms",
+        "codigo_curso": "MAT-101",
+        "periodo": "2026-1",
+        "estudiantes_impactados": 3,
+        "vlan": 10,
+    }
     with pytest.raises(ValidationError):
         IncidenciaIn(**BASE, detalle_especifico=d)
 

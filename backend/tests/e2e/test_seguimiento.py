@@ -88,16 +88,29 @@ async def test_cerrar_requiere_asignar(api):
     assert (await api.doc(inc["_id"]))["estado"] == "cerrada"
 
 
-@pytest.mark.parametrize("body", [
-    {"estado_nuevo": "en_proceso", "comentario": "abc", "horas": 1},
-    {"estado_nuevo": "en_proceso", "comentario": "x" * 1001, "horas": 1},
-    {"estado_nuevo": "en_proceso", "comentario": "Comentario ok", "horas": -1},
-    {"estado_nuevo": "en_proceso", "comentario": "Comentario ok", "horas": 25},
-    {"estado_nuevo": "inventado", "comentario": "Comentario ok", "horas": 1},
-    {"estado_nuevo": {"$ne": "x"}, "comentario": "Comentario ok", "horas": 1},
-    {"estado_nuevo": "en_proceso", "comentario": "Comentario ok"},
-    {"estado_nuevo": "en_proceso", "comentario": "Comentario ok", "horas": 1, "extra": 1},
-], ids=["comentario_corto", "comentario_largo", "horas_neg", "horas_25", "estado_invalido", "nosql", "sin_horas", "extra"])
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"estado_nuevo": "en_proceso", "comentario": "abc", "horas": 1},
+        {"estado_nuevo": "en_proceso", "comentario": "x" * 1001, "horas": 1},
+        {"estado_nuevo": "en_proceso", "comentario": "Comentario ok", "horas": -1},
+        {"estado_nuevo": "en_proceso", "comentario": "Comentario ok", "horas": 25},
+        {"estado_nuevo": "inventado", "comentario": "Comentario ok", "horas": 1},
+        {"estado_nuevo": {"$ne": "x"}, "comentario": "Comentario ok", "horas": 1},
+        {"estado_nuevo": "en_proceso", "comentario": "Comentario ok"},
+        {"estado_nuevo": "en_proceso", "comentario": "Comentario ok", "horas": 1, "extra": 1},
+    ],
+    ids=[
+        "comentario_corto",
+        "comentario_largo",
+        "horas_neg",
+        "horas_25",
+        "estado_invalido",
+        "nosql",
+        "sin_horas",
+        "extra",
+    ],
+)
 async def test_seguimiento_validacion(api, body):
     inc = await api.crear()
     r = await api.c.patch(f"/incidencias/{inc['_id']}/seguimiento", json=body, headers=api.h("tecnico_infra"))
@@ -108,8 +121,12 @@ async def test_seguimiento_validacion(api, body):
 async def test_seguimiento_permisos_y_alcance(api):
     inc = await api.crear("reportante_a", "infraestructura", edificio="Edificio B")
     antes = await api.doc(inc["_id"])
-    for quien, esperado in (("reportante_a", {403}), ("directivo", {403}),
-                            ("tecnico_redes", {404, 409}), ("jefe_a", {404, 409})):
+    for quien, esperado in (
+        ("reportante_a", {403}),
+        ("directivo", {403}),
+        ("tecnico_redes", {404, 409}),
+        ("jefe_a", {404, 409}),
+    ):
         r = await api.seguimiento(inc["_id"], "en_proceso", quien=quien)
         assert r.status_code in esperado, f"{quien}: {r.status_code}"
     assert await api.doc(inc["_id"]) == antes

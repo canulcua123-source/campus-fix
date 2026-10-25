@@ -25,9 +25,13 @@ async def _limpiar_cache_analitica():
 
 async def _preparar(api):
     # Garantiza datos resueltos en ambas categorías y edificios distintos
-    await api.crear_en("resuelta", "reportante_a", "infraestructura", edificio="Edificio A", tags=["analitica_tag", "luz"])
+    await api.crear_en(
+        "resuelta", "reportante_a", "infraestructura", edificio="Edificio A", tags=["analitica_tag", "luz"]
+    )
     await api.crear_en("cerrada", "reportante_a", "infraestructura", edificio="Edificio B", tags=["analitica_tag"])
-    await api.crear_en("resuelta", "reportante_a", "computo_redes", edificio="Edificio C", tags=["analitica_tag", "red"])
+    await api.crear_en(
+        "resuelta", "reportante_a", "computo_redes", edificio="Edificio C", tags=["analitica_tag", "red"]
+    )
 
 
 async def test_analitica_edificios(api):
@@ -73,10 +77,17 @@ async def test_analitica_tags(api):
         assert tags_c["analitica_tag"] == n
 
 
-@pytest.mark.parametrize("quien,esperado", [
-    ("reportante_a", 403), ("tecnico_infra", 403), ("jefe_a", 403),
-    ("coordinador_infra", 200), ("directivo", 200), ("admin", 200),
-])
+@pytest.mark.parametrize(
+    "quien,esperado",
+    [
+        ("reportante_a", 403),
+        ("tecnico_infra", 403),
+        ("jefe_a", 403),
+        ("coordinador_infra", 200),
+        ("directivo", 200),
+        ("admin", 200),
+    ],
+)
 async def test_analitica_permisos(api, quien, esperado):
     for ruta in ("/analitica/edificios", "/analitica/tags", "/analitica/resumen"):
         assert (await api.c.get(ruta, headers=api.h(quien))).status_code == esperado, ruta
@@ -396,9 +407,15 @@ async def test_analitica_f2_403_reportante(api):
 # ---------- IA ----------
 
 ANALISIS = AnalisisImagen(
-    es_incidencia_valida=True, categoria="infraestructura", titulo="Luminaria fundida",
-    descripcion="Se observa una luminaria apagada", prioridad_sugerida="baja", tags=["luminaria"],
-    campos_detectados=[{"nombre": "tipo", "valor": "luminaria"}], confianza=0.9, advertencias=[],
+    es_incidencia_valida=True,
+    categoria="infraestructura",
+    titulo="Luminaria fundida",
+    descripcion="Se observa una luminaria apagada",
+    prioridad_sugerida="baja",
+    tags=["luminaria"],
+    campos_detectados=[{"nombre": "tipo", "valor": "luminaria"}],
+    confianza=0.9,
+    advertencias=[],
 )
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
 
@@ -417,8 +434,9 @@ def ia_falsa(monkeypatch):
 
 async def _post(api, quien="reportante_a", nombre="foto.png", datos=PNG, mime="image/png", contexto=None):
     data = {"contexto": contexto} if contexto else None
-    return await api.c.post("/ia/analizar-imagen", files={"imagen": (nombre, datos, mime)}, data=data,
-                            headers=api.h(quien))
+    return await api.c.post(
+        "/ia/analizar-imagen", files={"imagen": (nombre, datos, mime)}, data=data, headers=api.h(quien)
+    )
 
 
 async def test_ia_ok(api, ia_falsa):
@@ -434,11 +452,15 @@ async def test_ia_permisos(api, ia_falsa, quien, esperado):
     assert (await _post(api, quien=quien)).status_code == esperado
 
 
-@pytest.mark.parametrize("nombre,mime,datos", [
-    ("a.txt", "text/plain", b"hola"),
-    ("a.gif", "image/gif", b"GIF89a"),
-    ("grande.png", "image/png", b"0" * (5 * 1024 * 1024 + 1)),
-], ids=["texto", "gif", "mayor_5mb"])
+@pytest.mark.parametrize(
+    "nombre,mime,datos",
+    [
+        ("a.txt", "text/plain", b"hola"),
+        ("a.gif", "image/gif", b"GIF89a"),
+        ("grande.png", "image/png", b"0" * (5 * 1024 * 1024 + 1)),
+    ],
+    ids=["texto", "gif", "mayor_5mb"],
+)
 async def test_ia_archivo_invalido(api, ia_falsa, nombre, mime, datos):
     r = await _post(api, nombre=nombre, datos=datos, mime=mime)
     assert r.status_code == 400, r.text
