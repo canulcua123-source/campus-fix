@@ -121,6 +121,154 @@
       ]
     },
     {
+      "name": "Revisión de alcance T-069",
+      "description": "Casos ficticios de BOLA, permisos y no enumeración. Requieren preparar los identificadores y tokens indicados en el entorno local.",
+      "item": [
+        {
+          "name": "Alcance REP: incidencia ajena oculta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de alcance responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('No revela datos de la incidencia', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('codigo', 'titulo', 'reportante', 'ubicacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}"}],
+            "description": "Un reportante no distingue una incidencia ajena de una inexistente.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_ajena_id}}", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_ajena_id}}"]}
+          }
+        },
+        {
+          "name": "Alcance TEC: incidencia de otra área oculta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de área responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('No revela el recurso', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('_id', 'codigo', 'categoria', 'ubicacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}"}],
+            "description": "Un técnico de área no puede consultar una incidencia de otra área.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_fuera_area_id}}"]}
+          }
+        },
+        {
+          "name": "Alcance COO: actualización fuera de área oculta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de área responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('No devuelve estado ni asignación', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('estado', 'tecnico_asignado'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Un coordinador no puede asignar una incidencia de otra área.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/asignacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_fuera_area_id}}", "asignacion"]},
+            "body": {"mode": "raw", "raw": "{\n  \"tecnico_id\": \"{{tecnico_id}}\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Permiso DIR: escritura rechazada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sin capacidad de escritura responde 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('No devuelve el recurso', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('_id', 'codigo', 'tags'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_directivo}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "El alcance global de DIR no concede tags:gestionar; la falta de capacidad general responde 403.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/tags", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "tags"]},
+            "body": {"mode": "raw", "raw": "{\n  \"tags\": [\"no_autorizado\"]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Gestor delegado: usuario no gestionable oculto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Usuario no gestionable responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('Cuerpo no revelador', function () { const j = pm.response.json(); pm.expect(j).to.eql({detail: 'Usuario no encontrado'}); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_gestor_delegado}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Un gestor delegado recibe la misma respuesta que para un usuario inexistente.",
+            "url": {"raw": "{{base_url}}/usuarios/{{usuario_no_gestionable_id}}", "host": ["{{base_url}}"], "path": ["usuarios", "{{usuario_no_gestionable_id}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"nombre\": \"Nombre ficticio\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Límite ADM: no amplía su propio alcance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Autoedición de alcance responde 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('No devuelve el usuario', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('_id', 'correo', 'rol', 'areas', 'edificios'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Ni ADM puede modificar su propio rol, áreas, edificios o desactivarse.",
+            "url": {"raw": "{{base_url}}/usuarios/{{admin_id}}", "host": ["{{base_url}}"], "path": ["usuarios", "{{admin_id}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"areas\": [\"infraestructura\"]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        }
+      ]
+    },
+    {
       "name": "Incidencias",
       "description": "Alta, listado y detalle de incidencias.",
       "item": [

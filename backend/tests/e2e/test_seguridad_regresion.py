@@ -93,9 +93,9 @@ async def test_gestor_no_crea_rol_con_mas_alcance(api):
 async def test_gestor_no_modifica_usuarios_con_mas_acceso(api):
     g = await _gestor_area(api)
     r = await api.c.patch(f"/usuarios/{api.oid('admin')}", json={"activo": False}, headers=_h(g))
-    assert r.status_code == 403
+    assert r.status_code == 404
     r = await api.c.patch(f"/usuarios/{api.oid('directivo')}", json={"nombre": "Cambiado"}, headers=_h(g))
-    assert r.status_code == 403
+    assert r.status_code == 404
     assert (await api.c.get("/auth/me", headers=api.h("admin"))).status_code == 200
 
 
@@ -248,8 +248,8 @@ async def test_gestor_delegado_solo_ve_y_edita_su_ambito(api):
     # reportantes de todo el campus y pares del mismo rol quedan fuera de su gestión
     assert (
         await api.c.patch(f"/usuarios/{api.oid('reportante_a')}", json={"activo": False}, headers=_h(g))
-    ).status_code == 403
+    ).status_code == 404
     par = await api.usuario_temporal(rol="gestor_area", areas=["infraestructura"])
     assert (
         await api.c.patch(f"/usuarios/{par['_id']}", json={"nombre": "Par cambiado"}, headers=_h(g))
-    ).status_code == 403
+    ).status_code == 404
