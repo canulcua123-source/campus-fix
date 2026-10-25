@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core import db
 from app.core.config import settings
 from app.core.limiter import limite_general, limiter
-from app.routers import analitica, auth, categorias, ia, incidencias, roles, usuarios
+from app.routers import analitica, auth, categorias, config, ia, incidencias, roles, usuarios
 
 
 @asynccontextmanager
@@ -109,5 +109,5 @@ async def health():
     return {"status": "ok"}
 
 
-for r in (auth, incidencias, ia, roles, categorias, analitica, usuarios):
+for r in (auth, incidencias, ia, roles, categorias, analitica, usuarios, config):
     app.include_router(r.router)

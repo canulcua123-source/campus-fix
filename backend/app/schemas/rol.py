@@ -15,6 +15,7 @@ CATALOGO_PERMISOS = [
     "roles:gestionar",
     "categorias:gestionar",
     "ia:usar",
+    "configuracion:gestionar",
 ]
 
 Permiso = Literal[
@@ -30,6 +31,7 @@ Permiso = Literal[
     "roles:gestionar",
     "categorias:gestionar",
     "ia:usar",
+    "configuracion:gestionar",
 ]
 assert list(get_args(Permiso)) == CATALOGO_PERMISOS
 

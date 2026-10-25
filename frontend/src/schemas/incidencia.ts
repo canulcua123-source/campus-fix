@@ -12,6 +12,8 @@ export const TIPOS_DANO = ['filtracion', 'electrico', 'climatizacion', 'cerrajer
 export const RIESGOS = ['bajo', 'medio', 'alto'] as const
 export const PLATAFORMAS = ['lms', 'portal_calificaciones', 'correo'] as const
 export const TIPOS_MIME_EVIDENCIA = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
+export const ACCIONES_IA = ['autollenar', 'sugerir', 'preguntar', 'rechazar'] as const
+export const CAMPOS_ACEPTADOS_IA = ['titulo', 'descripcion', 'prioridad', 'tags', 'detalle_especifico'] as const
 
 export type Categoria = (typeof CATEGORIAS)[number]
 export type Estado = (typeof ESTADOS)[number]
@@ -99,6 +101,14 @@ export const ubicacionSchema = z.object({
   aula: z.string('Indica el aula').min(1, 'Indica el aula').max(60, 'Máximo 60 caracteres'),
 })
 
+export const iaSugerenciaSchema = z.strictObject({
+  modelo: z.string().min(1).max(100).regex(/^[A-Za-z0-9._:-]+$/),
+  prompt_version: z.string().min(1).max(30).regex(/^[A-Za-z0-9._-]+$/),
+  confianza: z.number().min(0).max(1),
+  accion: z.enum(ACCIONES_IA),
+  campos_aceptados: z.array(z.enum(CAMPOS_ACEPTADOS_IA)).max(5).refine((v) => new Set(v).size === v.length, 'No repitas campos aceptados'),
+})
+
 /** IncidenciaIn (POST /incidencias). */
 export const incidenciaSchema = z.object({
   titulo: z.string('Requerido').min(5, 'Mínimo 5 caracteres').max(120, 'Máximo 120 caracteres'),
@@ -107,6 +117,7 @@ export const incidenciaSchema = z.object({
   ubicacion: ubicacionSchema,
   detalle_especifico: detalleEspecificoSchema,
   tags: z.array(tagSchema).max(15, 'Máximo 15 tags').transform(ordenarUnicos),
+  ia_sugerencia: iaSugerenciaSchema.optional(),
 })
 export type IncidenciaForm = z.infer<typeof incidenciaSchema>
 export type IncidenciaIn = IncidenciaForm
@@ -229,6 +240,7 @@ export const incidenciaDetalleSchema = incidenciaListaItemSchema.omit({ score: t
   fecha_actualizacion: fecha.optional(),
   fecha_resolucion: fecha.optional(),
   schema_version: z.number().optional(),
+  ia_sugerencia: iaSugerenciaSchema.optional(),
 })
 export type IncidenciaDetalle = z.infer<typeof incidenciaDetalleSchema>
 

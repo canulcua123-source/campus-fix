@@ -62,12 +62,19 @@ async def entorno():
 
     from app.core import db as core_db
     from app.main import app
-    from scripts.init_db import asegurar_coleccion, crear_indices, esquema_incidencias, sembrar_base
+    from scripts.init_db import (
+        asegurar_coleccion,
+        crear_indices,
+        esquema_configuracion_ia,
+        esquema_incidencias,
+        sembrar_base,
+    )
 
     cliente = AsyncMongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=3000)
     await cliente.drop_database(settings.mongodb_db)
     tdb = cliente[settings.mongodb_db]
     await asegurar_coleccion(tdb, "incidencias_campus", esquema_incidencias())
+    await asegurar_coleccion(tdb, "configuracion_ia", esquema_configuracion_ia())
     for nombre in ("usuarios", "roles", "categorias"):
         await asegurar_coleccion(tdb, nombre)
     await crear_indices(tdb)

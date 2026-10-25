@@ -4,10 +4,29 @@ import re
 import unicodedata
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator
+from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator, model_validator
 
 Prioridad = Literal["baja", "media", "alta", "critica"]
 Estado = Literal["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
+AccionIA = Literal["autollenar", "sugerir", "preguntar", "rechazar"]
+CampoAceptadoIA = Literal["titulo", "descripcion", "prioridad", "tags", "detalle_especifico"]
+
+
+class IASugerencia(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    modelo: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._:-]+$")
+    prompt_version: str = Field(min_length=1, max_length=30, pattern=r"^[A-Za-z0-9._-]+$")
+    confianza: float = Field(ge=0, le=1)
+    accion: AccionIA
+    campos_aceptados: list[CampoAceptadoIA] = Field(max_length=5)
+
+    @field_validator("campos_aceptados")
+    @classmethod
+    def _campos_unicos(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("campos_aceptados contiene duplicados")
+        return v
 
 
 class DetalleComputo(BaseModel):
@@ -61,11 +80,18 @@ class IncidenciaIn(BaseModel):
     ubicacion: Ubicacion
     detalle_especifico: DetalleEspecifico
     tags: list[str] = Field(default_factory=list, max_length=15)
+    ia_sugerencia: IASugerencia | None = None
 
     @field_validator("tags")
     @classmethod
     def _tags(cls, v: list[str]) -> list[str]:
         return sorted({normalizar_tag(t) for t in v})
+
+    @model_validator(mode="after")
+    def _ia_sin_null(self):
+        if "ia_sugerencia" in self.model_fields_set and self.ia_sugerencia is None:
+            raise ValueError("ia_sugerencia no admite null")
+        return self
 
 
 class SeguimientoIn(BaseModel):

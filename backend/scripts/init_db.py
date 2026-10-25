@@ -84,6 +84,33 @@ def esquema_incidencias() -> dict:
                 "fecha_creacion": {"bsonType": "date"},
                 "fecha_actualizacion": {"bsonType": "date"},
                 "fecha_resolucion": {"bsonType": "date"},
+                "ia_sugerencia": {
+                    "bsonType": "object",
+                    "required": ["modelo", "prompt_version", "confianza", "accion", "campos_aceptados"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "modelo": {
+                            "bsonType": "string",
+                            "minLength": 1,
+                            "maxLength": 100,
+                            "pattern": r"^[A-Za-z0-9._:-]+$",
+                        },
+                        "prompt_version": {
+                            "bsonType": "string",
+                            "minLength": 1,
+                            "maxLength": 30,
+                            "pattern": r"^[A-Za-z0-9._-]+$",
+                        },
+                        "confianza": {"bsonType": ["int", "long", "double"], "minimum": 0, "maximum": 1},
+                        "accion": {"enum": ["autollenar", "sugerir", "preguntar", "rechazar"]},
+                        "campos_aceptados": {
+                            "bsonType": "array",
+                            "maxItems": 5,
+                            "uniqueItems": True,
+                            "items": {"enum": ["titulo", "descripcion", "prioridad", "tags", "detalle_especifico"]},
+                        },
+                    },
+                },
                 "tags": {"bsonType": "array", "maxItems": 15, "uniqueItems": True, "items": {"bsonType": "string"}},
                 "historial_seguimiento": {"bsonType": "array"},
                 "evidencias_adjuntas": {
@@ -149,6 +176,31 @@ def esquema_incidencias() -> dict:
         },
         # La categoría del ticket debe coincidir con la del detalle polimórfico
         "$expr": {"$eq": ["$categoria", "$detalle_especifico.categoria"]},
+    }
+
+
+def esquema_configuracion_ia() -> dict:
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "_id",
+                "schema_version",
+                "habilitada",
+                "limite_diario_usuario",
+                "limite_diario_global",
+                "fecha_actualizacion",
+            ],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"enum": ["ia"]},
+                "schema_version": {"bsonType": "int", "minimum": 1},
+                "habilitada": {"bsonType": "bool"},
+                "limite_diario_usuario": {"bsonType": "int", "minimum": 1, "maximum": 1000},
+                "limite_diario_global": {"bsonType": "int", "minimum": 1, "maximum": 100000},
+                "fecha_actualizacion": {"bsonType": "date"},
+            },
+        }
     }
 
 
@@ -266,6 +318,22 @@ async def sembrar_base(db) -> dict:
         await db.roles.update_one({"clave": rol["clave"]}, {"$setOnInsert": rol}, upsert=True)
     for cat in categorias_sistema():
         await db.categorias.update_one({"clave": cat["clave"]}, {"$setOnInsert": cat}, upsert=True)
+    await db.roles.update_one(
+        {"clave": "admin", "sistema": True}, {"$addToSet": {"permisos": "configuracion:gestionar"}}
+    )
+    await db.configuracion_ia.update_one(
+        {"_id": "ia"},
+        {
+            "$setOnInsert": {
+                "schema_version": 1,
+                "habilitada": settings.ia_habilitada,
+                "limite_diario_usuario": settings.ia_limite_diario,
+                "limite_diario_global": settings.ia_limite_global_diario,
+                "fecha_actualizacion": datetime.now(timezone.utc),
+            }
+        },
+        upsert=True,
+    )
     admin = await db.usuarios.find_one({"correo": "admin@utm.local"})
     if admin is None:
         local = "localhost" in (settings.mongodb_admin_uri or settings.mongodb_uri)
@@ -441,6 +509,7 @@ async def main() -> None:
     db = cliente[settings.mongodb_db]
     try:
         await asegurar_coleccion(db, "incidencias_campus", esquema_incidencias())
+        await asegurar_coleccion(db, "configuracion_ia", esquema_configuracion_ia())
         for nombre in ("usuarios", "roles", "categorias"):
             await asegurar_coleccion(db, nombre)
         await crear_indices(db)

@@ -7,7 +7,7 @@ import { api } from '../api/client'
 const PERMISOS = [
   'incidencias:crear', 'incidencias:ver', 'incidencias:asignar', 'incidencias:buscar', 'evidencias:subir',
   'seguimiento:registrar', 'tags:gestionar', 'analitica:ver', 'usuarios:gestionar', 'roles:gestionar',
-  'categorias:gestionar', 'ia:usar',
+  'categorias:gestionar', 'ia:usar', 'configuracion:gestionar',
 ] as const
 
 const esquema = z.object({

@@ -188,6 +188,12 @@ const ia = useAnalizarImagen(); ia.mutate({ imagen: comprimida, contexto })
 
 Respuestas: 200 `AnalisisImagen`; 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global o error del modelo. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
 
+Al crear una incidencia, `ia_sugerencia` es opcional y solo se manda si el usuario aceptó campos sugeridos.
+Su forma es `{modelo, prompt_version, confianza, accion, campos_aceptados}` y está reflejada por
+`iaSugerenciaSchema`. Consultar `/ia/analizar-imagen` nunca persiste esa estructura por sí mismo. La
+configuración administrable vive en `GET/PATCH /config/ia`; ambas rutas requieren
+`configuracion:gestionar`, por lo que no se consumen desde la pantalla de reporte.
+
 ## 8. CORS, service worker y fechas
 
 **FB-17 · CORS en dos lugares.** API: `CORS_ORIGINS` (lista separada por comas, sin `/` final) con el origen exacto de la PWA (`http://localhost:5173`, `https://<dominio-pwa>`); nunca `*` (la API usa `allow_credentials=False`: la sesión viaja en `Authorization`, no en cookies). Bucket: reglas CORS con los mismos orígenes, permitiendo `PUT` (subida) y `GET` (lectura) y el encabezado `Content-Type`. Si agregas un dominio de despliegue, actualiza **ambos** en el mismo cambio.

@@ -199,7 +199,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Crea una incidencia con detalle de infraestructura.",
+            "description": "Crea una incidencia con detalle de infraestructura y persiste ia_sugerencia solo porque el cliente la envía explícitamente.",
             "url": {
               "raw": "{{base_url}}/incidencias",
               "host": [
@@ -211,7 +211,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"titulo\": \"Filtración de agua en el techo\",\n  \"descripcion\": \"Hay una filtración constante de agua en el techo del salón durante lluvias.\",\n  \"prioridad\": \"media\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio B\",\n    \"piso\": 1,\n    \"aula\": \"Aula 105\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"infraestructura\",\n    \"tipo_dano\": \"filtracion\",\n    \"riesgo_seguridad\": \"medio\",\n    \"requiere_insumos\": true,\n    \"insumos\": [\n      \"sellador\"\n    ],\n    \"requiere_contratista\": false\n  },\n  \"tags\": [\n    \"filtracion\"\n  ]\n}",
+              "raw": "{\n  \"titulo\": \"Filtración de agua en el techo\",\n  \"descripcion\": \"Hay una filtración constante de agua en el techo del salón durante lluvias.\",\n  \"prioridad\": \"media\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio B\",\n    \"piso\": 1,\n    \"aula\": \"Aula 105\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"infraestructura\",\n    \"tipo_dano\": \"filtracion\",\n    \"riesgo_seguridad\": \"medio\",\n    \"requiere_insumos\": true,\n    \"insumos\": [\n      \"sellador\"\n    ],\n    \"requiere_contratista\": false\n  },\n  \"tags\": [\n    \"filtracion\"\n  ],\n  \"ia_sugerencia\": {\n    \"modelo\": \"claude-opus-5-5\",\n    \"prompt_version\": \"v1\",\n    \"confianza\": 0.91,\n    \"accion\": \"autollenar\",\n    \"campos_aceptados\": [\"titulo\", \"descripcion\", \"tags\"]\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -987,6 +987,127 @@
                 }
               ]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Configuración",
+      "description": "Configuración administrable de IA. MongoDB es la fuente de verdad; Redis conserva una copia por máximo 60 segundos.",
+      "item": [
+        {
+          "name": "Consultar configuración de IA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Límites y estado configurables', function () { const j = pm.response.json(); pm.expect(j.habilitada).to.be.a('boolean'); pm.expect(j.limite_diario_usuario).to.be.a('number'); pm.expect(j.limite_diario_global).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              }
+            ],
+            "description": "Solo usuarios con configuracion:gestionar.",
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": ["{{base_url}}"],
+              "path": ["config", "ia"]
+            }
+          }
+        },
+        {
+          "name": "Modificar configuración de IA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Actualización parcial', function () { const j = pm.response.json(); pm.expect(j.limite_diario_usuario).to.eql(20); pm.expect(j.limite_diario_global).to.eql(300); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Actualización parcial. Los valores iniciales son 20 por usuario y 300 globales.",
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": ["{{base_url}}"],
+              "path": ["config", "ia"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habilitada\": true,\n  \"limite_diario_usuario\": 20,\n  \"limite_diario_global\": 300\n}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Configuración con límite inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Los límites deben ser enteros positivos dentro de los rangos documentados.",
+            "url": {"raw": "{{base_url}}/config/ia", "host": ["{{base_url}}"], "path": ["config", "ia"]},
+            "body": {"mode": "raw", "raw": "{\n  \"limite_diario_usuario\": 0\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Configuración sin permiso de administrador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_directivo}}", "description": "Token JWT sin configuracion:gestionar"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Un usuario autenticado sin el permiso recibe 403.",
+            "url": {"raw": "{{base_url}}/config/ia", "host": ["{{base_url}}"], "path": ["config", "ia"]},
+            "body": {"mode": "raw", "raw": "{\n  \"habilitada\": false\n}", "options": {"raw": {"language": "json"}}}
           }
         }
       ]

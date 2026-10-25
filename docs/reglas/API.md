@@ -22,6 +22,7 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `POST /incidencias/{id}/evidencias` | `evidencias:subir` | **201** `{ok, evidencia_id}` |
 | `GET /incidencias/{id}/evidencias/{evidencia_id}/url` | `incidencias:ver` | 200 `{url, expira_en}` |
 | `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `AnalisisImagen` |
+| `GET /config/ia`, `PATCH /config/ia` | `configuracion:gestionar` | 200 `ConfigIA` |
 | `GET /analitica/edificios`, `GET /analitica/tags` | `analitica:ver` | 200 |
 | `GET /roles`, `POST /roles` | `roles:gestionar` | 200 / **201** |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200 |

@@ -133,6 +133,8 @@ async def crear_incidencia(
         "fecha_creacion": ahora,
         "fecha_actualizacion": ahora,
     }
+    if datos.ia_sugerencia is not None:
+        doc["ia_sugerencia"] = datos.ia_sugerencia.model_dump()
     for intento in range(3):
         doc["codigo"] = await generar_codigo(categoria, ahora)
         try:
