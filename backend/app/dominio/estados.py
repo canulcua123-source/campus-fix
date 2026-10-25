@@ -1,5 +1,7 @@
 """Reglas del ciclo de vida de una incidencia."""
 
+from datetime import datetime, timedelta
+
 TRANSICIONES: dict[str, list[str]] = {
     "abierta": ["en_proceso", "en_espera"],
     "en_proceso": ["en_espera", "resuelta"],
@@ -11,6 +13,10 @@ TRANSICIONES: dict[str, list[str]] = {
 
 class TransicionEstadoInvalida(ValueError):
     """Indica que un cambio de estado no pertenece al flujo permitido."""
+
+
+class AccionReportanteInvalida(ValueError):
+    """Indica que el reportante no puede confirmar o reabrir la incidencia."""
 
 
 def transicion_permitida(estado_actual: str, estado_nuevo: str) -> bool:
@@ -28,3 +34,24 @@ def origenes_permitidos(estado_nuevo: str) -> list[str]:
     """Obtiene los estados desde los que se puede alcanzar el destino."""
     return [estado for estado, destinos in TRANSICIONES.items() if estado_nuevo in destinos]
 
+
+def validar_confirmacion_reportante(estado_actual: str) -> None:
+    """La confirmación del reportante solamente cierra una incidencia resuelta."""
+    if estado_actual != "resuelta":
+        raise AccionReportanteInvalida("Solo se puede confirmar una incidencia resuelta")
+
+
+def validar_reapertura_reportante(
+    estado_actual: str,
+    fecha_resolucion: datetime | None,
+    ahora: datetime,
+) -> None:
+    """Valida la reapertura especial resuelta -> abierta dentro de siete días."""
+    if estado_actual != "resuelta":
+        raise AccionReportanteInvalida("Solo se puede reabrir una incidencia resuelta")
+    if fecha_resolucion is None or fecha_resolucion.tzinfo is None:
+        raise AccionReportanteInvalida("La incidencia no tiene una fecha de resolución válida")
+    if ahora.tzinfo is None:
+        raise ValueError("ahora debe incluir zona horaria")
+    if not ahora - timedelta(days=7) <= fecha_resolucion <= ahora:
+        raise AccionReportanteInvalida("El plazo de siete días para reabrir venció")

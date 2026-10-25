@@ -94,6 +94,107 @@ def esquema_roles() -> dict:
     }
 
 
+def _resumen_auditoria_usuario() -> dict:
+    return {
+        "bsonType": "object",
+        "required": ["rol", "activo"],
+        "additionalProperties": False,
+        "properties": {
+            "rol": {"bsonType": "string", "pattern": r"^[a-z_]{3,30}$"},
+            "activo": {"bsonType": "bool"},
+            "areas": {
+                "bsonType": "array",
+                "maxItems": 3,
+                "uniqueItems": True,
+                "items": {"bsonType": "string", "minLength": 1, "maxLength": 60},
+            },
+            "edificios": {
+                "bsonType": "array",
+                "maxItems": 20,
+                "uniqueItems": True,
+                "items": {"bsonType": "string", "minLength": 1, "maxLength": 60},
+            },
+            "tipo_reportante": {"enum": TIPOS_REPORTANTE},
+        },
+    }
+
+
+def _resumen_auditoria_rol() -> dict:
+    return {
+        "bsonType": "object",
+        "required": ["clave", "alcance", "cantidad_permisos"],
+        "additionalProperties": False,
+        "properties": {
+            "clave": {"bsonType": "string", "pattern": r"^[a-z_]{3,30}$"},
+            "alcance": {"enum": ALCANCES},
+            "cantidad_permisos": {"bsonType": "int", "minimum": 0, "maximum": len(CATALOGO_PERMISOS)},
+            "sistema": {"bsonType": "bool"},
+        },
+    }
+
+
+def _resumen_auditoria_categoria() -> dict:
+    return {
+        "bsonType": "object",
+        "required": ["clave", "version", "activa", "prefijo", "cantidad_campos"],
+        "additionalProperties": False,
+        "properties": {
+            "clave": {"bsonType": "string", "pattern": PATRON_CATEGORIA},
+            "version": {"bsonType": "int", "minimum": 1},
+            "activa": {"bsonType": "bool"},
+            "prefijo": {"bsonType": "string", "pattern": r"^[A-Z]{3}$"},
+            "cantidad_campos": {"bsonType": "int", "minimum": 1, "maximum": 30},
+            "sistema": {"bsonType": "bool"},
+        },
+    }
+
+
+def esquema_auditoria() -> dict:
+    """Validador estricto de eventos administrativos resumidos."""
+    recursos = (
+        ("usuarios", _resumen_auditoria_usuario()),
+        ("roles", _resumen_auditoria_rol()),
+        ("categorias", _resumen_auditoria_categoria()),
+    )
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["actor_id", "accion", "recurso", "recurso_id", "despues", "fecha"],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"bsonType": "objectId"},
+                "actor_id": {"bsonType": "objectId"},
+                "accion": {"enum": ["crear", "editar"]},
+                "recurso": {"enum": ["usuarios", "roles", "categorias"]},
+                "recurso_id": {"bsonType": "string", "minLength": 1, "maxLength": 64},
+                "antes": {"bsonType": "object"},
+                "despues": {"bsonType": "object"},
+                "fecha": {"bsonType": "date"},
+            },
+            "allOf": [
+                {
+                    "oneOf": [
+                        {
+                            "properties": {
+                                "recurso": {"enum": [recurso]},
+                                "antes": resumen,
+                                "despues": resumen,
+                            }
+                        }
+                        for recurso, resumen in recursos
+                    ]
+                },
+                {
+                    "oneOf": [
+                        {"properties": {"accion": {"enum": ["crear"]}}},
+                        {"required": ["antes"], "properties": {"accion": {"enum": ["editar"]}}},
+                    ]
+                },
+            ],
+        }
+    }
+
+
 def _campo_categoria(tipo: str, propiedades: dict | None = None, requeridos: list[str] | None = None) -> dict:
     return {
         "bsonType": "object",
@@ -323,6 +424,21 @@ async def crear_indices(db) -> None:
     await db.usuarios.create_index("correo", unique=True)
     await db.roles.create_index("clave", unique=True)
     await db.categorias.create_index("clave", unique=True)
+    listar_colecciones = getattr(db, "list_collection_names", None)
+    if not callable(listar_colecciones):
+        # Algunos dobles y el exportador T-013 modelan solo las colecciones originales.
+        return
+    if "auditoria" not in await listar_colecciones():
+        return
+    auditoria = db.auditoria
+    await auditoria.create_index(
+        [("fecha", DESCENDING), ("_id", DESCENDING)],
+        name="auditoria_fecha_id",
+    )
+    await auditoria.create_index(
+        [("recurso", ASCENDING), ("fecha", DESCENDING), ("_id", DESCENDING)],
+        name="auditoria_recurso_fecha_id",
+    )
 
 
 def roles_sistema() -> list[dict]:
@@ -536,6 +652,7 @@ async def main() -> None:
             ("usuarios", esquema_usuarios()),
             ("roles", esquema_roles()),
             ("categorias", esquema_categorias()),
+            ("auditoria", esquema_auditoria()),
         ):
             await asegurar_coleccion(db, nombre, validador)
         await crear_indices(db)

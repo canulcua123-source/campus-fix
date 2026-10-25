@@ -22,15 +22,25 @@ from app.core.serial import a_json
 from app.core.storage import get_storage
 from app.dominio.categorias import CATEGORIAS_SISTEMA
 from app.dominio.detalle import DefinicionDetalleError
-from app.dominio.estados import origenes_permitidos
+from app.dominio.estados import (
+    AccionReportanteInvalida,
+    origenes_permitidos,
+    validar_confirmacion_reportante,
+    validar_reapertura_reportante,
+)
 from app.dominio.folio import fecha_local_campus, formatear_folio, prefijo_folio
 from app.dominio.puertos import StorageNoDisponibleError, StoragePort
 from app.schemas.incidencia import (
+    AccionEstadoOut,
+    ComentarioReportanteIn,
+    ConfirmacionIn,
     Estado,
     IncidenciaIn,
     Prioridad,
     SeguimientoIn,
     TagsIn,
+    TomarIncidenciaIn,
+    TomarIncidenciaOut,
 )
 
 router = APIRouter(prefix="/incidencias", tags=["incidencias"])
@@ -256,6 +266,205 @@ async def buscar(
 @router.get("/{incidencia_id}")
 async def detalle(incidencia_id: str, usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))]):
     return a_json(await _en_alcance(incidencia_id, usuario))
+
+
+def _entrada_historial(ahora: datetime, usuario: dict, estado: str, comentario: str) -> dict[str, Any]:
+    return {
+        "fecha": ahora,
+        "usuario_id": usuario["_id"],
+        "estado_nuevo": estado,
+        "comentario": comentario,
+        "horas": 0,
+    }
+
+
+def _push_historial(entrada: dict[str, Any]) -> dict[str, Any]:
+    return {"$each": [entrada], "$slice": -MAX_HISTORIAL}
+
+
+async def _diagnosticar_accion_reportante(
+    incidencia_id: str,
+    usuario: dict,
+    accion: Literal["confirmar", "reabrir", "comentar"],
+    ahora: datetime,
+) -> None:
+    actual = await _en_alcance(
+        incidencia_id,
+        usuario,
+        {"estado": 1, "fecha_resolucion": 1, "reportante.usuario_id": 1},
+    )
+    if actual.get("reportante", {}).get("usuario_id") != usuario["_id"]:
+        raise HTTPException(403, "Solo el reportante propietario puede realizar esta acción")
+    try:
+        if accion == "confirmar":
+            validar_confirmacion_reportante(actual["estado"])
+        elif accion == "reabrir":
+            validar_reapertura_reportante(actual["estado"], actual.get("fecha_resolucion"), ahora)
+        elif actual["estado"] != "en_espera":
+            raise AccionReportanteInvalida("Solo se puede comentar una incidencia en espera")
+    except AccionReportanteInvalida as exc:
+        raise HTTPException(409, str(exc)) from exc
+    raise HTTPException(409, "La incidencia cambió; intenta de nuevo")
+
+
+@router.post(
+    "/{incidencia_id}/confirmacion",
+    response_model=AccionEstadoOut,
+    summary="Confirmar o reabrir una incidencia resuelta",
+    description=(
+        "El reportante propietario confirma la resolución para cerrar la incidencia o solicita "
+        "su reapertura dentro de los siete días siguientes. La validación de estado, propiedad, "
+        "alcance y plazo forma parte de una actualización atómica."
+    ),
+    responses={
+        400: {"description": "Identificador, acción o comentario inválido"},
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso o el usuario no es el reportante propietario"},
+        404: {"description": "Incidencia inexistente o fuera de alcance"},
+        409: {"description": "Estado incompatible, plazo vencido o conflicto concurrente"},
+    },
+)
+@limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
+async def confirmar_o_reabrir(
+    request: Request,
+    incidencia_id: str,
+    datos: ConfirmacionIn,
+    usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))],
+):
+    ahora = datetime.now(timezone.utc)
+    oid = _oid(incidencia_id)
+    propietario = {"reportante.usuario_id": usuario["_id"]}
+    condiciones: list[dict[str, Any]] = [
+        {"_id": oid, "estado": "resuelta"},
+        filtro_alcance(usuario),
+        propietario,
+    ]
+    if datos.accion == "confirmar":
+        estado_resultante = "cerrada"
+        comentario = datos.comentario or "Resolución confirmada por el reportante"
+        update: dict[str, Any] = {
+            "$set": {"estado": estado_resultante, "fecha_actualizacion": ahora},
+            "$push": {"historial_seguimiento": _push_historial(
+                _entrada_historial(ahora, usuario, estado_resultante, comentario)
+            )},
+        }
+    else:
+        estado_resultante = "abierta"
+        comentario = datos.comentario or "Reapertura solicitada por el reportante"
+        condiciones.append({
+            "fecha_resolucion": {
+                "$gte": ahora - timedelta(days=7),
+                "$lte": ahora,
+            }
+        })
+        update = {
+            "$set": {"estado": estado_resultante, "fecha_actualizacion": ahora},
+            "$unset": {"fecha_resolucion": ""},
+            "$push": {"historial_seguimiento": _push_historial(
+                _entrada_historial(ahora, usuario, estado_resultante, comentario)
+            )},
+        }
+    res = await get_db().incidencias_campus.update_one({"$and": condiciones}, update)
+    if res.matched_count == 0:
+        await _diagnosticar_accion_reportante(incidencia_id, usuario, datos.accion, ahora)
+    return {"ok": True, "estado": estado_resultante}
+
+
+@router.post(
+    "/{incidencia_id}/comentarios",
+    response_model=AccionEstadoOut,
+    summary="Agregar informacion del reportante durante una espera",
+    description=(
+        "El reportante propietario agrega información únicamente mientras la incidencia está "
+        "en espera. Solo se actualizan la fecha y el historial, sin cambiar estado ni horas."
+    ),
+    responses={
+        400: {"description": "Identificador o comentario inválido"},
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso o el usuario no es el reportante propietario"},
+        404: {"description": "Incidencia inexistente o fuera de alcance"},
+        409: {"description": "La incidencia no esta en espera o cambio concurrentemente"},
+    },
+)
+@limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
+async def comentar_en_espera(
+    request: Request,
+    incidencia_id: str,
+    datos: ComentarioReportanteIn,
+    usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))],
+):
+    ahora = datetime.now(timezone.utc)
+    res = await get_db().incidencias_campus.update_one(
+        {"$and": [
+            {"_id": _oid(incidencia_id), "estado": "en_espera"},
+            filtro_alcance(usuario),
+            {"reportante.usuario_id": usuario["_id"]},
+        ]},
+        {
+            "$set": {"fecha_actualizacion": ahora},
+            "$push": {"historial_seguimiento": _push_historial(
+                _entrada_historial(ahora, usuario, "en_espera", datos.comentario)
+            )},
+        },
+    )
+    if res.matched_count == 0:
+        await _diagnosticar_accion_reportante(incidencia_id, usuario, "comentar", ahora)
+    return {"ok": True, "estado": "en_espera"}
+
+
+@router.post(
+    "/{incidencia_id}/tomar",
+    response_model=TomarIncidenciaOut,
+    summary="Autoasignarse una incidencia disponible",
+    description=(
+        "Un técnico toma una incidencia de su área que aún no tiene técnico. Solo son elegibles "
+        "los estados abierta, en_proceso y en_espera; la asignación y el historial se guardan "
+        "atómicamente sin cambiar el estado."
+    ),
+    responses={
+        400: {"description": "Identificador inválido"},
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso o el actor no es un técnico elegible"},
+        404: {"description": "Incidencia inexistente o fuera del área autorizada"},
+        409: {"description": "Incidencia ya tomada, terminal o conflicto concurrente"},
+    },
+)
+@limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
+async def tomar_incidencia(
+    request: Request,
+    incidencia_id: str,
+    usuario: Annotated[dict, Depends(require_permiso("seguimiento:registrar"))],
+    datos: TomarIncidenciaIn | None = None,
+):
+    if usuario.get("rol") != "tecnico":
+        raise HTTPException(403, "Solo un técnico puede tomar incidencias")
+    ahora = datetime.now(timezone.utc)
+    estados_elegibles = ["abierta", "en_proceso", "en_espera"]
+    tecnico = {"usuario_id": usuario["_id"], "nombre": usuario["nombre"]}
+    oid = _oid(incidencia_id)
+    actual = await _en_alcance(incidencia_id, usuario, {"estado": 1})
+    estado = actual["estado"]
+    res = await get_db().incidencias_campus.update_one(
+        {"$and": [
+            {"_id": oid, "estado": estado, "tecnico_asignado": {"$exists": False}},
+            {"estado": {"$in": estados_elegibles}},
+            filtro_alcance(usuario),
+        ]},
+        {
+            "$set": {"tecnico_asignado": tecnico, "fecha_actualizacion": ahora},
+            "$push": {"historial_seguimiento": _push_historial(
+                _entrada_historial(ahora, usuario, estado, f"Incidencia tomada por {usuario['nombre']}")
+            )},
+        },
+    )
+    if res.matched_count == 0:
+        await _en_alcance(incidencia_id, usuario, {"_id": 1})
+        raise HTTPException(409, "La incidencia no está disponible para autoasignación")
+    return {
+        "ok": True,
+        "estado": estado,
+        "tecnico_asignado": {"usuario_id": str(usuario["_id"]), "nombre": usuario["nombre"]},
+    }
 
 
 @router.patch("/{incidencia_id}/seguimiento")

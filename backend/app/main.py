@@ -8,7 +8,7 @@ from app.core import db
 from app.core.config import settings
 from app.core.errores import registrar_manejadores_errores, respuesta_error
 from app.core.limiter import limite_general, limiter
-from app.routers import analitica, auth, categorias, ia, incidencias, roles, usuarios
+from app.routers import analitica, auditoria, auth, categorias, ia, incidencias, roles, usuarios
 
 
 @asynccontextmanager
@@ -82,5 +82,5 @@ async def health():
     return {"status": "ok"}
 
 
-for r in (auth, incidencias, ia, roles, categorias, analitica, usuarios):
+for r in (auth, incidencias, ia, roles, categorias, analitica, usuarios, auditoria):
     app.include_router(r.router)

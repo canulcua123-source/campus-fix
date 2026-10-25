@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
+from app.core.auditoria import registrar_auditoria
 from app.core.config import settings
 from app.core.cache_categorias import invalidar_categoria
 from app.core.db import get_db
@@ -49,7 +50,7 @@ async def _validar_prefijo_disponible(prefijo: str, excepto: str | None = None) 
 async def crear_categoria(
     request: Request,
     datos: CategoriaIn,
-    _: Annotated[dict, Depends(require_permiso("categorias:gestionar"))],
+    usuario: Annotated[dict, Depends(require_permiso("categorias:gestionar"))],
 ):
     await _validar_prefijo_disponible(datos.prefijo)
     ahora = datetime.now(timezone.utc)
@@ -67,6 +68,13 @@ async def crear_categoria(
         raise HTTPException(409, "Ya existe una categoría con esa clave") from exc
     doc["_id"] = resultado.inserted_id
     await invalidar_categoria(datos.clave, 1)
+    await registrar_auditoria(
+        actor=usuario,
+        accion="crear",
+        recurso="categorias",
+        recurso_id=datos.clave,
+        despues=doc,
+    )
     return a_json(doc)
 
 
@@ -92,7 +100,7 @@ async def editar_categoria(
     request: Request,
     clave: str,
     datos: CategoriaPatch,
-    _: Annotated[dict, Depends(require_permiso("categorias:gestionar"))],
+    usuario: Annotated[dict, Depends(require_permiso("categorias:gestionar"))],
 ):
     try:
         clave_normalizada = normalizar_clave_categoria(clave)
@@ -148,4 +156,12 @@ async def editar_categoria(
             raise HTTPException(404, "Categoría no encontrada")
         raise HTTPException(409, "La categoría cambió; intenta de nuevo")
     await invalidar_categoria(clave_normalizada, version_actual, actualizado["version"])
+    await registrar_auditoria(
+        actor=usuario,
+        accion="editar",
+        recurso="categorias",
+        recurso_id=clave_normalizada,
+        antes=actual,
+        despues=actualizado,
+    )
     return a_json(actualizado)

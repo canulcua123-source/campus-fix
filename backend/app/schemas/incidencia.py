@@ -105,6 +105,43 @@ class SeguimientoIn(BaseModel):
     horas: float = Field(ge=0, le=24, multiple_of=0.25, allow_inf_nan=False)
 
 
+class ConfirmacionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    accion: Literal["confirmar", "reabrir"]
+    comentario: str | None = Field(default=None, min_length=5, max_length=1000)
+
+
+class ComentarioReportanteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    comentario: str = Field(min_length=5, max_length=1000)
+
+
+class AccionEstadoOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    estado: Estado
+
+
+class TecnicoAsignadoOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    usuario_id: str
+    nombre: str
+
+
+class TomarIncidenciaIn(BaseModel):
+    """Cuerpo opcional vacío: impide elegir a otro técnico desde el cliente."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class TomarIncidenciaOut(AccionEstadoOut):
+    tecnico_asignado: TecnicoAsignadoOut
+
+
 class TagsIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

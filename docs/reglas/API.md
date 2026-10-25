@@ -242,7 +242,44 @@ doc = await col.find_one({"_id": oid}); if doc["estado"] == "abierta": await col
 
 **API-25 · Entradas siempre con schema Pydantic**, `extra="forbid"` y límites en todo campo (ver CREAR-API.md). Nunca `dict` o `Request.json()` crudos: un body crudo permite inyectar operadores de MongoDB (`{"$ne": ""}`) — RNF-13.
 
-## 8. Sesión con refresh token (T-014)
+## 8. Acciones de fase 2 sobre incidencias (T-021)
+
+`POST /incidencias/{id}/confirmacion` permite exclusivamente al reportante propietario actuar sobre una incidencia
+`resuelta`. La acción `confirmar` cambia el estado a `cerrada` y conserva `fecha_resolucion`; la acción `reabrir`
+realiza la transición especial `resuelta -> abierta` solo si `fecha_resolucion` se encuentra entre el instante UTC
+actual menos siete días y el instante actual, ambos límites incluidos. La reapertura elimina `fecha_resolucion` con
+`$unset`. Esta excepción no forma parte de la tabla general de transiciones: la reapertura técnica
+`resuelta -> en_proceso` permanece sin cambios.
+
+`POST /incidencias/{id}/comentarios` permite al reportante propietario agregar información solo cuando el estado es
+`en_espera`. No cambia estado, asignación ni `horas_invertidas`. `POST /incidencias/{id}/tomar` no recibe identidad
+de técnico: usa al técnico autenticado y solo admite incidencias sin asignar de su área en `abierta`, `en_proceso` o
+`en_espera`; `resuelta` y `cerrada` no son elegibles.
+
+Las tres rutas incluyen alcance, propiedad cuando aplica, estado esperado y condiciones de concurrencia en el filtro
+atómico de MongoDB. Cada escritura agrega exactamente una entrada de `historial_seguimiento` con horas cero y conserva
+el límite de 200 mediante `$slice`. Un estado incompatible, plazo vencido, incidencia ya tomada o carrera perdida
+responde 409. La falta del permiso o la inelegibilidad del actor responde 403. Un recurso inexistente o fuera de
+alcance responde siempre 404 para no revelar su existencia; por ello el caso históricamente llamado
+`test_tomar_otra_area_403` comprueba 404 conforme a la política BOLA vigente.
+
+## 9. Bitácora administrativa (T-022)
+
+`GET /auditoria` permite exclusivamente al rol `admin` consultar los cambios administrativos ya aplicados sobre
+usuarios, roles y categorías. Requiere autenticación y el permiso vigente `usuarios:gestionar`; además comprueba el
+rol real para impedir que un gestor delegado consulte la bitácora. No se agregó un permiso ni un rol nuevo.
+
+La consulta acepta `pagina` (desde 1), `limite` (1 a 100, por defecto 20) y el filtro opcional `recurso`, limitado a
+`usuarios`, `roles` o `categorias`. Responde `{pagina, limite, total, resultados}` y ordena de forma estable por
+`fecha` descendente y `_id` descendente. La API construye el filtro desde valores tipados, aplica una proyección
+explícita y serializa fechas e identificadores con `a_json()`; no admite filtros MongoDB arbitrarios.
+
+Los eventos contienen solo resúmenes de campos permitidos. Nunca incluyen contraseñas, hashes, tokens, cookies,
+cabeceras, cuerpos HTTP completos ni datos personales innecesarios. Las creaciones omiten `antes`; las ediciones
+incluyen resúmenes `antes` y `despues`. Si la persistencia de la auditoría falla, se emite una advertencia segura con
+el recurso, la acción y la clase del error, pero la operación administrativa principal conserva su respuesta exitosa.
+
+## 10. Sesión con refresh token (T-014)
 
 `POST /auth/login` conserva el access token en el JSON y emite un JWT de refresh independiente exclusivamente en la cookie `refresh_token`. La cookie es `HttpOnly`, usa `Path=/auth`, `SameSite=Lax` por defecto y `Secure=true` en producción. Su expiración coincide con `JWT_REFRESH_DAYS`. El entorno e2e local declara `REFRESH_COOKIE_SECURE=false` porque usa HTTP; esa configuración no se debe reutilizar en producción.
 

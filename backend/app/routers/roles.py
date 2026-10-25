@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pymongo.errors import DuplicateKeyError
 
+from app.core.auditoria import registrar_auditoria
 from app.core.db import get_db
 from app.core.security import puede_otorgar, require_permiso
 from app.core.serial import a_json
@@ -28,4 +29,11 @@ async def crear_rol(datos: RolIn, usuario: Annotated[dict, Depends(require_permi
     except DuplicateKeyError:
         raise HTTPException(409, "Ya existe un rol con esa clave")
     doc["_id"] = res.inserted_id
+    await registrar_auditoria(
+        actor=usuario,
+        accion="crear",
+        recurso="roles",
+        recurso_id=datos.clave,
+        despues=doc,
+    )
     return a_json(doc)

@@ -251,6 +251,24 @@ T-020 evaluó el índice `{"detalle_especifico.$**": 1}` descrito como posibilid
 
 Los cambios de validador están preparados en `backend/scripts/init_db.py`, pero requieren respaldo, revisión y aprobación del DBA antes de ejecutar `collMod` en un entorno autorizado. No se aplican desde los routers. Como T-013 genera sus artefactos desde `init_db.py`, `entrega/script_maestro.js` deberá regenerarse posteriormente mediante el exportador aprobado; T-020 no modifica los archivos de `entrega/`.
 
+## 10. Bitácora administrativa (T-022)
+
+La colección `auditoria` conserva eventos inmutables con `actor_id` (ObjectId), `accion` (`crear` o `editar`),
+`recurso` (`usuarios`, `roles` o `categorias`), `recurso_id` (string), un resumen obligatorio `despues`, el resumen
+`antes` obligatorio solo para ediciones y `fecha` como BSON Date UTC. Su `$jsonSchema` usa
+`additionalProperties: false` tanto en el evento como en los resúmenes específicos de cada recurso; esto refuerza
+la lista positiva aplicada por `app/core/auditoria.py` y evita convertir la bitácora en una copia de documentos.
+
+`crear_indices()` define de forma idempotente `{fecha:-1, _id:-1}` para la consulta cronológica y
+`{recurso:1, fecha:-1, _id:-1}` para el filtro por recurso con el mismo orden estable. La definición de la colección,
+el validador y los índices está preparada en `scripts/init_db.py`; aplicarla a un entorno real requiere respaldo y
+aprobación del DBA según BD-19 y BD-20.
+
+El TTL opcional de 180 días fue evaluado y no se habilitó: eliminaría registros automáticamente y no existe una
+aprobación de retención del DBA. Si se aprueba posteriormente, debe acordarse primero la política de conservación,
+medirse el volumen, respaldarse la base y agregarse el índice mediante un cambio de esquema explícito. Esta decisión
+es independiente del TTL de incidencias descrito en BD-25 y BD-26.
+
 ---
 
 ## Checklist BASE DE DATOS

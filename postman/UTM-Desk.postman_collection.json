@@ -638,6 +638,106 @@
       ]
     },
     {
+      "name": "Acciones F2 (T-021)",
+      "description": "Confirmación/reapertura del reportante, comentarios en espera y autoasignación atómica. Preparar los ids indicados en cada solicitud.",
+      "item": [
+        {
+          "name": "Confirmar resolución",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Respuesta de cierre válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('cerrada'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_resuelta_id}} en estado resuelta y propiedad del reportante. Conserva fecha_resolucion.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_resuelta_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_resuelta_id}}", "confirmacion"]},
+            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"confirmar\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Reabrir incidencia dentro de siete días",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Respuesta de reapertura válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('abierta'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_reabrir_id}} resuelta hace no más de siete días. Elimina fecha_resolucion.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_reabrir_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_reabrir_id}}", "confirmacion"]},
+            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa después de la reparación\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Comentario del reportante en espera",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Conserva estado en_espera', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('en_espera'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_espera_id}} en estado en_espera; solo agrega historial y actualiza la fecha.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_espera_id}}/comentarios", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_espera_id}}", "comentarios"]},
+            "body": {"mode": "raw", "raw": "{\n  \"comentario\": \"El problema presenta ahora información adicional\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Tomar incidencia disponible",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Devuelve técnico asignado', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado', 'tecnico_asignado'); pm.expect(j.ok).to.eql(true); pm.expect(j.tecnico_asignado.usuario_id).to.be.a('string'); pm.expect(j.tecnico_asignado.nombre).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}", "description": "Token de un técnico del área"}],
+            "description": "Autoasigna atómicamente {{incidencia_disponible_id}} si está en el área, no es terminal y carece de técnico.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_disponible_id}}/tomar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_disponible_id}}", "tomar"]}
+          }
+        },
+        {
+          "name": "Reapertura fuera de plazo (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_resuelta_vencida_id}} con fecha_resolucion anterior a siete días; no debe escribir historial.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_resuelta_vencida_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_resuelta_vencida_id}}", "confirmacion"]},
+            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa fuera del plazo permitido\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Autoasignación duplicada (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}", "description": "Token de técnico"}],
+            "description": "Requiere {{incidencia_tomada_id}} ya asignada; el segundo intento no debe duplicar historial.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_tomada_id}}/tomar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_tomada_id}}", "tomar"]}
+          }
+        }
+      ]
+    },
+    {
       "name": "Asignación",
       "description": "Asignación de incidencias a técnicos.",
       "item": [
@@ -1797,6 +1897,44 @@
       ]
     },
     {
+      "name": "Auditoria administrativa",
+      "description": "Consulta paginada de T-022, exclusiva del administrador.",
+      "item": [
+        {
+          "name": "Listar auditoria por recurso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Pagina de auditoria segura', function () { const j = pm.response.json(); pm.expect(j.pagina).to.eql(1); pm.expect(j.limite).to.eql(20); pm.expect(j.total).to.be.a('number'); pm.expect(j.resultados).to.be.an('array'); pm.expect(pm.response.text()).to.not.include('password_hash'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"}
+            ],
+            "description": "Lista la primera pagina de eventos de usuarios en orden estable descendente.",
+            "url": {
+              "raw": "{{base_url}}/auditoria?pagina=1&limite=20&recurso=usuarios",
+              "host": ["{{base_url}}"],
+              "path": ["auditoria"],
+              "query": [
+                {"key": "pagina", "value": "1"},
+                {"key": "limite", "value": "20"},
+                {"key": "recurso", "value": "usuarios"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Pruebas negativas",
       "description": "Casos de error esperados: validación, autenticación, permisos, no encontrado y conflictos; todos verifican {error, detalle}.",
       "item": [
@@ -2179,6 +2317,30 @@
     },
     {
       "key": "correo_nuevo",
+      "value": ""
+    },
+    {
+      "key": "incidencia_resuelta_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_reabrir_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_espera_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_disponible_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_resuelta_vencida_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_tomada_id",
       "value": ""
     }
   ]

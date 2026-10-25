@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pymongo.errors import DuplicateKeyError
 
+from app.core.auditoria import registrar_auditoria
 from app.core.db import get_db
 from app.core.config import settings
 from app.core.security import hashear_password, permisos_del_usuario, puede_otorgar, require_permiso
@@ -107,6 +108,13 @@ async def crear(datos: UsuarioIn, usuario: Annotated[dict, Depends(require_permi
     except DuplicateKeyError:
         raise HTTPException(409, "Ya existe un usuario con ese correo")
     doc["_id"] = res.inserted_id
+    await registrar_auditoria(
+        actor=usuario,
+        accion="crear",
+        recurso="usuarios",
+        recurso_id=str(res.inserted_id),
+        despues=doc,
+    )
     return a_json(doc)
 
 
@@ -139,5 +147,15 @@ async def editar(
     update: dict[str, Any] = {"$set": sets}
     if unsets:
         update["$unset"] = unsets
-    await get_db().usuarios.update_one({"_id": oid}, update)
-    return a_json(await get_db().usuarios.find_one({"_id": oid}, PROYECCION))
+    resultado = await get_db().usuarios.update_one({"_id": oid}, update)
+    actualizado = await get_db().usuarios.find_one({"_id": oid}, PROYECCION)
+    if resultado.matched_count and actualizado is not None:
+        await registrar_auditoria(
+            actor=usuario,
+            accion="editar",
+            recurso="usuarios",
+            recurso_id=usuario_id,
+            antes=actual,
+            despues=actualizado,
+        )
+    return a_json(actualizado)
