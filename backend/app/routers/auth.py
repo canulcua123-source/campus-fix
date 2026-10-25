@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.core.db import get_db, get_redis
-from app.core.limiter import limiter
+from app.core.limiter import LIMITE_LOGIN, limiter
 from slowapi.util import get_remote_address
 from app.core.security import (
     HASH_FICTICIO,
@@ -27,7 +27,7 @@ class LoginIn(BaseModel):
 
 
 @router.post("/login")
-@limiter.limit("10/minute")
+@limiter.limit(LIMITE_LOGIN)
 async def login(request: Request, datos: LoginIn):
     correo = datos.correo.strip().lower()
     # Además del límite general por IP: intentos fallidos por (cuenta, IP) y por cuenta.

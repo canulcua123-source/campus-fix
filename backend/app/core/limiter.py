@@ -6,6 +6,8 @@ from starlette.requests import Request
 
 from app.core.config import settings
 
+LIMITE_LOGIN = "10/minute"
+
 
 def clave_usuario(request: Request) -> str:
     """Endpoints autenticados: cuenta por usuario (sub del JWT); sin token válido, por IP.

@@ -43,6 +43,13 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET debe tener al menos 32 caracteres (openssl rand -hex 32)")
         return v
 
+    @field_validator("jwt_access_minutes")
+    @classmethod
+    def _access_token_quince_minutos(cls, v: int) -> int:
+        if v != 15:
+            raise ValueError("JWT_ACCESS_MINUTES debe ser 15")
+        return v
+
     @field_validator("cors_origins")
     @classmethod
     def _sin_comodin(cls, v: str) -> str:

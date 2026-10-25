@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 import jwt
 from bson import ObjectId
@@ -12,9 +12,10 @@ from app.core.db import get_db
 
 _hasher = PasswordHash.recommended()  # argon2
 _bearer = HTTPBearer(auto_error=False)
-ALGORITMO = "HS256"
-EMISOR = "utm-desk"
-AUDIENCIA = "utm-desk-api"
+ALGORITMO: Final = "HS256"
+EMISOR: Final = "utm-desk"
+AUDIENCIA: Final = "utm-desk-api"
+CLAIMS_OBLIGATORIOS: Final = frozenset({"sub", "iss", "aud", "iat", "exp"})
 # Hash de una contraseña aleatoria: el login lo verifica cuando el correo no existe (tiempo constante).
 HASH_FICTICIO = _hasher.hash("utm-desk-hash-ficticio-para-tiempo-constante")
 
@@ -28,14 +29,16 @@ def verificar_password(password: str, hash_: str) -> bool:
 
 
 def crear_access_token(sub: str, extra: dict[str, Any] | None = None) -> str:
+    if extra and CLAIMS_OBLIGATORIOS.intersection(extra):
+        raise ValueError("Los claims obligatorios del access token no se pueden sobrescribir")
     ahora = datetime.now(timezone.utc)
     payload = {
+        **(extra or {}),
         "sub": sub,
         "iss": EMISOR,
         "aud": AUDIENCIA,
         "iat": ahora,
         "exp": ahora + timedelta(minutes=settings.jwt_access_minutes),
-        **(extra or {}),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITMO)
 
@@ -47,7 +50,7 @@ def decodificar_token(token: str) -> dict[str, Any]:
         algorithms=[ALGORITMO],
         audience=AUDIENCIA,
         issuer=EMISOR,
-        options={"require": ["exp", "iat", "sub", "iss", "aud"]},
+        options={"require": sorted(CLAIMS_OBLIGATORIOS)},
     )
 
 
@@ -61,7 +64,7 @@ async def get_usuario_actual(
         oid = ObjectId(payload["sub"])
     except Exception:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido o expirado")
-    usuario = await get_db().usuarios.find_one({"_id": oid, "activo": {"$ne": False}})
+    usuario = await get_db().usuarios.find_one({"_id": oid, "activo": True})
     if usuario is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no encontrado")
     return usuario
