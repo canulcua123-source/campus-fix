@@ -1005,7 +1005,7 @@
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
                   "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });",
-                  "pm.test('Roles con clave y permisos', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('clave'); pm.expect(j[0].permisos).to.be.an('array'); } });"
+                  "pm.test('Roles con clave y permisos', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('clave'); pm.expect(j[0].permisos).to.be.an('array'); } const base = j.find((r) => r.clave === 'reportante'); pm.expect(base.sistema).to.eql(true); pm.collectionVariables.set('rol_base_id', base._id); });"
                 ]
               }
             }
@@ -1050,7 +1050,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
-                  "pm.test('Rol creado con _id y clave', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('rol_clave')); pm.expect(j.sistema).to.eql(false); });"
+                  "pm.test('Rol creado con _id y clave', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('rol_clave')); pm.expect(j.sistema).to.eql(false); pm.collectionVariables.set('rol_id', j._id); });"
                 ]
               }
             }
@@ -1134,6 +1134,174 @@
                   "language": "json"
                 }
               }
+            }
+          }
+        },
+        {
+          "name": "Editar rol personalizado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rol actualizado', function () { const j = pm.response.json(); pm.expect(j.nombre).to.eql('Rol de prueba editado'); pm.expect(j.sistema).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Edita un rol personalizado; los roles con sistema=true responden 409.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Rol de prueba editado\",\n  \"permisos\": [\n    \"incidencias:ver\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar rol personalizado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rol eliminado', function () { pm.expect(pm.response.json()).to.eql({ok: true}); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Elimina un rol personalizado sin usuarios asignados; roles base o asignados responden 409.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "No editar rol base",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Un administrador no puede modificar un rol con sistema=true.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_base_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_base_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Nombre prohibido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "No eliminar rol base",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Un administrador no puede eliminar un rol con sistema=true.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_base_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_base_id}}"
+              ]
             }
           }
         }

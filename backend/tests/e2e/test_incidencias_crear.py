@@ -68,6 +68,16 @@ async def test_crear_permisos(api, quien, esperado):
     assert r.status_code == esperado, r.text
 
 
+async def test_directivo_no_puede_crear_403(api):
+    antes = await api.db.incidencias_campus.count_documents({})
+    r = await api.c.post(
+        "/incidencias", json=cuerpo("infraestructura", edificio="Edificio B"), headers=api.h("directivo")
+    )
+    assert r.status_code == 403, r.text
+    assert await api.db.incidencias_campus.count_documents({}) == antes
+    assert (await api.c.get("/incidencias", headers=api.h("directivo"))).status_code == 200
+
+
 async def test_crear_sin_token(api):
     r = await api.c.post("/incidencias", json=cuerpo())
     assert r.status_code == 401

@@ -47,3 +47,18 @@ class RolIn(BaseModel):
         if len(set(v)) != len(v):
             raise ValueError("permisos duplicados")
         return v
+
+
+class RolPatch(BaseModel):
+    clave: str | None = Field(default=None, pattern=r"^[a-z_]{3,30}$")
+    nombre: str | None = Field(default=None, min_length=3, max_length=50)
+    descripcion: str | None = Field(default=None, max_length=200)
+    permisos: list[Permiso] | None = Field(default=None, min_length=1)
+    alcance: Literal["propio", "area", "edificio", "global"] | None = None
+
+    @field_validator("permisos")
+    @classmethod
+    def _unicos(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None and len(set(v)) != len(v):
+            raise ValueError("permisos duplicados")
+        return v

@@ -55,8 +55,13 @@ async def test_crear_rol_invalido(api, over):
 
 @pytest.mark.parametrize("quien", ["reportante_a", "tecnico_infra", "coordinador_infra", "directivo", "jefe_a"])
 async def test_roles_no_admin_403(api, quien):
+    rol_base = await api.db.roles.find_one({"clave": "reportante"})
     assert (await api.c.post("/roles", json=_rol(clave="intruso"), headers=api.h(quien))).status_code == 403
     assert (await api.c.get("/roles", headers=api.h(quien))).status_code == 403
+    assert (
+        await api.c.patch(f"/roles/{rol_base['_id']}", json={"nombre": "Intruso"}, headers=api.h(quien))
+    ).status_code == 403
+    assert (await api.c.delete(f"/roles/{rol_base['_id']}", headers=api.h(quien))).status_code == 403
 
 
 async def test_listar_roles_admin(api):
@@ -81,6 +86,58 @@ async def test_escalada_privilegios(api):
     # dentro de sus permisos sí puede
     r = await api.c.post("/roles", json=_rol(clave="solo_ver", permisos=["incidencias:ver"]), headers=api.h("gestor"))
     assert r.status_code == 201, r.text
+
+
+async def test_admin_no_puede_editar_rol_base(api):
+    antes = await api.db.roles.find_one({"clave": "directivo"})
+    r = await api.c.patch(
+        f"/roles/{antes['_id']}",
+        json={"clave": "directivo_modificado", "permisos": ["incidencias:crear"]},
+        headers=api.h("admin"),
+    )
+    assert r.status_code == 409, r.text
+    despues = await api.db.roles.find_one({"_id": antes["_id"]})
+    assert despues == antes
+
+
+async def test_admin_no_puede_eliminar_rol_base(api):
+    antes = await api.db.roles.find_one({"clave": "reportante"})
+    r = await api.c.delete(f"/roles/{antes['_id']}", headers=api.h("admin"))
+    assert r.status_code == 409, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
+
+
+async def test_rol_personalizado_se_puede_editar_y_eliminar(api):
+    creado = await api.c.post(
+        "/roles", json=_rol(clave="temporal_editable", permisos=["incidencias:ver"]), headers=api.h("admin")
+    )
+    assert creado.status_code == 201, creado.text
+    rol_id = creado.json()["_id"]
+
+    editado = await api.c.patch(
+        f"/roles/{rol_id}",
+        json={"clave": "temporal_editado", "nombre": "Temporal editado", "permisos": ["incidencias:buscar"]},
+        headers=api.h("admin"),
+    )
+    assert editado.status_code == 200, editado.text
+    assert editado.json()["clave"] == "temporal_editado"
+    assert editado.json()["permisos"] == ["incidencias:buscar"]
+
+    eliminado = await api.c.delete(f"/roles/{rol_id}", headers=api.h("admin"))
+    assert eliminado.status_code == 200, eliminado.text
+    assert eliminado.json() == {"ok": True}
+    assert await api.db.roles.find_one({"clave": "temporal_editado"}) is None
+
+
+async def test_rol_personalizado_asignado_no_pierde_su_referencia(api):
+    antes = await api.db.roles.find_one({"clave": "gestor_roles"})
+    r = await api.c.patch(f"/roles/{antes['_id']}", json={"clave": "gestor_renombrado"}, headers=api.h("admin"))
+    assert r.status_code == 409, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
+
+    r = await api.c.delete(f"/roles/{antes['_id']}", headers=api.h("admin"))
+    assert r.status_code == 409, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
 
 
 async def test_categorias(api):

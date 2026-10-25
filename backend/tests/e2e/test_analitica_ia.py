@@ -78,6 +78,14 @@ async def test_analitica_permisos(api, quien, esperado):
     assert (await api.c.get("/analitica/tags")).status_code == 401
 
 
+async def test_reportante_no_ve_analitica_403(api):
+    r = await api.c.get("/analitica/edificios", headers=api.h("reportante_a"))
+    assert r.status_code == 403
+    assert "horas_invertidas" not in r.text
+    assert "horas_resolucion_prom" not in r.text
+    assert (await api.c.get("/incidencias", headers=api.h("reportante_a"))).status_code == 200
+
+
 # ---------- IA ----------
 
 ANALISIS = AnalisisImagen(
