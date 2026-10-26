@@ -9,7 +9,7 @@ from app.core.cache import cache_analitica
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.limiter import limiter
-from app.core.security import filtro_alcance, require_permiso
+from app.core.security import filtro_alcance, require_admin, require_permiso
 from app.core.serial import a_json
 from app.schemas.analitica import (
     AnaliticaEdificio,
@@ -17,13 +17,16 @@ from app.schemas.analitica import (
     AulaCronica,
     CargaTecnico,
     FiltrosAnalitica,
+    FiltrosMetricasIA,
+    MetricasIAOut,
     ResumenAnalitica,
     TendenciaMensual,
 )
+from app.services.metricas_ia import obtener_metricas_ia
 
 
 def _validar_filtros_no_duplicados(request: Request) -> None:
-    for nombre in ("desde", "hasta", "categoria"):
+    for nombre in ("desde", "hasta", "categoria", "proveedor", "modelo"):
         if len(request.query_params.getlist(nombre)) > 1:
             raise HTTPException(400, f"El filtro {nombre} no puede repetirse")
 
@@ -39,6 +42,7 @@ _TIPO_RESUMEN = TypeAdapter(ResumenAnalitica)
 _TIPO_AULAS_CRONICAS = TypeAdapter(list[AulaCronica])
 _TIPO_CARGA_TECNICOS = TypeAdapter(list[CargaTecnico])
 _TIPO_TENDENCIA = TypeAdapter(list[TendenciaMensual])
+_TIPO_METRICAS_IA = TypeAdapter(MetricasIAOut)
 _ESTADOS_ACTIVOS = ["abierta", "en_proceso", "en_espera"]
 _RESPUESTAS_ANALITICA = {
     400: {"description": "Filtros inválidos"},
@@ -462,4 +466,51 @@ async def tendencia(
         ttl=300,
         calcular=calcular,
         validar=_cache_compatible(_TIPO_TENDENCIA),
+    )
+
+
+@router.get(
+    "/ia",
+    response_model=MetricasIAOut,
+    summary="Métricas administrativas de inteligencia artificial",
+    responses={
+        400: {"description": "Filtros inválidos"},
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Acceso exclusivo del administrador"},
+        429: {"description": "Límite de consultas excedido"},
+    },
+)
+@limiter.limit(lambda: settings.limite_consulta_pesada)
+async def metricas_ia(
+    request: Request,
+    filtros: Annotated[FiltrosMetricasIA, Query()],
+    usuario: Annotated[dict, Depends(require_admin("analitica:ver"))],
+):
+    alcance = filtro_alcance(usuario)
+
+    async def calcular():
+        return await obtener_metricas_ia(
+            get_db(),
+            filtros,
+            alcance_incidencias=alcance,
+            umbral_diario_usd=settings.ia_umbral_costo_diario_usd,
+        )
+
+    def validar(valor: Any) -> bool:
+        try:
+            _TIPO_METRICAS_IA.validate_python(valor)
+        except ValidationError:
+            return False
+        return True
+
+    return await cache_analitica(
+        "ia",
+        alcance,
+        {
+            **filtros.para_cache(),
+            "umbral_diario_usd": settings.ia_umbral_costo_diario_usd,
+        },
+        ttl=300,
+        calcular=calcular,
+        validar=validar,
     )

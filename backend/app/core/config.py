@@ -2,7 +2,7 @@ import re
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     ia_habilitada: bool = True
     ia_modelo: str = "claude-opus-5-5"
+    ia_umbral_costo_diario_usd: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
     @field_validator("jwt_secret")
     @classmethod

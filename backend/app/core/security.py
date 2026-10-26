@@ -139,6 +139,20 @@ def require_permiso(permiso: str):
     return dependencia
 
 
+def require_admin(permiso: str):
+    """Combina un permiso real con la restricción explícita al rol de sistema admin."""
+    dependencia_permiso = require_permiso(permiso)
+
+    async def dependencia(
+        usuario: Annotated[dict[str, Any], Depends(dependencia_permiso)],
+    ) -> dict[str, Any]:
+        if usuario.get("rol") != "admin":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso exclusivo del administrador")
+        return usuario
+
+    return dependencia
+
+
 def filtro_alcance(usuario: dict[str, Any]) -> dict[str, Any]:
     """Filtro Mongo según el alcance del rol del usuario."""
     alcance = usuario.get("_alcance", "propio")

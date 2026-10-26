@@ -1417,6 +1417,49 @@
               ]
             }
           }
+        },
+        {
+          "name": "Métricas de IA (solo admin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                "pm.test('Agregados de IA sin eventos crudos', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('periodo', 'totales', 'tasa_deshacer', 'tasa_edicion', 'correccion_tecnica_72h', 'cobertura_agentica', 'tiempo_toque_folio', 'compuertas_fallidas', 'latencia_ia', 'errores_ia', 'timeouts_ia', 'costos', 'semanal'); pm.expect(j).not.to.have.any.keys('actor_clave', 'correo', 'nombre'); });"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Tablero agregado exclusivo del rol admin. Filtros opcionales, periodo máximo de 180 días.",
+            "url": {
+              "raw": "{{base_url}}/analitica/ia",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "ia"],
+              "query": [
+                { "key": "desde", "value": "2026-10-01", "disabled": true },
+                { "key": "hasta", "value": "2026-10-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true },
+                { "key": "proveedor", "value": "claude", "disabled": true },
+                { "key": "modelo", "value": "claude-opus-5-5", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Métricas IA - no administrador",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"] }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_reportante}}" }],
+            "description": "Un usuario que no es admin recibe 403 aunque esté autenticado.",
+            "url": { "raw": "{{base_url}}/analitica/ia", "host": ["{{base_url}}"], "path": ["analitica", "ia"] }
+          }
         }
       ]
     },
@@ -1515,6 +1558,62 @@
               "raw": "{\n  \"coincidencia_id\": \"{{coincidencia_id}}\"\n}",
               "options": {"raw": {"language": "json"}}
             }
+          }
+        },
+        {
+          "name": "Registrar evento de oferta IA",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                "pm.test('Respuesta idempotente y mínima', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('analisis_id', 'evento', 'registrado', 'es_final'); pm.expect(j).not.to.have.any.keys('costo_estimado_usd', 'tokens_entrada', 'actor_clave'); });"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Requiere un analisis_id emitido y ligado al mismo usuario por el backend agéntico. T-033/T-036 aún deben proporcionar esa oferta.",
+            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
+            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"{{analisis_id}}\",\n  \"evento\": \"editado\",\n  \"motivo\": \"usuario_edito\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Evento IA - oferta inexistente",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });"] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
+            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"deshecho\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Evento IA - costo falsificado",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "El navegador no puede declarar costo, tokens ni latencia.",
+            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
+            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"editado\",\n  \"costo_estimado_usd\": 99\n}", "options": { "raw": { "language": "json" } } }
           }
         }
       ]
@@ -2425,6 +2524,10 @@
         },
         {
             "key": "coincidencia_id",
+            "value": ""
+        },
+        {
+            "key": "analisis_id",
             "value": ""
         }
   ]

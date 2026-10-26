@@ -314,6 +314,27 @@ La integración posterior del frontend debe usar `credentials: "include"` en log
 
 ---
 
+## 11. Auditoría y métricas de IA (T-035)
+
+`POST /ia/eventos` requiere `ia:usar` y acepta únicamente `analisis_id`, `evento` y un motivo controlado opcional.
+El navegador solo puede declarar `editado`, `deshecho` o `fallback`; nunca puede informar un envío exitoso,
+tokens, costo o latencia. La API comprueba que la oferta exista, no haya vencido y pertenezca al usuario
+autenticado mediante una clave HMAC seudónima. Una oferta ajena se trata como inexistente (404).
+
+Cada oferta ocupa un único documento de `ia_eventos`. `editado` es una marca intermedia; `deshecho`, `enviado`,
+`duplicado_sumado` y `fallback` son resultados finales. El resultado se escribe con un filtro atómico que exige la
+ausencia de `resultado_final`: repetir el mismo resultado es idempotente y un resultado incompatible responde 409.
+La colección no guarda nombres, correos, fotos, prompts, respuestas completas ni identificadores directos del actor.
+
+`GET /analitica/ia` requiere el permiso `analitica:ver` y, adicionalmente, el rol real `admin`. Admite `desde`,
+`hasta`, `categoria`, `proveedor` y `modelo`; el periodo máximo es de 180 días y el predeterminado son los últimos
+30 días. La respuesta contiene únicamente agregados. Los porcentajes sin denominador y los costos que el proveedor
+no informó se expresan como `null`, nunca como cero inventado. La alerta diaria compara costo estimado confiable con
+`IA_UMBRAL_COSTO_DIARIO_USD`; es informativa y no bloquea la IA.
+
+La corrección técnica en 72 horas se devuelve explícitamente como no disponible mientras el historial de incidencias
+no registre cambios de categoría/prioridad y el rol que los efectuó. T-035 no amplía T-021 ni fabrica esa información.
+
 ## Checklist de revisión API
 
 - [ ] Ruta en plural, español, kebab-case; verbo HTTP correcto.

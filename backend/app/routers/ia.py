@@ -9,8 +9,15 @@ from app.core.db import get_db, get_redis
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
-from app.schemas.ia import AnalisisImagen
+from app.schemas.ia import AnalisisImagen, EventoIAIn, EventoIAOut
 from app.services.ia import IAError, analizar_imagen
+from app.services.ia_eventos import (
+    EventoIAConflictivo,
+    OfertaIAAjena,
+    OfertaIANoEncontrada,
+    OfertaIAVencida,
+    registrar_evento_cliente,
+)
 from app.services.vision.duplicados import (
     CoincidenciaNoElegible,
     CoincidenciaNoEncontrada,
@@ -50,6 +57,47 @@ async def analizar(
         return await analizar_imagen(datos, imagen.content_type, contexto)
     except Exception as e:  # IAError, errores de red/API, JSON inválido
         raise HTTPException(503, "No fue posible analizar la imagen con IA") from e
+
+
+@router.post(
+    "/eventos",
+    response_model=EventoIAOut,
+    summary="Registrar una interacción con una oferta de IA",
+    responses={
+        400: {"description": "Evento o identificador inválido"},
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso ia:usar"},
+        404: {"description": "Oferta inexistente o de otro usuario"},
+        409: {"description": "Oferta vencida o con otro resultado final"},
+    },
+)
+@limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
+async def registrar_evento(
+    request: Request,
+    datos: EventoIAIn,
+    usuario: Annotated[dict, Depends(require_permiso("ia:usar"))],
+):
+    try:
+        resultado = await registrar_evento_cliente(
+            get_db(),
+            analisis_id=datos.analisis_id,
+            evento=datos.evento,
+            actor_id=usuario["_id"],
+            secreto=settings.jwt_secret,
+            motivo=datos.motivo,
+        )
+    except (OfertaIANoEncontrada, OfertaIAAjena) as exc:
+        raise HTTPException(404, "Oferta de IA no encontrada") from exc
+    except OfertaIAVencida as exc:
+        raise HTTPException(409, "La oferta de IA ya venció") from exc
+    except EventoIAConflictivo as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return EventoIAOut(
+        analisis_id=resultado.analisis_id,
+        evento=resultado.evento,
+        registrado=resultado.registrado,
+        es_final=resultado.es_final,
+    )
 
 
 @router.post(

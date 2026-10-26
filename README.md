@@ -160,6 +160,7 @@ npm run dev                             # http://localhost:5173
 | `STORAGE_ENDPOINT` / `STORAGE_REGION` | Backblaze B2 (S3) | vacío |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | Llaves del bucket | vacío |
 | `IA_HABILITADA` / `IA_MODELO` / `ANTHROPIC_API_KEY` | Análisis de foto | `false` en local |
+| `IA_UMBRAL_COSTO_DIARIO_USD` | Alerta administrativa de costo estimado diario (opcional) | vacío |
 
 Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`) y `VITE_DOMINIO_CORREO` (debe coincidir con `DOMINIO_CORREO`).
 

@@ -13,6 +13,7 @@ from scripts.init_db import (  # noqa: E402
     esquema_categorias,
     esquema_coincidencias_duplicados,
     esquema_huellas_reportes,
+    esquema_ia_eventos,
     esquema_incidencias,
     esquema_roles,
     esquema_usuarios,
@@ -75,6 +76,15 @@ class BaseIndicesT038Falsa(BaseIndicesFalsa):
         return ["huellas_reportes", "coincidencias_duplicados", "adhesiones_reportes"]
 
 
+class BaseIndicesT035Falsa(BaseIndicesFalsa):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ia_eventos = ColeccionFalsa()
+
+    async def list_collection_names(self) -> list[str]:
+        return ["ia_eventos"]
+
+
 def test_validadores_vigentes_incluyen_t007_y_t008():
     esquemas = {
         "incidencias_campus": esquema_incidencias(),
@@ -108,6 +118,18 @@ def test_validadores_t038_son_estrictos_y_no_guardan_pii():
     serializado = str(esquemas).lower()
     for campo in ("nombre", "correo", "usuario_id", "reportante", "descripcion", "fotografia", "token"):
         assert campo not in serializado
+
+
+def test_validador_t035_es_estricto_y_sin_datos_personales():
+    esquema = esquema_ia_eventos()["$jsonSchema"]
+    assert esquema["additionalProperties"] is False
+    assert esquema["properties"]["evento"]["enum"] == [
+        "ofrecido", "deshecho", "editado", "enviado", "duplicado_sumado", "fallback",
+    ]
+    serializado = str(esquema["properties"]).lower()
+    for campo in ("nombre", "correo", "telefono", "password", "refresh", "foto", "imagen", "prompt_contenido"):
+        assert campo not in serializado
+    assert "ia_sugerencia" in esquema_incidencias()["$jsonSchema"]["properties"]
 
 
 @pytest.mark.asyncio
@@ -215,4 +237,22 @@ async def test_indices_t038_incluyen_ttl_24h_y_consulta_compuesta():
             [("incidencia_id", 1), ("fecha", -1)],
             {"name": "adhesiones_incidencia_fecha"},
         )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_indices_t035_incluyen_ttl_180_dias_y_unicidad():
+    db = BaseIndicesT035Falsa()
+
+    await crear_indices(db)
+
+    assert db.ia_eventos.llamadas == [
+        ("analisis_id", {"unique": True, "name": "ia_eventos_analisis_unico"}),
+        ("fecha", {"expireAfterSeconds": 15_552_000, "name": "ia_eventos_ttl_180d"}),
+        ([('evento', 1), ('fecha', -1)], {"name": "ia_eventos_evento_fecha"}),
+        ([('categoria', 1), ('fecha', -1)], {"name": "ia_eventos_categoria_fecha", "sparse": True}),
+        (
+            [('proveedor', 1), ('modelo', 1), ('fecha', -1)],
+            {"name": "ia_eventos_proveedor_modelo_fecha", "sparse": True},
+        ),
     ]

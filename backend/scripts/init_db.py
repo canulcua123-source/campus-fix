@@ -28,6 +28,160 @@ PRIORIDADES = ["baja", "media", "alta", "critica"]
 TIPOS_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
 ALCANCES = ["propio", "area", "edificio", "global"]
 TIPOS_REPORTANTE = ["docente", "estudiante", "administrativo"]
+EVENTOS_IA = ["ofrecido", "deshecho", "editado", "enviado", "duplicado_sumado", "fallback"]
+EVENTOS_FINALES_IA = ["deshecho", "enviado", "duplicado_sumado", "fallback"]
+COMPUERTAS_IA = [f"G{numero}" for numero in range(1, 10)]
+PATRON_ANALISIS_IA = r"^[A-Za-z0-9_-]{22,64}$"
+PATRON_CAMPO_IA = r"^(titulo|descripcion|prioridad|tags|detalle_especifico\.[a-z][a-z0-9_]{0,49})$"
+
+
+def esquema_ia_sugerencia() -> dict:
+    """Subdocumento aditivo que T-029/T-036 podrán escribir desde datos del servidor."""
+    campos = {
+        "bsonType": "array",
+        "maxItems": 15,
+        "uniqueItems": True,
+        "items": {"bsonType": "string", "pattern": PATRON_CAMPO_IA},
+    }
+    return {
+        "bsonType": "object",
+        "required": ["modo", "modelo", "version_prompt", "confianza", "campos_autollenados"],
+        "additionalProperties": False,
+        "properties": {
+            "modo": {"enum": ["agentico", "asistido"]},
+            "modelo": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": r"^[A-Za-z0-9._:/-]+$",
+            },
+            "version_prompt": {
+                "bsonType": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "pattern": r"^[A-Za-z0-9._-]+$",
+            },
+            "confianza": {"bsonType": ["double", "decimal"], "minimum": 0, "maximum": 1},
+            "campos_autollenados": campos,
+            "proveedor": {
+                "bsonType": "string",
+                "minLength": 2,
+                "maxLength": 30,
+                "pattern": r"^[a-z][a-z0-9_-]+$",
+            },
+            "analisis_id": {"bsonType": "string", "pattern": PATRON_ANALISIS_IA},
+            "accion": {
+                "enum": [
+                    "agentico", "formulario", "duplicado", "autollenar",
+                    "sugerir", "preguntar", "rechazar",
+                ]
+            },
+            "campos_editados_por_usuario": campos,
+            "compuertas_fallidas": {
+                "bsonType": "array",
+                "maxItems": 9,
+                "uniqueItems": True,
+                "items": {"enum": COMPUERTAS_IA},
+            },
+            "ubicacion_fuente": {"enum": ["qr", "confirmada", "selector"]},
+        },
+    }
+
+
+def esquema_ia_eventos() -> dict:
+    """Una fila por oferta; el resultado final se decide con actualización atómica."""
+    propiedades = {
+        "_id": {"bsonType": "objectId"},
+        "analisis_id": {"bsonType": "string", "pattern": PATRON_ANALISIS_IA},
+        "actor_clave": {"bsonType": "string", "pattern": r"^[0-9a-f]{64}$"},
+        "evento": {"enum": EVENTOS_IA},
+        "resultado_final": {"enum": EVENTOS_FINALES_IA},
+        "fecha": {"bsonType": "date"},
+        "fecha_evento": {"bsonType": "date"},
+        "fecha_final": {"bsonType": "date"},
+        "oferta_expira_en": {"bsonType": "date"},
+        "editado": {"bsonType": "bool"},
+        "modo": {"enum": ["agentico", "asistido"]},
+        "modelo": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": r"^[A-Za-z0-9._:/-]+$",
+        },
+        "version_prompt": {
+            "bsonType": "string", "minLength": 1, "maxLength": 40,
+            "pattern": r"^[A-Za-z0-9._-]+$",
+        },
+        "confianza": {"bsonType": ["double", "decimal"], "minimum": 0, "maximum": 1},
+        "campos_autollenados": {
+            "bsonType": "array", "maxItems": 15, "uniqueItems": True,
+            "items": {"bsonType": "string", "pattern": PATRON_CAMPO_IA},
+        },
+        "proveedor": {
+            "bsonType": "string", "minLength": 2, "maxLength": 30,
+            "pattern": r"^[a-z][a-z0-9_-]+$",
+        },
+        "categoria": {"bsonType": "string", "pattern": PATRON_CATEGORIA},
+        "accion": {
+            "enum": [
+                "agentico", "formulario", "duplicado", "autollenar",
+                "sugerir", "preguntar", "rechazar",
+            ]
+        },
+        "campos_editados_por_usuario": {
+            "bsonType": "array", "maxItems": 15, "uniqueItems": True,
+            "items": {"bsonType": "string", "pattern": PATRON_CAMPO_IA},
+        },
+        "compuertas_fallidas": {
+            "bsonType": "array", "maxItems": 9, "uniqueItems": True,
+            "items": {"enum": COMPUERTAS_IA},
+        },
+        "ubicacion_fuente": {"enum": ["qr", "confirmada", "selector"]},
+        "latencia_ia_ms": {"bsonType": ["int", "long"], "minimum": 0, "maximum": 300000},
+        "tokens_entrada": {"bsonType": ["int", "long"], "minimum": 0},
+        "tokens_salida": {"bsonType": ["int", "long"], "minimum": 0},
+        "costo_estimado_usd": {
+            "bsonType": ["int", "long", "double", "decimal"], "minimum": 0,
+        },
+        "resultado_ia": {"enum": ["ok", "error", "timeout"]},
+        "motivo": {"enum": ["usuario_deshizo", "usuario_edito", "continuo_manual"]},
+        "incidencia_id": {"bsonType": "objectId"},
+        "duracion_toque_folio_ms": {
+            "bsonType": ["int", "long"], "minimum": 0, "maximum": 300000,
+        },
+    }
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "analisis_id", "actor_clave", "evento", "fecha", "fecha_evento",
+                "oferta_expira_en", "editado", "modo", "modelo", "version_prompt",
+                "confianza", "campos_autollenados",
+            ],
+            "additionalProperties": False,
+            "properties": propiedades,
+            "oneOf": [
+                {
+                    "properties": {"evento": {"enum": ["ofrecido"]}, "editado": {"enum": [False]}},
+                    "not": {"anyOf": [{"required": ["resultado_final"]}, {"required": ["fecha_final"]}]},
+                },
+                {
+                    "properties": {"evento": {"enum": ["editado"]}, "editado": {"enum": [True]}},
+                    "not": {"anyOf": [{"required": ["resultado_final"]}, {"required": ["fecha_final"]}]},
+                },
+                *[
+                    {
+                        "required": ["resultado_final", "fecha_final"],
+                        "properties": {
+                            "evento": {"enum": [evento]},
+                            "resultado_final": {"enum": [evento]},
+                        },
+                    }
+                    for evento in EVENTOS_FINALES_IA
+                ],
+            ],
+        }
+    }
 
 
 def esquema_huellas_reportes() -> dict:
@@ -414,6 +568,7 @@ def esquema_incidencias() -> dict:
                 "fecha_creacion": {"bsonType": "date"},
                 "fecha_actualizacion": {"bsonType": "date"},
                 "fecha_resolucion": {"bsonType": "date"},
+                "ia_sugerencia": esquema_ia_sugerencia(),
                 "tags": {"bsonType": "array", "maxItems": 15, "uniqueItems": True, "items": {"bsonType": "string"}},
                 "historial_seguimiento": {"bsonType": "array"},
                 "evidencias_adjuntas": {
@@ -540,6 +695,32 @@ async def crear_indices(db) -> None:
         await db.adhesiones_reportes.create_index(
             [("incidencia_id", ASCENDING), ("fecha", DESCENDING)],
             name="adhesiones_incidencia_fecha",
+        )
+    if "ia_eventos" in colecciones:
+        eventos = db.ia_eventos
+        await eventos.create_index(
+            "analisis_id",
+            unique=True,
+            name="ia_eventos_analisis_unico",
+        )
+        await eventos.create_index(
+            "fecha",
+            expireAfterSeconds=180 * 24 * 3600,
+            name="ia_eventos_ttl_180d",
+        )
+        await eventos.create_index(
+            [("evento", ASCENDING), ("fecha", DESCENDING)],
+            name="ia_eventos_evento_fecha",
+        )
+        await eventos.create_index(
+            [("categoria", ASCENDING), ("fecha", DESCENDING)],
+            name="ia_eventos_categoria_fecha",
+            sparse=True,
+        )
+        await eventos.create_index(
+            [("proveedor", ASCENDING), ("modelo", ASCENDING), ("fecha", DESCENDING)],
+            name="ia_eventos_proveedor_modelo_fecha",
+            sparse=True,
         )
     if "auditoria" not in colecciones:
         return
@@ -770,6 +951,7 @@ async def main() -> None:
             ("huellas_reportes", esquema_huellas_reportes()),
             ("coincidencias_duplicados", esquema_coincidencias_duplicados()),
             ("adhesiones_reportes", esquema_adhesiones_reportes()),
+            ("ia_eventos", esquema_ia_eventos()),
         ):
             await asegurar_coleccion(db, nombre, validador)
         await crear_indices(db)
