@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import re
 import unicodedata
 from typing import Annotated, Literal
@@ -105,3 +107,19 @@ class TagsIn(BaseModel):
     @classmethod
     def _tags(cls, v: list[str]) -> list[str]:
         return sorted({normalizar_tag(t) for t in v})
+
+
+class EntradaHistorialOut(BaseModel):
+    fecha: datetime
+    usuario_id: str
+    estado_nuevo: Estado
+    comentario: str
+    horas: float
+    tipo: Literal["asignacion"] | None = None
+    autor_nombre: str | None = Field(default=None, description="Nombre actual del autor, si sigue disponible")
+
+
+class IncidenciaDetalleOut(BaseModel):
+    # Conserva los campos existentes del expediente sin cambiar su representación.
+    model_config = ConfigDict(extra="allow")
+    historial_seguimiento: list[EntradaHistorialOut]

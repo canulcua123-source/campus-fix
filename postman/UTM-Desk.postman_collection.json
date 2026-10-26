@@ -337,7 +337,7 @@
                 "description": "Token JWT"
               }
             ],
-            "description": "Obtiene una incidencia por su ObjectId.",
+            "description": "Obtiene una incidencia por su ObjectId.\nEl historial incluye autor_nombre opcional (nombre actual del usuario). No se persiste ni incluye otros datos del directorio.",
             "url": {
               "raw": "{{base_url}}/incidencias/{{incidencia_id}}",
               "host": [

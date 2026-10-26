@@ -199,3 +199,29 @@ async def test_detalle_fuera_de_alcance_404(api):
     for malo in ("no-es-oid", "123", "zzzzzzzzzzzzzzzzzzzzzzzz"):
         r = await api.c.get(f"/incidencias/{malo}", headers=api.h("admin"))
         assert r.status_code == 400, malo
+
+
+async def test_detalle_identifica_autores_tras_reasignacion(api):
+    inc = await api.crear("reportante_a", "infraestructura")
+    ruta = f"/incidencias/{inc['_id']}"
+    nuevo = await api.usuario_temporal("tecnico", areas=["infraestructura"], nombre="Técnico reasignado")
+    r = await api.c.patch(
+        ruta + "/seguimiento",
+        headers=api.h("tecnico_infra"),
+        json={"estado_nuevo": "en_proceso", "comentario": "Inspección del técnico inicial", "horas": 1.5},
+    )
+    assert r.status_code == 200, r.text
+    r = await api.c.patch(
+        ruta + "/asignacion", headers=api.h("coordinador_infra"), json={"tecnico_id": str(nuevo["_id"])}
+    )
+    assert r.status_code == 200, r.text
+    r = await api.c.get(ruta, headers=api.h("reportante_a"))
+    assert r.status_code == 200, r.text
+    historial = r.json()["historial_seguimiento"]
+    for entrada in historial:
+        autor = await api.db.usuarios.find_one({"_id": ObjectId(entrada["usuario_id"])})
+        assert entrada["autor_nombre"] == autor["nombre"]
+        assert "correo" not in entrada and "password_hash" not in entrada
+    assert all("autor_nombre" not in entrada for entrada in (await api.doc(inc["_id"]))["historial_seguimiento"])
+    fuera = await api.c.get(ruta, headers=api.h("reportante_b"))
+    assert fuera.status_code == 404
