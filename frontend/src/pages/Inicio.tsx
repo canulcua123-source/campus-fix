@@ -14,8 +14,8 @@ export default function Inicio() {
           </Link>
         )}
         {tiene('incidencias:ver') && (
-          <Link to="/mis-tickets" className="card flex items-center gap-3 text-ink no-underline">
-            <ClipboardList className="text-brand" aria-hidden /> Ver mis tickets
+          <Link to="/mis-reportes" className="card flex items-center gap-3 text-ink no-underline">
+            <ClipboardList className="text-brand" aria-hidden /> Ver mis reportes
           </Link>
         )}
       </div>

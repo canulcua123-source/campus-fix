@@ -139,6 +139,13 @@ export const rolInSchema = z.object({
 }).strict()
 export type RolIn = z.infer<typeof rolInSchema>
 
+/** RolPatch (PATCH /roles/{id}): solo los campos que cambian. */
+export const rolPatchSchema = rolInSchema.partial().strict()
+export type RolPatch = z.infer<typeof rolPatchSchema>
+
+/** Respuesta de DELETE /roles/{id}. */
+export const okSchema = z.object({ ok: z.literal(true) })
+
 export const rolSchema = z.object({
   _id: z.string(),
   clave: z.string(),
