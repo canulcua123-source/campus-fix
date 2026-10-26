@@ -51,6 +51,13 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET debe tener al menos 32 caracteres (openssl rand -hex 32)")
         return v
 
+    @field_validator("jwt_access_minutes")
+    @classmethod
+    def _access_token_maximo_quince_minutos(cls, v: int) -> int:
+        if not 1 <= v <= 15:
+            raise ValueError("JWT_ACCESS_MINUTES debe estar entre 1 y 15")
+        return v
+
     @field_validator("dominio_correo")
     @classmethod
     def _dominio_correo_valido(cls, v: str) -> str:
