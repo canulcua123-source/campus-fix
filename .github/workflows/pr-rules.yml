@@ -1,4 +1,4 @@
-# Reglas del PR: título Conventional Commits, `Closes #N` y rama al día con la base.
+# Reglas del PR: título Conventional Commits y `Closes #N`; avisa si la rama va atrás de la base.
 name: pr-rules
 
 on:
@@ -57,8 +57,8 @@ jobs:
           fi
 
       - name: La rama está al día con la base
-        # Señal temprana. La garantía real es la protección "require branches to be up to date"
-        # (strict) en dev, que bloquea el merge aunque este check se haya corrido antes de que dev avanzara.
+        # Solo aviso: dev ya no exige ramas al día (strict desactivado para no repetir el CI tras cada merge).
+        # El CI de cada PR sigue siendo obligatorio; si dos PRs chocan, lo detecta el CI del siguiente.
         # En main no aplica: main solo recibe merge commits desde dev (ver CONTRIBUTING.md).
         if: github.event.pull_request.base.ref == 'dev'
         env:
@@ -69,7 +69,6 @@ jobs:
         run: |
           atras=$(gh api "repos/$REPO/compare/$BASE...$HEAD_SHA" --jq '.behind_by')
           if [ "$atras" -gt 0 ]; then
-            echo "::error::Tu rama va $atras commit(s) atrás de '$BASE'. Ejecuta: git fetch origin && git rebase origin/$BASE && git push --force-with-lease"
-            exit 1
+            echo "::warning::Tu rama va $atras commit(s) atrás de '$BASE'. Si hay conflictos: git fetch origin && git merge origin/$BASE && git push"
           fi
           echo "Rama al día con $BASE."

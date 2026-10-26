@@ -14,6 +14,8 @@ from app.core.errores import cabeceras_retry_after, segundos_hasta_reinicio
 
 logger = logging.getLogger(__name__)
 
+LIMITE_LOGIN = "10/minute"
+
 
 def clave_usuario(request: Request) -> str:
     """Endpoints autenticados: cuenta por usuario (sub del JWT); sin token válido, por IP.
