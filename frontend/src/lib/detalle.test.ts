@@ -115,6 +115,7 @@ describe('evidencias', () => {
 })
 
 const detalleBase: IncidenciaDetalle = {
+  puede_retirar: false,
   _id: '1', codigo: 'INC-2026-1020-INF-0001', titulo: 'Luminaria fundida', categoria: 'infraestructura',
   estado: 'abierta', prioridad: 'media', ubicacion: { edificio: 'B', piso: null, aula: 'B-1' }, tags: [],
   fecha_creacion: '2026-10-20T09:40:00Z', reportante,
