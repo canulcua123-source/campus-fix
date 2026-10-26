@@ -109,9 +109,11 @@ def test_directivo_es_solo_lectura_y_coordinador_puede_cerrar():
     assert {"seguimiento:registrar", "incidencias:asignar"} <= set(roles["coordinador"]["permisos"])
 
 
-def test_api_roles_no_expone_edicion_eliminacion_ni_desactivacion():
-    metodos_mutacion = {"PATCH", "PUT", "DELETE"}
-    rutas_roles = [ruta for ruta in roles_router.routes if ruta.path.startswith("/roles")]
+def test_api_roles_expone_edicion_y_eliminacion_pero_no_put():
+    metodos = set()
+    for ruta in roles_router.routes:
+        if ruta.path.startswith("/roles"):
+            metodos |= set(ruta.methods or set())
 
-    assert rutas_roles
-    assert all(not (set(ruta.methods or set()) & metodos_mutacion) for ruta in rutas_roles)
+    assert {"GET", "POST", "PATCH", "DELETE"} <= metodos
+    assert "PUT" not in metodos

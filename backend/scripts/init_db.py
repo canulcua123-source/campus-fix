@@ -914,7 +914,9 @@ def _guardar_clave_admin_local(valor: str) -> Path:
 
 async def sembrar_base(db) -> dict:
     for rol in roles_sistema():
-        await db.roles.update_one({"clave": rol["clave"]}, {"$setOnInsert": rol}, upsert=True)
+        # Los cinco roles base son parte del contrato de seguridad: se sincronizan
+        # sin cambiar su _id ni las referencias de usuarios existentes.
+        await db.roles.update_one({"clave": rol["clave"]}, {"$set": rol}, upsert=True)
     for cat in categorias_sistema():
         await db.categorias.update_one({"clave": cat["clave"]}, {"$setOnInsert": cat}, upsert=True)
     admin = await db.usuarios.find_one({"correo": "admin@utm.local"})
