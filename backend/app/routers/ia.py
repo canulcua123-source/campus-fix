@@ -19,7 +19,7 @@ from app.core.imagen import (
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
-from app.schemas.ia import AnalisisImagen, EventoIAIn, EventoIAOut, RespuestaAnalisisImagen
+from app.schemas.ia import AnalisisImagen, EventoIAIn, EventoIAOut, RespuestaIA
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
     CoincidenciaNoElegible,
@@ -27,7 +27,8 @@ from app.services.duplicados import (
     confirmar_adhesion,
 )
 from app.services import ia as ia_service
-from app.services.ia import PROMPT_VERSION, PROVEEDOR_IA, IAError, analizar_imagen
+from app.services.ia import PROMPT_VERSION, IAError, analizar_imagen, identidad_proveedor
+from app.services.vision.decision import decidir
 from app.services.ia_eventos import (
     EventoIAConflictivo,
     OfertaIAAjena,
@@ -115,13 +116,9 @@ async def _consumir_cupo(redis, claves: tuple[str, str], *, limite_usuario: int,
         raise HTTPException(503, "El análisis con IA no está disponible por hoy")
 
 
-def _respuesta(analisis: AnalisisImagen, *, cache: bool) -> RespuestaAnalisisImagen:
-    return RespuestaAnalisisImagen(**analisis.model_dump(), cache=cache)
-
-
 @router.post(
     "/analizar-imagen",
-    response_model=RespuestaAnalisisImagen,
+    response_model=RespuestaIA,
     responses={
         413: {
             "description": "El archivo supera 5 MB",
@@ -166,13 +163,14 @@ async def analizar(
         raise HTTPException(503, "El análisis con IA está deshabilitado")
     # Lista de datos permitidos para el proveedor: imagen, MIME y contexto sin datos del perfil.
     contexto_normalizado = _normalizar_contexto(_minimizar_contexto(contexto, usuario))
+    proveedor, modelo = identidad_proveedor()
     clave_cache = _clave_cache(
         validada.datos,
         contexto_normalizado,
         usuario_id=usuario["_id"],
         prompt_version=PROMPT_VERSION,
-        proveedor=PROVEEDOR_IA,
-        modelo=settings.ia_modelo,
+        proveedor=proveedor,
+        modelo=modelo,
     )
     redis = None
     try:
@@ -180,7 +178,7 @@ async def analizar(
         guardado = await redis.get(clave_cache)
         if guardado is not None:
             try:
-                return _respuesta(AnalisisImagen.model_validate_json(guardado), cache=True)
+                return decidir(AnalisisImagen.model_validate_json(guardado), cache=True)
             except ValueError:
                 logger.warning("Entrada inválida en la caché de IA; se regenerará", exc_info=True)
     except Exception:
@@ -219,7 +217,7 @@ async def analizar(
         await redis.set(clave_cache, analisis.model_dump_json(), ex=CACHE_TTL)
     except Exception:
         logger.warning("Redis no disponible al guardar la caché de IA", exc_info=True)
-    return _respuesta(analisis, cache=False)
+    return decidir(analisis, cache=False)
 
 
 @router.post(

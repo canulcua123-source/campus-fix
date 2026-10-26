@@ -4,8 +4,6 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
 
-import anthropic
-import httpx
 import pytest
 import pytest_asyncio
 from bson import ObjectId
@@ -17,9 +15,13 @@ import app.routers.analitica as analitica_router
 import app.routers.ia as ia_router
 import app.services.config_ia as config_ia_service
 import app.services.ia as ia_service
+import app.services.vision as vision
 from app.core import cache as cache_core
 from app.core.db import get_redis
-from app.schemas.ia import AnalisisImagen, RespuestaAnalisisImagen
+from app.core.config import settings
+from app.schemas.ia import AnalisisImagen, RespuestaIA
+from app.services.vision.claude import ProveedorClaude
+from app.services.vision.puerto import ErrorProveedor, error_http
 
 from .helpers import cuerpo
 
@@ -470,10 +472,9 @@ def reintentos_rapidos(monkeypatch):
     return esperas
 
 
-def _error_http(clase, status):
-    peticion = httpx.Request("POST", "https://proveedor.invalid/v1/messages")
-    respuesta = httpx.Response(status, request=peticion)
-    return clase("detalle interno secreto", response=respuesta, body={"detalle": "credencial-secreta"})
+def _error_http(status):
+    # Así llega al router un 4xx/429/5xx ya traducido por el adaptador del proveedor.
+    return error_http(status)
 
 
 async def _post(api, quien="reportante_a", nombre="foto.png", datos=PNG, mime="image/png", contexto=None):
@@ -486,10 +487,22 @@ async def _post(api, quien="reportante_a", nombre="foto.png", datos=PNG, mime="i
 async def test_ia_ok(api, ia_falsa):
     r = await _post(api, contexto="pasillo del edificio A")
     assert r.status_code == 200, r.text
-    assert r.json()["categoria"] == "infraestructura"
+    assert r.json()["accion"] == "autollenar"
+    assert r.json()["mensaje"]
+    assert r.json()["analisis"]["categoria"] == "infraestructura"
     assert r.json()["cache"] is False
-    RespuestaAnalisisImagen.model_validate(r.json())
+    RespuestaIA.model_validate(r.json())
     assert ia_falsa == [(len(PNG), "image/png", "pasillo del edificio A")]
+
+
+async def test_ia_cache_conserva_decision(api, ia_falsa):
+    primera = await _post(api, contexto="pasillo norte")
+    segunda = await _post(api, contexto="pasillo norte")
+
+    assert primera.json()["cache"] is False
+    assert segunda.json()["cache"] is True
+    assert segunda.json()["accion"] == primera.json()["accion"] == "autollenar"
+    assert len(ia_falsa) == 1
 
 
 async def test_ia_cache_hit_no_consume_cupo(api, ia_falsa):
@@ -650,7 +663,7 @@ async def test_ia_429_reintenta_una_vez(api, monkeypatch, reintentos_rapidos):
     async def limitado(*args, **kwargs):
         nonlocal intentos
         intentos += 1
-        raise _error_http(anthropic.RateLimitError, 429)
+        raise _error_http(429)
 
     monkeypatch.setattr(ia_router, "analizar_imagen", limitado)
     r = await _post(api)
@@ -667,7 +680,7 @@ async def test_ia_5xx_reintenta_una_vez(api, monkeypatch, reintentos_rapidos):
     async def no_disponible(*args, **kwargs):
         nonlocal intentos
         intentos += 1
-        raise _error_http(anthropic.InternalServerError, 500)
+        raise _error_http(500)
 
     monkeypatch.setattr(ia_router, "analizar_imagen", no_disponible)
     r = await _post(api)
@@ -683,7 +696,7 @@ async def test_ia_4xx_sin_reintento(api, monkeypatch, reintentos_rapidos):
     async def solicitud_invalida(*args, **kwargs):
         nonlocal intentos
         intentos += 1
-        raise _error_http(anthropic.BadRequestError, 400)
+        raise _error_http(400)
 
     monkeypatch.setattr(ia_router, "analizar_imagen", solicitud_invalida)
     r = await _post(api)
@@ -699,7 +712,7 @@ async def test_ia_reintento_devuelve_cupo_una_sola_vez(api, monkeypatch, reinten
     async def limitado(*args, **kwargs):
         nonlocal intentos
         intentos += 1
-        raise _error_http(anthropic.RateLimitError, 429)
+        raise _error_http(429)
 
     redis = get_redis()
     claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
@@ -742,7 +755,9 @@ async def test_payload_ia_sin_datos_personales(api, monkeypatch):
             )
 
     cliente = SimpleNamespace(beta=SimpleNamespace(messages=Mensajes()))
-    monkeypatch.setattr(ia_service.anthropic, "AsyncAnthropic", lambda **_kwargs: cliente)
+    monkeypatch.setattr(settings, "ia_proveedor", "claude")
+    adaptador = ProveedorClaude(api_key="", modelo=settings.ia_modelo, cliente=cliente)
+    monkeypatch.setitem(vision._instancias, ("claude", settings.ia_modelo), adaptador)
     usuario = api.u["reportante_a"]
     contexto = f"Reportó {usuario['nombre']} ({usuario['correo']}) en el pasillo"
     r = await _post(api, contexto=contexto)
@@ -839,3 +854,47 @@ async def test_bd_valida_configuracion_ia(api):
     with pytest.raises(WriteError) as exc:
         await api.db.configuracion_ia.update_one({"_id": "ia"}, {"$set": {"limite_diario_usuario": 0}})
     assert exc.value.code == 121
+
+
+async def test_ia_usa_proveedor_configurado(api, monkeypatch):
+    llamadas = []
+
+    class ProveedorFalso:
+        nombre = "gemini"
+        modelo = "modelo-falso"
+
+        async def analizar(self, imagen, media_type, pistas):
+            llamadas.append((media_type, pistas))
+            return ANALISIS
+
+    monkeypatch.setattr(settings, "ia_proveedor", "gemini")
+    monkeypatch.setattr(settings, "gemini_modelo", "modelo-falso")
+    monkeypatch.setitem(vision._instancias, ("gemini", "modelo-falso"), ProveedorFalso())
+    r = await _post(api, contexto="pasillo")
+
+    assert r.status_code == 200, r.text
+    assert llamadas == [("image/png", "pasillo")]
+    claves = [clave async for clave in get_redis().scan_iter(match="ia:cache:*")]
+    esperada = ia_router._clave_cache(
+        PNG,
+        "pasillo",
+        usuario_id=api.oid("reportante_a"),
+        prompt_version=ia_service.PROMPT_VERSION,
+        proveedor="gemini",
+        modelo="modelo-falso",
+    )
+    assert claves == [esperada]
+
+
+async def test_ia_capa_gratuita_bloqueada_devuelve_503_y_cupo(api, monkeypatch):
+    monkeypatch.setattr(settings, "ia_proveedor", "gemini")
+    monkeypatch.setattr(settings, "gemini_capa", "gratuita")
+    monkeypatch.setattr(settings, "ia_permitir_capa_gratuita", False)
+    monkeypatch.setattr(settings, "gemini_modelo", "modelo-bloqueado")
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert await redis.mget(*claves_cupo) == ["0", "0"]
+    assert isinstance(ErrorProveedor("x"), ia_service.IAError)

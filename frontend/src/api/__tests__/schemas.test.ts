@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema, respuestaAnalisisImagenSchema,
+  adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema, respuestaIaSchema,
 } from '../../schemas/ia'
 import {
   evidenciaFirmaSchema, evidenciaSchema, incidenciaSchema, normalizarTag, seguimientoSchema, tagsSchema, iaSugerenciaSchema,
@@ -156,10 +156,16 @@ describe('respuesta de IA (AnalisisImagen, extra=forbid)', () => {
   it('acepta válida y rechaza confianza fuera de 0..1 o campos extra', () => {
     expect(analisisImagenSchema.safeParse(ia).success).toBe(true)
     expect(analisisImagenSchema.safeParse({ ...ia, cache: false }).success).toBe(false)
-    expect(respuestaAnalisisImagenSchema.safeParse({ ...ia, cache: true }).success).toBe(true)
-    expect(respuestaAnalisisImagenSchema.safeParse(ia).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, confianza: 1.1 }).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, extra: 1 }).success).toBe(false)
+  })
+
+  it('valida la respuesta con acción, mensaje, análisis y caché', () => {
+    const respuesta = { accion: 'autollenar', mensaje: 'Revisa los datos', analisis: ia, cache: false }
+    expect(respuestaIaSchema.safeParse(respuesta).success).toBe(true)
+    expect(respuestaIaSchema.safeParse({ ...respuesta, accion: 'ignorar' }).success).toBe(false)
+    expect(respuestaIaSchema.safeParse({ ...respuesta, extra: true }).success).toBe(false)
+    expect(respuestaIaSchema.safeParse({ ...respuesta, cache: undefined }).success).toBe(false)
   })
 })
 

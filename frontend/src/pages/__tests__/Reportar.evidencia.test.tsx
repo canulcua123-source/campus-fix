@@ -18,16 +18,20 @@ beforeAll(() => {
 vi.mock('browser-image-compression', () => ({ default: vi.fn(async (archivo: File) => archivo) }))
 
 const SUGERENCIA = {
-  es_incidencia_valida: true,
-  categoria: 'computo_redes',
-  titulo: 'Proyector no enciende en el aula 3',
-  descripcion: 'El proyector del aula 3 no enciende desde ayer por la mañana',
-  prioridad_sugerida: 'alta',
-  tags: ['proyector', 'aula_3'],
-  campos_detectados: [],
-  confianza: 0.9,
-  advertencias: [],
+  accion: 'autollenar',
+  mensaje: 'Completamos el formulario con la sugerencia de la IA.',
   cache: false,
+  analisis: {
+    es_incidencia_valida: true,
+    categoria: 'computo_redes',
+    titulo: 'Proyector no enciende en el aula 3',
+    descripcion: 'El proyector del aula 3 no enciende desde ayer por la mañana',
+    prioridad_sugerida: 'alta',
+    tags: ['proyector', 'aula_3'],
+    campos_detectados: [],
+    confianza: 0.9,
+    advertencias: [],
+  },
 }
 
 function renderReportar() {

@@ -184,13 +184,13 @@ evidencia.mutate({ archivo, onProgreso: (f) => setProgreso(f) })   // firma → 
 const fd = new FormData()
 fd.append('imagen', comprimida, 'incidencia.jpg')
 if (contexto) fd.append('contexto', contexto.slice(0, 500))
-const sugerencia = analisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
+const sugerencia = respuestaIaSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
 // ✅✅ o con el hook (multipart, timeout 30 s; el servidor reintenta dentro de un deadline total de 28 s, respuesta validada)
 const ia = useAnalizarImagen(); ia.mutate({ imagen: comprimida, contexto })
 // ❌ headers: { 'Content-Type': 'multipart/form-data' }   → falta el boundary, 400
 ```
 
-Respuestas: 200 `AnalisisImagen` con `cache: bool` obligatorio (`true` si reutilizó un análisis sin consumir cupo); 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global, Redis no disponible para contabilizar el cupo (falla cerrado) o error del modelo. La respuesta se valida con `respuestaAnalisisImagenSchema`. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
+Respuestas: 200 `RespuestaIA { accion, mensaje, analisis, cache }`: `accion` es `autollenar`, `sugerir`, `preguntar` o `rechazar` (decisión determinista del servidor; el frontend muestra siempre `mensaje` y solo autollena campos no editados con `autollenar`/`sugerir`), `analisis` es `AnalisisImagen` con la confianza efectiva y `cache` es `true` si reutilizó un análisis sin consumir cupo; 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global, Redis no disponible para contabilizar el cupo (falla cerrado) o error del modelo. La respuesta se valida con `respuestaIaSchema`. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
 
 Al crear una incidencia, `ia_sugerencia` es opcional y solo se manda si el usuario aceptó campos sugeridos.
 Su forma es `IASugerencia` (`{modo, modelo, version_prompt, confianza, campos_autollenados, accion?, …}`, sin `null`) y está reflejada por

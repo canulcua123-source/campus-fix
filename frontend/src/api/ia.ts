@@ -1,6 +1,6 @@
 import {
   adhesionSchema,
-  respuestaAnalisisImagenSchema,
+  respuestaIaSchema,
   analizarImagenSchema,
   confirmarAdhesionSchema,
   type AnalizarImagenIn,
@@ -24,7 +24,7 @@ export function analizarImagen(datos: AnalizarImagenIn, opciones: OpcionesAnalis
     body: fd,
     timeoutMs: TIMEOUT_IA_MS,
     signal: opciones.signal,
-    schema: respuestaAnalisisImagenSchema,
+    schema: respuestaIaSchema,
   })
 }
 

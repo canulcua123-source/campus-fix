@@ -23,7 +23,7 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `POST /incidencias/{id}/evidencias/firma` | `evidencias:subir` | 200 `{evidencia_id, url_storage, upload_url, expira_en}` |
 | `POST /incidencias/{id}/evidencias` | `evidencias:subir` | **201** `{ok, evidencia_id}` |
 | `GET /incidencias/{id}/evidencias/{evidencia_id}/url` | `incidencias:ver` | 200 `{url, expira_en}` |
-| `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `AnalisisImagen`; 413 si supera 5 MB; 415 si la firma no es JPEG/PNG/WebP; 400 si está corrupta o fuera de 200–2600 px |
+| `POST /ia/analizar-imagen` (multipart) | `ia:usar` | 200 `RespuestaIA {accion, mensaje, analisis, cache}`; 413 si supera 5 MB; 415 si la firma no es JPEG/PNG/WebP; 400 si está corrupta o fuera de 200–2600 px |
 | `POST /ia/duplicados/adhesiones` | `ia:usar` + `incidencias:crear` | 200 `{ok, codigo, categoria, adhesiones, registrada}` |
 | `GET /config/ia`, `PATCH /config/ia` | `configuracion:gestionar` | 200 `ConfigIA` |
 | `GET /analitica/edificios`, `GET /analitica/tags` | `analitica:ver` | 200 lista |

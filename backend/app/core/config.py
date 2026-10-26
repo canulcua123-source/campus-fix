@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     ia_habilitada: bool = True
     ia_modelo: str = "claude-opus-5-5"
+    # Puerto ProveedorVision (T-028): cambiar de proveedor no requiere tocar el router.
+    ia_proveedor: Literal["claude", "gemini"] = "claude"
+    gemini_api_key: str = ""
+    gemini_modelo: str = "gemini-3.8-flash"
+    # La capa gratuita de Gemini usa el contenido para mejorar productos: solo para el set de evaluación.
+    gemini_capa: Literal["gratuita", "pagada"] = "gratuita"
+    ia_permitir_capa_gratuita: bool = False
     ia_umbral_costo_diario_usd: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
     @field_validator("jwt_secret")

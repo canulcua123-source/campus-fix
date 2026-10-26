@@ -5,7 +5,7 @@ import { TIMEOUT_IA_MS, ApiError } from '../client'
 import { analizarImagen, confirmarAdhesion } from '../ia'
 import { respuesta, simularFetch } from './utilidades'
 
-const ANALISIS = {
+const ANALISIS_IA = {
   es_incidencia_valida: true,
   categoria: 'infraestructura',
   titulo: 'Luminaria fundida',
@@ -15,8 +15,8 @@ const ANALISIS = {
   campos_detectados: [{ nombre: 'tipo', valor: 'luminaria' }],
   confianza: 0.9,
   advertencias: [],
-  cache: false,
 }
+const ANALISIS = { accion: 'autollenar', mensaje: 'Revisa los datos', analisis: ANALISIS_IA, cache: false }
 
 function imagen() {
   return new File(['foto'], 'foto.jpg', { type: 'image/jpeg' })
