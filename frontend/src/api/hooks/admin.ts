@@ -1,11 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { CategoriaIn, CategoriaPatch } from '../../schemas/catalogos'
 import type { RolIn, UsuarioIn, UsuarioPatch } from '../../schemas/usuario'
-import { categoriasQuery } from '../catalogos'
+import { categoriasQuery, crearCategoria, editarCategoria } from '../catalogos'
 import { claves } from '../keys'
 import { crearRol, crearUsuario, editarUsuario, rolesQuery, usuariosQuery } from '../usuarios'
 
 export function useCategorias() {
   return useQuery(categoriasQuery())
+}
+
+export function useCrearCategoria() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (datos: CategoriaIn) => crearCategoria(datos),
+    onSuccess: () => qc.invalidateQueries({ queryKey: claves.categorias }),
+  })
+}
+
+export function useEditarCategoria() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ clave, datos }: { clave: string; datos: CategoriaPatch }) => editarCategoria(clave, datos),
+    onSuccess: () => qc.invalidateQueries({ queryKey: claves.categorias }),
+  })
 }
 
 export function useUsuarios() {
