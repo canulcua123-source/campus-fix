@@ -3,9 +3,11 @@ import '../../test/setup'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError } from '../../api/client'
+import { ApiError, BASE, camposDeDetalle } from '../../api/client'
+import { servidor } from '../../test/msw/server'
 import { ErrorImagen } from '../../lib/imagen'
 import Reportar from '../Reportar'
 
@@ -290,5 +292,105 @@ describe('Reportar con IA no bloqueante (T-024)', () => {
     await userEvent.type(screen.getByLabelText('Título'), ' corregido')
 
     expect(screen.getAllByText('Sugerido por IA')).toHaveLength(antes - 1)
+  })
+})
+
+describe('Reportar completo (T-049)', () => {
+  async function abrirFormularioManual() {
+    renderReportar()
+    await userEvent.click(screen.getByRole('button', { name: 'Llenar sin foto' }))
+  }
+
+  async function llenarMinimo(user = userEvent.setup()) {
+    await user.type(screen.getByLabelText('Título'), 'Switch sin enlace')
+    await user.type(screen.getByLabelText('Descripción'), 'El switch del laboratorio no tiene enlace')
+    await user.type(screen.getByLabelText('Edificio'), 'Edificio A')
+    await user.type(screen.getByLabelText('Aula'), 'A-301')
+    await user.type(screen.getByLabelText('IP'), '10.0.0.5')
+    return user
+  }
+
+  it('muestra campos por categoria y limpia el detalle anterior al cambiarla', async () => {
+    await abrirFormularioManual()
+    expect(screen.getByLabelText('IP')).toBeInTheDocument()
+    expect(screen.getByLabelText('VLAN')).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'academico')
+    expect(screen.queryByLabelText('IP')).not.toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Código de curso'), 'MAT-101')
+
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'infraestructura')
+    expect(screen.getByLabelText('Tipo de daño')).toBeInTheDocument()
+    expect(screen.getByLabelText('Riesgo de seguridad')).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'academico')
+    expect(screen.getByLabelText('Código de curso')).toHaveValue('')
+  })
+
+  it('etiquetas legibles', async () => {
+    await abrirFormularioManual()
+    expect(screen.getByRole('option', { name: 'Crítica' })).toHaveValue('critica')
+    expect(screen.getByRole('option', { name: 'Cómputo y redes' })).toHaveValue('computo_redes')
+    expect(screen.queryByRole('option', { name: 'critica' })).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'infraestructura')
+    expect(screen.getByRole('option', { name: 'Filtración' })).toHaveValue('filtracion')
+    expect(screen.getByRole('option', { name: 'Climatización' })).toHaveValue('climatizacion')
+  })
+
+  it('error al salir del campo', async () => {
+    await abrirFormularioManual()
+    const titulo = screen.getByLabelText('Título')
+
+    await userEvent.type(titulo, 'abc')
+    expect(screen.queryByText('Mínimo 5 caracteres')).not.toBeInTheDocument()
+
+    await userEvent.tab()
+    expect(await screen.findByText('Mínimo 5 caracteres')).toBeInTheDocument()
+    expect(titulo).toHaveAttribute('aria-invalid', 'true')
+    expect(titulo).toHaveAccessibleDescription(/Mínimo 5 caracteres/)
+
+    await userEvent.type(titulo, 'de prueba')
+    await waitFor(() => expect(screen.queryByText('Mínimo 5 caracteres')).not.toBeInTheDocument())
+  })
+
+  it('envia y muestra folio', async () => {
+    let cuerpo: unknown
+    servidor.use(http.post(`${BASE}/incidencias`, async ({ request }) => {
+      cuerpo = await request.json()
+      return HttpResponse.json({ _id: 'inc1', codigo: 'INC-2026-1026-RED-0001', estado: 'abierta' }, { status: 201 })
+    }))
+    await abrirFormularioManual()
+    const user = await llenarMinimo()
+    await user.selectOptions(screen.getByLabelText('Prioridad'), 'alta')
+
+    await user.click(screen.getByRole('button', { name: 'Enviar reporte' }))
+
+    expect(await screen.findByText('INC-2026-1026-RED-0001')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver mi reporte' })).toHaveAttribute('href', '/incidencias/inc1')
+    expect(cuerpo).toMatchObject({
+      titulo: 'Switch sin enlace', prioridad: 'alta',
+      ubicacion: { edificio: 'Edificio A', aula: 'A-301' },
+      detalle_especifico: { categoria: 'computo_redes', ip: '10.0.0.5', vlan: 1 },
+    })
+  })
+
+  it('muestra error 400 por campo', async () => {
+    const detalle = [
+      { loc: ['body', 'detalle_especifico', 'computo_redes', 'vlan'], msg: 'Input should be less than or equal to 4094', type: 'less_than_equal', ctx: { le: 4094 } },
+      { loc: ['body'], msg: 'Ubicación fuera del campus', type: 'value_error' },
+    ]
+    servidor.use(http.post(`${BASE}/incidencias`, () => HttpResponse.json({ error: 'validacion', detalle }, { status: 400 })))
+    const esperado = camposDeDetalle(detalle)
+    await abrirFormularioManual()
+    const user = await llenarMinimo()
+
+    await user.click(screen.getByRole('button', { name: 'Enviar reporte' }))
+
+    const vlan = screen.getByLabelText('VLAN')
+    await waitFor(() => expect(vlan).toHaveAttribute('aria-invalid', 'true'))
+    expect(vlan).toHaveAccessibleDescription(new RegExp(esperado['detalle_especifico.vlan']))
+    expect(screen.getByRole('alert')).toHaveTextContent(esperado._general)
+    expect(screen.queryByText('INC-2026-1026-RED-0001')).not.toBeInTheDocument()
   })
 })

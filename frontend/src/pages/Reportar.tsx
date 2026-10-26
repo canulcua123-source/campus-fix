@@ -1,28 +1,28 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Camera, Sparkles } from 'lucide-react'
+import { Camera, ImagePlus, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
+import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { aulaQuery } from '../api/aulas'
+import { ApiError } from '../api/client'
 import { analizarImagen } from '../api/ia'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import { AvisoCalidad } from '../components/AvisoCalidad'
+import { CamposDetalleReporte } from '../components/CamposDetalleReporte'
 import { SugerenciaIA } from '../components/SugerenciaIA'
-import { Button, Card, Skeleton } from '../components/ui'
+import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui'
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
+import { OPCIONES_CATEGORIA, OPCIONES_PRIORIDAD } from '../lib/etiquetas'
 import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
 import type { RespuestaIA } from '../schemas/ia'
-import {
-  CATEGORIAS, PRIORIDADES, incidenciaSchema,
-  type Categoria, type IncidenciaCreada, type IncidenciaForm,
-} from '../schemas/incidencia'
+import { incidenciaSchema, type Categoria, type IncidenciaCreada, type IncidenciaForm } from '../schemas/incidencia'
+import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
 
-const NOMBRES_CATEGORIA: Record<Categoria, string> = {
-  computo_redes: 'Cómputo y redes', infraestructura: 'Infraestructura', academico: 'Académico',
-}
+/** Rutas del formulario que tienen un campo visible: un 400 de la API en ellas se marca bajo el campo (UX-18). */
+const RUTAS_CON_CAMPO = /^(titulo|descripcion|prioridad|tags|ubicacion\.(edificio|piso|aula)|detalle_especifico\.[a-z_]+)$/
 
 function detalleVacio(c: Categoria): IncidenciaForm['detalle_especifico'] {
   switch (c) {
@@ -35,8 +35,8 @@ function detalleVacio(c: Categoria): IncidenciaForm['detalle_especifico'] {
   }
 }
 
-function Err({ msg }: { msg?: string }) {
-  return msg ? <p className="campo-error">{msg}</p> : null
+function Err({ id, msg }: { id?: string; msg?: string }) {
+  return msg ? <p id={id} className="campo-error">{msg}</p> : null
 }
 
 function normalizarTag(t: string): string {
@@ -65,11 +65,14 @@ export default function Reportar() {
   const [tagsTexto, setTagsTexto] = useState('')
   const [creada, setCreada] = useState<IncidenciaCreada | null>(null)
   const [errorFoto, setErrorFoto] = useState<string | null>(null)
-  const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [estadoFoto, setEstadoFoto] = useState<EstadoFoto>('sin_foto')
   const [calidadPendiente, setCalidadPendiente] = useState<{ ia: Blob; pistas: CalidadCliente[] } | null>(null)
   const progresoFoto = useRef<ReanudarSubida>({}) // conserva firma y PUT hechos para reintentar solo el paso fallido
 
-  const { register, handleSubmit, setValue, getFieldState, control, formState } = useForm<IncidenciaForm>({
+  const galeria = useRef<HTMLInputElement>(null)
+  const { register, handleSubmit, setValue, setError, clearErrors, getFieldState, control, formState } = useForm<IncidenciaForm>({
+    // Valida al salir del campo y, una vez tocado, al corregirlo (UX-15, doc §7.1).
+    mode: 'onTouched',
     resolver: zodResolver(incidenciaSchema),
     defaultValues: {
       titulo: '', descripcion: '', prioridad: 'media', tags: [],
@@ -100,13 +103,10 @@ export default function Reportar() {
     }
   }, [])
 
-  // register de campos del detalle (la unión discriminada no se resuelve en tipos de ruta)
-  const d = (nombre: string, opts?: RegisterOptions) =>
-    register(`detalle_especifico.${nombre}` as 'detalle_especifico.categoria', opts as never)
-  const num = { valueAsNumber: true } as RegisterOptions
-
+  /** Cambiar de categoría limpia los campos y errores del detalle anterior. */
   function cambiarCategoria(c: Categoria, porUsuario = false) {
     setValue('detalle_especifico', detalleVacio(c), { shouldDirty: porUsuario })
+    clearErrors('detalle_especifico')
   }
 
   // El análisis llega mientras el formulario ya es editable: nunca pisa lo que el usuario escribió.
@@ -263,15 +263,32 @@ export default function Reportar() {
   async function adjuntarFoto(incidenciaId: string) {
     if (!foto) return
     setErrorFoto(null)
-    setSubiendoFoto(true)
+    setEstadoFoto('subiendo')
     try {
       await subirFoto({ incidenciaId, archivo: foto, nombre: 'incidencia.jpg', reanudar: progresoFoto.current })
-      navigate('/mis-tickets')
+      if (montado.current) setEstadoFoto('subida')
     } catch (e) {
+      if (!montado.current) return
       setErrorFoto(e instanceof Error ? e.message : 'No se pudo adjuntar la foto')
-    } finally {
-      setSubiendoFoto(false)
+      setEstadoFoto('error')
     }
+  }
+
+  /** 400 de la API → mensaje bajo cada campo (FB-08); lo que no tiene campo va al aviso general. */
+  function marcarErroresApi(e: ApiError): boolean {
+    const sueltos: string[] = []
+    let primero = true
+    for (const [ruta, mensaje] of Object.entries(e.campos)) {
+      if (RUTAS_CON_CAMPO.test(ruta)) {
+        setError(ruta as Path<IncidenciaForm>, { type: 'servidor', message: mensaje }, { shouldFocus: primero })
+        primero = false
+      } else {
+        sueltos.push(mensaje)
+      }
+    }
+    if (primero && sueltos.length === 0) return false
+    setErrorEnvio(sueltos.length ? sueltos.join('. ') : 'Revisa los campos marcados')
+    return true
   }
 
   async function enviar(datos: IncidenciaForm) {
@@ -279,13 +296,10 @@ export default function Reportar() {
     setErrorEnvio(null)
     try {
       const nueva = await crear(datos)
-      if (!foto) {
-        navigate('/mis-tickets')
-        return
-      }
       setCreada(nueva)
-      await adjuntarFoto(nueva._id)
+      if (foto) await adjuntarFoto(nueva._id)
     } catch (e) {
+      if (e instanceof ApiError && e.codigo === 'validacion' && marcarErroresApi(e)) return
       setErrorEnvio(e instanceof Error ? e.message : 'No se pudo crear la incidencia')
     }
   }
@@ -294,31 +308,15 @@ export default function Reportar() {
     void handleSubmit(enviar)(evento)
   }
 
-  const errD = errors.detalle_especifico as Record<string, { message?: string }> | undefined
-
   if (creada) {
     return (
-      <>
-        <h1 className="titulo-pagina">Incidencia creada</h1>
-        <div className="card">
-          <p className="m-0">Tu reporte <strong>{creada.codigo}</strong> quedó registrado.</p>
-          {subiendoFoto && <p className="mt-2 text-muted" role="status">Subiendo la foto como evidencia…</p>}
-          {errorFoto && (
-            <div className="mt-3" role="alert">
-              <p className="m-0 font-semibold">No se pudo adjuntar la foto, reintentar</p>
-              <p className="mb-0 mt-1 text-sm text-muted">{errorFoto}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className="btn" disabled={subiendoFoto} onClick={() => adjuntarFoto(creada._id)}>
-                  Reintentar foto
-                </button>
-                <button type="button" className="btn btn-secundario" onClick={() => navigate('/mis-tickets')}>
-                  Continuar sin foto
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </>
+      <ReporteEnviado
+        creada={creada}
+        estadoFoto={estadoFoto}
+        errorFoto={errorFoto}
+        onReintentarFoto={() => void adjuntarFoto(creada._id)}
+        onContinuarSinFoto={() => navigate('/mis-tickets')}
+      />
     )
   }
 
@@ -333,6 +331,20 @@ export default function Reportar() {
       onChange={(e) => {
         alElegirFoto(e.target.files?.[0])
         e.target.value = '' // permite volver a elegir la misma foto al repetir
+      }}
+    />
+  )
+  // Alternativa a la cámara: mismo procesamiento, sin `capture` (abre la galería/archivos).
+  const entradaGaleria = (
+    <input
+      ref={galeria}
+      type="file"
+      accept={ACCEPT_FOTO}
+      hidden
+      aria-label="Foto desde la galería"
+      onChange={(e) => {
+        alElegirFoto(e.target.files?.[0])
+        e.target.value = ''
       }}
     />
   )
@@ -354,9 +366,13 @@ export default function Reportar() {
             onChange={(e) => setContexto(e.target.value)}
           />
           {entradaFoto}
+          {entradaGaleria}
           <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
           </button>
+          <Button variante="secundario" icono={<ImagePlus size={18} aria-hidden />} disabled={analizando} onClick={() => galeria.current?.click()}>
+            Elegir de la galería
+          </Button>
           <button className="btn btn-secundario" onClick={continuarManual}>Llenar sin foto</button>
         </div>
       </>
@@ -417,100 +433,51 @@ export default function Reportar() {
         </div>
       )}
 
-      <form onSubmit={enviarFormulario} className="card">
-        <label className="etiqueta" htmlFor="titulo">Título</label>{marcaIA('titulo')}
-        <input id="titulo" {...register('titulo')} />
-        <Err msg={errors.titulo?.message} />
-        <label className="etiqueta" htmlFor="descripcion">Descripción</label>{marcaIA('descripcion')}
-        <textarea id="descripcion" rows={4} {...register('descripcion')} />
-        <Err msg={errors.descripcion?.message} />
-        <label className="etiqueta" htmlFor="prioridad">Prioridad</label>{marcaIA('prioridad')}
-        <select id="prioridad" {...register('prioridad', { onChange: () => setCriticaPendiente(false) })}>
-          {PRIORIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
+      <form onSubmit={enviarFormulario} className="card" noValidate>
+        {marcaIA('titulo')}
+        <Input etiqueta="Título" maxLength={120} error={errors.titulo?.message} {...register('titulo')} />
+        {marcaIA('descripcion')}
+        <Textarea etiqueta="Descripción" rows={4} maxLength={2000} error={errors.descripcion?.message} {...register('descripcion')} />
+        {marcaIA('prioridad')}
+        <Select
+          etiqueta="Prioridad"
+          opciones={OPCIONES_PRIORIDAD}
+          error={errors.prioridad?.message}
+          {...register('prioridad', { onChange: () => setCriticaPendiente(false) })}
+        />
 
-        <label className="etiqueta" htmlFor="edificio">Edificio</label>
-        <input id="edificio" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada} {...register('ubicacion.edificio')} />
-        <Err msg={errors.ubicacion?.edificio?.message} />
-        <label className="etiqueta" htmlFor="piso">Piso (opcional)</label>
-        <input id="piso" type="number" inputMode="numeric" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+        <Input etiqueta="Edificio" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+          error={errors.ubicacion?.edificio?.message} {...register('ubicacion.edificio')} />
+        <Input etiqueta="Piso (opcional)" type="number" inputMode="numeric" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+          error={errors.ubicacion?.piso?.message}
           {...register('ubicacion.piso', { setValueAs: (v) => (v === '' || v == null ? null : Number(v)) })} />
-        <label className="etiqueta" htmlFor="aula">Aula</label>
-        <input id="aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada} {...register('ubicacion.aula')} />
-        <Err msg={errors.ubicacion?.aula?.message} />
+        <Input etiqueta="Aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+          error={errors.ubicacion?.aula?.message} {...register('ubicacion.aula')} />
 
-        <label className="etiqueta" htmlFor="categoria">Categoría</label>{marcaIA('detalle_especifico')}
-        <select id="categoria" value={categoria} onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}>
-          {CATEGORIAS.map((c) => <option key={c} value={c}>{NOMBRES_CATEGORIA[c]}</option>)}
-        </select>
+        {marcaIA('detalle_especifico')}
+        <Select
+          etiqueta="Categoría"
+          opciones={OPCIONES_CATEGORIA}
+          value={categoria}
+          onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}
+        />
+        <CamposDetalleReporte categoria={categoria} register={register} errores={errors.detalle_especifico} />
 
-        {categoria === 'computo_redes' && (
-          <>
-            <label className="etiqueta" htmlFor="ip">IP</label>
-            <input id="ip" inputMode="decimal" {...d('ip')} />
-            <Err msg={errD?.ip?.message} />
-            <label className="etiqueta" htmlFor="vlan">VLAN</label>
-            <input id="vlan" type="number" inputMode="numeric" {...d('vlan', num)} />
-            <Err msg={errD?.vlan?.message} />
-            <label className="etiqueta" htmlFor="uplink">Puerto uplink</label>
-            <input id="uplink" {...d('puerto_uplink')} />
-            <Err msg={errD?.puerto_uplink?.message} />
-            <label className="etiqueta" htmlFor="equipos">Equipos afectados</label>
-            <input id="equipos" type="number" inputMode="numeric" {...d('equipos_afectados', num)} />
-            <Err msg={errD?.equipos_afectados?.message} />
-          </>
-        )}
-        {categoria === 'infraestructura' && (
-          <>
-            <label className="etiqueta" htmlFor="tipo_dano">Tipo de daño</label>
-            <select id="tipo_dano" {...d('tipo_dano')}>
-              {['filtracion', 'electrico', 'climatizacion', 'cerrajeria', 'luminaria', 'otro'].map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <label className="etiqueta" htmlFor="riesgo">Riesgo de seguridad</label>
-            <select id="riesgo" {...d('riesgo_seguridad')}>
-              {['bajo', 'medio', 'alto'].map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <label className="mt-3 flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" style={{ width: 20, minHeight: 20 }} {...d('requiere_insumos')} /> Requiere insumos
-            </label>
-            <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" style={{ width: 20, minHeight: 20 }} {...d('requiere_contratista')} /> Requiere contratista
-            </label>
-          </>
-        )}
-        {categoria === 'academico' && (
-          <>
-            <label className="etiqueta" htmlFor="plataforma">Plataforma</label>
-            <select id="plataforma" {...d('plataforma')}>
-              <option value="lms">LMS</option>
-              <option value="portal_calificaciones">Portal de calificaciones</option>
-              <option value="correo">Correo</option>
-            </select>
-            <label className="etiqueta" htmlFor="curso">Código de curso</label>
-            <input id="curso" placeholder="MAT-101" {...d('codigo_curso')} />
-            <Err msg={errD?.codigo_curso?.message} />
-            <label className="etiqueta" htmlFor="periodo">Periodo</label>
-            <input id="periodo" placeholder="2026-1" {...d('periodo')} />
-            <Err msg={errD?.periodo?.message} />
-            <label className="etiqueta" htmlFor="impactados">Estudiantes impactados</label>
-            <input id="impactados" type="number" inputMode="numeric" {...d('estudiantes_impactados', num)} />
-            <Err msg={errD?.estudiantes_impactados?.message} />
-          </>
-        )}
-
-        <label className="etiqueta" htmlFor="tags">Tags (separados por coma)</label>{marcaIA('tags')}
-        <input
-          id="tags"
+        {marcaIA('tags')}
+        <Input
+          etiqueta="Tags (separados por coma)"
           value={tagsTexto}
+          aria-describedby={errors.tags ? 'tags-error' : undefined}
+          aria-invalid={errors.tags ? true : undefined}
           onChange={(e) => {
             setTagsTexto(e.target.value)
             setValue('tags', e.target.value.split(',').map(normalizarTag).filter(Boolean), { shouldDirty: true })
           }}
         />
-        <Err msg={errors.tags?.message} />
+        <Err id="tags-error" msg={errors.tags?.message ?? (Array.isArray(errors.tags) ? 'Revisa los tags: 2 a 30 letras, números o _' : undefined)} />
 
         {errorEnvio && <p className="campo-error" role="alert">{errorEnvio}</p>}
-        <button className="btn mt-4 w-full" disabled={isSubmitting}>Enviar reporte</button>
+        <Button type="submit" bloque className="mt-4" cargando={isSubmitting} textoCargando="Enviando…">Enviar reporte</Button>
       </form>
     </>
   )
