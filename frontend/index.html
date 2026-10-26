@@ -8,6 +8,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0B0F17" media="(prefers-color-scheme: dark)" />
+    <script>
+      // T-058: aplica el tema guardado antes del primer pintado (sin parpadeo). Espejo de src/lib/tema.ts.
+      try {
+        var tema = localStorage.getItem('utm-desk:tema')
+        if (tema === 'claro' || tema === 'oscuro') {
+          document.documentElement.dataset.theme = tema === 'oscuro' ? 'dark' : 'light'
+          var metas = document.querySelectorAll('meta[name="theme-color"]')
+          var color = document.querySelector('meta[name="theme-color"][media*="' + (tema === 'oscuro' ? 'dark' : 'light') + '"]').content
+          metas.forEach(function (m) { m.dataset.original = m.content; m.content = color })
+        }
+      } catch (e) {
+        // Sin almacenamiento (modo privado): se queda el tema del sistema.
+      }
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

@@ -6,8 +6,10 @@ import { crearQueryClient } from './api/queryClient'
 import App from './App'
 import './index.css'
 import { aplicarPlataforma } from './lib/platform'
+import { iniciarTema } from './lib/tema'
 
 aplicarPlataforma()
+iniciarTema()
 const queryClient = crearQueryClient()
 
 createRoot(document.getElementById('root')!).render(
