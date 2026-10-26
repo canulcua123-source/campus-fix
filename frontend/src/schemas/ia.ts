@@ -14,6 +14,8 @@ export const analizarImagenSchema = z.object({
     .refine((b) => (TIPOS_IMAGEN_IA as readonly string[]).includes(b.type), 'Formato no permitido (usa JPEG, PNG o WebP)')
     .refine((b) => b.size <= MAX_BYTES_IMAGEN_IA, 'La imagen excede 5 MB'),
   contexto: z.string().max(500, 'Máximo 500 caracteres').optional(),
+  /** Pistas del control de calidad del cliente (Form `calidad_cliente`, CALIDADES_CLIENTE de routers/ia.py). */
+  calidad_cliente: z.array(z.enum(['borrosa', 'oscura', 'sobreexpuesta'])).max(3).optional(),
 })
 export type AnalizarImagenIn = z.infer<typeof analizarImagenSchema>
 

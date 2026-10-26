@@ -130,13 +130,32 @@ def _estado_por_verificar(usuario: dict) -> tuple[UbicacionCompuertas | None, st
     return None, "no_verificable"
 
 
+# Pistas del control de calidad del cliente (frontend/src/lib/calidad.ts); cualquiera hace fallar G4.
+CALIDADES_CLIENTE = frozenset({"borrosa", "oscura", "sobreexpuesta"})
+
+
+def _calidad_cliente(valor: str | None) -> tuple[str, ...]:
+    """``"borrosa,oscura"`` → ``("borrosa", "oscura")``; 400 si trae una pista desconocida."""
+    pistas = tuple(dict.fromkeys(p.strip() for p in (valor or "").split(",") if p.strip()))
+    if any(p not in CALIDADES_CLIENTE for p in pistas):
+        raise HTTPException(400, "calidad_cliente solo acepta: borrosa, oscura, sobreexpuesta")
+    return pistas
+
+
 def _entrada_compuertas(
-    analisis: AnalisisImagen, usuario: dict, ahora: datetime, config: ConfigIA, *, cupo_agentico_disponible: bool
+    analisis: AnalisisImagen,
+    usuario: dict,
+    ahora: datetime,
+    config: ConfigIA,
+    *,
+    cupo_agentico_disponible: bool,
+    calidad_cliente: tuple[str, ...] = (),
 ) -> EntradaCompuertas:
     ubicacion, duplicado = _estado_por_verificar(usuario)
     return EntradaCompuertas(
         analisis=analisis,
         ahora=ahora,
+        calidad_cliente=calidad_cliente,
         ubicacion=ubicacion,
         esquema_valido=mapeo_valido(analisis, ubicacion),
         duplicado=duplicado,
@@ -176,10 +195,18 @@ async def _responder(
     config: ConfigIA,
     ahora: datetime,
     cupo_agentico_disponible: bool,
+    calidad_cliente: tuple[str, ...] = (),
 ) -> RespuestaIA:
     """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
     asistida = decidir(analisis, cache=cache)
-    entrada = _entrada_compuertas(analisis, usuario, ahora, config, cupo_agentico_disponible=cupo_agentico_disponible)
+    entrada = _entrada_compuertas(
+        analisis,
+        usuario,
+        ahora,
+        config,
+        cupo_agentico_disponible=cupo_agentico_disponible,
+        calidad_cliente=calidad_cliente,
+    )
     decision = evaluar_compuertas(entrada)
     if decision.accion == "agentico" and entrada.ubicacion is not None:
         try:
@@ -250,7 +277,9 @@ async def analizar(
     imagen: UploadFile,
     usuario: Annotated[dict, Depends(require_permiso("ia:usar"))],
     contexto: Annotated[str | None, Form(max_length=500)] = None,
+    calidad_cliente: Annotated[str | None, Form(max_length=60)] = None,
 ):
+    pistas_calidad = _calidad_cliente(calidad_cliente)
     try:
         validada = await leer_y_validar_imagen(imagen)
     except ImagenDemasiadoGrande as exc:
@@ -292,7 +321,12 @@ async def analizar(
         logger.warning("Redis no disponible al consultar la caché de IA", exc_info=True)
     ahora = datetime.now(timezone.utc)
     cupo_agentico = await _cupo_agentico_previo(redis, usuario, config, ahora)
-    contexto_respuesta = {"config": config, "ahora": ahora, "cupo_agentico_disponible": cupo_agentico}
+    contexto_respuesta = {
+        "config": config,
+        "ahora": ahora,
+        "cupo_agentico_disponible": cupo_agentico,
+        "calidad_cliente": pistas_calidad,
+    }
     if analisis_cache is not None:
         return await _responder(redis, usuario, validada.datos, analisis_cache, cache=True, **contexto_respuesta)
 

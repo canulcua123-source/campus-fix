@@ -1823,7 +1823,7 @@
                 "description": "Token JWT"
               }
             ],
-            "description": "Multipart: campo imagen (archivo) y contexto (opcional). Adjunta un archivo antes de enviar. La respuesta indica con cache si el análisis se reutilizó.",
+            "description": "Multipart: campo imagen (archivo), contexto (opcional) y calidad_cliente (opcional). Adjunta un archivo antes de enviar. La respuesta indica con cache si el análisis se reutilizó.",
             "url": {
               "raw": "{{base_url}}/ia/analizar-imagen",
               "host": [
@@ -1848,6 +1848,13 @@
                   "value": "Foto de un switch apagado en el laboratorio",
                   "type": "text",
                   "description": "Texto opcional (máx. 500)"
+                },
+                {
+                  "key": "calidad_cliente",
+                  "value": "borrosa",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Opcional: pistas del control de calidad del cliente separadas por coma (borrosa, oscura, sobreexpuesta). Con cualquier pista la compuerta G4 no pasa."
                 }
               ]
             }

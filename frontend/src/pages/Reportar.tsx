@@ -8,9 +8,11 @@ import { aulaQuery } from '../api/aulas'
 import { analizarImagen } from '../api/ia'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
+import { AvisoCalidad } from '../components/AvisoCalidad'
 import { SugerenciaIA } from '../components/SugerenciaIA'
 import { Button, Card, Skeleton } from '../components/ui'
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
+import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
 import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
 import type { RespuestaIA } from '../schemas/ia'
 import {
@@ -64,6 +66,7 @@ export default function Reportar() {
   const [creada, setCreada] = useState<IncidenciaCreada | null>(null)
   const [errorFoto, setErrorFoto] = useState<string | null>(null)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const [calidadPendiente, setCalidadPendiente] = useState<{ ia: Blob; pistas: CalidadCliente[] } | null>(null)
   const progresoFoto = useRef<ReanudarSubida>({}) // conserva firma y PUT hechos para reintentar solo el paso fallido
 
   const { register, handleSubmit, setValue, getFieldState, control, formState } = useForm<IncidenciaForm>({
@@ -146,8 +149,11 @@ export default function Reportar() {
     entrada.current?.click()
   }
 
-  async function alElegirFoto(archivo: File | undefined) {
-    if (!archivo) return
+  const vigente = (control: AbortController) =>
+    montado.current && !control.signal.aborted && operacionIA.current === control
+
+  /** Corre una operación cancelable (procesar y/o analizar); otra foto o "Continuar sin IA" la abortan. */
+  async function conOperacion(tarea: (control: AbortController) => Promise<void>) {
     cancelarAnalisis()
     const control = new AbortController()
     operacionIA.current = control
@@ -155,61 +161,10 @@ export default function Reportar() {
     setAviso(null)
     setCriticaPendiente(false)
     setCamposIA([])
-    setPaso('formulario')
     try {
-      // Orientación EXIF + derivados JPEG sin metadatos (lib/imagen.ts); en un worker si se puede.
-      const derivados = await procesarFotoEnSegundoPlano(archivo)
-      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
-      setFoto(derivados.evidencia)
-      progresoFoto.current = {}
-      if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
-      vistaUrl.current = URL.createObjectURL(derivados.miniatura)
-      setVista(vistaUrl.current)
-      const sugerencia = await analizarImagen({ imagen: derivados.ia, contexto: contexto.trim() || undefined }, { signal: control.signal })
-      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
-      setIa(sugerencia)
-      // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
-      if (sugerencia.accion_asistida === 'autollenar' || sugerencia.accion_asistida === 'sugerir') {
-        const analisis = sugerencia.analisis
-        const rellenados: string[] = []
-        if (sinEditar('titulo')) {
-          setValue('titulo', analisis.titulo.slice(0, 120))
-          rellenados.push('titulo')
-        }
-        if (sinEditar('descripcion')) {
-          setValue('descripcion', analisis.descripcion)
-          rellenados.push('descripcion')
-        }
-        // "critica" nunca se autollena: se deja "alta" y se pide confirmación explícita.
-        if (sinEditar('prioridad')) {
-          setValue('prioridad', analisis.prioridad_sugerida === 'critica' ? 'alta' : analisis.prioridad_sugerida)
-          setCriticaPendiente(analisis.prioridad_sugerida === 'critica')
-          rellenados.push('prioridad')
-        }
-        if (sinEditar('tags')) {
-          const tags = analisis.tags.map(normalizarTag)
-          setValue('tags', tags)
-          setTagsTexto(tags.join(', '))
-          rellenados.push('tags')
-        }
-        if (analisis.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) {
-          cambiarCategoria(analisis.categoria)
-          rellenados.push('detalle_especifico')
-          if (analisis.categoria === 'infraestructura' && analisis.detalle_infra) {
-            setValue('detalle_especifico', {
-              categoria: 'infraestructura',
-              tipo_dano: analisis.detalle_infra.tipo_dano,
-              // Igual que el mapeo del servidor: riesgo "alto" nunca se autollena, lo confirma la persona.
-              riesgo_seguridad: analisis.detalle_infra.riesgo_seguridad === 'alto' ? 'medio' : analisis.detalle_infra.riesgo_seguridad,
-              requiere_insumos: false,
-              requiere_contratista: false,
-            })
-          }
-        }
-        setCamposIA(rellenados)
-      }
+      await tarea(control)
     } catch (e) {
-      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
+      if (!vigente(control)) return
       setAviso(e instanceof ErrorImagen
         ? `${e.message} Puedes llenar el formulario sin foto.`
         : 'No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
@@ -219,6 +174,90 @@ export default function Reportar() {
         setAnalizando(false)
       }
     }
+  }
+
+  async function analizar(imagen: Blob, pistas: CalidadCliente[], control: AbortController) {
+    const sugerencia = await analizarImagen(
+      { imagen, contexto: contexto.trim() || undefined, calidad_cliente: pistas.length ? pistas : undefined },
+      { signal: control.signal },
+    )
+    if (!vigente(control)) return
+    setIa(sugerencia)
+    // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
+    if (sugerencia.accion_asistida === 'autollenar' || sugerencia.accion_asistida === 'sugerir') {
+      const analisis = sugerencia.analisis
+      const rellenados: string[] = []
+      if (sinEditar('titulo')) {
+        setValue('titulo', analisis.titulo.slice(0, 120))
+        rellenados.push('titulo')
+      }
+      if (sinEditar('descripcion')) {
+        setValue('descripcion', analisis.descripcion)
+        rellenados.push('descripcion')
+      }
+      // "critica" nunca se autollena: se deja "alta" y se pide confirmación explícita.
+      if (sinEditar('prioridad')) {
+        setValue('prioridad', analisis.prioridad_sugerida === 'critica' ? 'alta' : analisis.prioridad_sugerida)
+        setCriticaPendiente(analisis.prioridad_sugerida === 'critica')
+        rellenados.push('prioridad')
+      }
+      if (sinEditar('tags')) {
+        const tags = analisis.tags.map(normalizarTag)
+        setValue('tags', tags)
+        setTagsTexto(tags.join(', '))
+        rellenados.push('tags')
+      }
+      if (analisis.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) {
+        cambiarCategoria(analisis.categoria)
+        rellenados.push('detalle_especifico')
+        if (analisis.categoria === 'infraestructura' && analisis.detalle_infra) {
+          setValue('detalle_especifico', {
+            categoria: 'infraestructura',
+            tipo_dano: analisis.detalle_infra.tipo_dano,
+            // Igual que el mapeo del servidor: riesgo "alto" nunca se autollena, lo confirma la persona.
+            riesgo_seguridad: analisis.detalle_infra.riesgo_seguridad === 'alto' ? 'medio' : analisis.detalle_infra.riesgo_seguridad,
+            requiere_insumos: false,
+            requiere_contratista: false,
+          })
+        }
+      }
+      setCamposIA(rellenados)
+    }
+  }
+
+  function alElegirFoto(archivo: File | undefined) {
+    if (!archivo) return
+    setCalidadPendiente(null)
+    setPaso('formulario')
+    void conOperacion(async (control) => {
+      // Orientación EXIF + derivados JPEG sin metadatos (lib/imagen.ts); en un worker si se puede.
+      const derivados = await procesarFotoEnSegundoPlano(archivo)
+      if (!vigente(control)) return
+      setFoto(derivados.evidencia)
+      progresoFoto.current = {}
+      if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
+      vistaUrl.current = URL.createObjectURL(derivados.miniatura)
+      setVista(vistaUrl.current)
+      const pistas = pistasCalidad(derivados.calidad)
+      if (pistas.length > 0) {
+        // Aviso no bloqueante: el formulario sigue editable y la IA espera la decisión (no gasta cupo en una foto a repetir).
+        setCalidadPendiente({ ia: derivados.ia, pistas })
+        return
+      }
+      await analizar(derivados.ia, [], control)
+    })
+  }
+
+  function usarFotoDeTodosModos() {
+    if (!calidadPendiente) return
+    const { ia: imagen, pistas } = calidadPendiente
+    setCalidadPendiente(null)
+    void conOperacion((control) => analizar(imagen, pistas, control))
+  }
+
+  function repetirFoto() {
+    setCalidadPendiente(null)
+    abrirCamara()
   }
 
   async function adjuntarFoto(incidenciaId: string) {
@@ -283,6 +322,21 @@ export default function Reportar() {
     )
   }
 
+  const entradaFoto = (
+    <input
+      ref={entrada}
+      type="file"
+      accept={ACCEPT_FOTO}
+      capture="environment"
+      hidden
+      aria-label="Foto de la incidencia"
+      onChange={(e) => {
+        alElegirFoto(e.target.files?.[0])
+        e.target.value = '' // permite volver a elegir la misma foto al repetir
+      }}
+    />
+  )
+
   if (paso === 'foto') {
     return (
       <>
@@ -299,7 +353,7 @@ export default function Reportar() {
             placeholder="Ej. el proyector no enciende desde ayer"
             onChange={(e) => setContexto(e.target.value)}
           />
-          <input ref={entrada} type="file" accept={ACCEPT_FOTO} capture="environment" hidden aria-label="Foto de la incidencia" onChange={(e) => alElegirFoto(e.target.files?.[0])} />
+          {entradaFoto}
           <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
           </button>
@@ -312,6 +366,7 @@ export default function Reportar() {
   return (
     <>
       <h1 className="titulo-pagina">Nueva incidencia</h1>
+      {entradaFoto}
       {vista && <img src={vista} alt="Foto de la incidencia" className="mb-3 max-h-56 rounded-card object-cover" />}
       {analizando && (
         <Card role="status" className="mb-3 text-sm">
@@ -322,6 +377,9 @@ export default function Reportar() {
           </div>
           <Button variante="secundario" className="mt-3" onClick={continuarSinIA}>Continuar sin IA</Button>
         </Card>
+      )}
+      {calidadPendiente && (
+        <AvisoCalidad pistas={calidadPendiente.pistas} onRepetir={repetirFoto} onUsar={usarFotoDeTodosModos} />
       )}
       {aviso && <p role="status" className="card mb-3 text-sm">{aviso}</p>}
       {aulaId && aula.isPending && <p role="status" className="card mb-3 text-sm">Comprobando la ubicación del código QR…</p>}

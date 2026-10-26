@@ -23,6 +23,7 @@ function entornoFalso(mapa: { width: number; height: number }) {
         fillRect: () => undefined,
         setTransform: (...m) => { dibujo.matriz = m },
         drawImage: (_img, _x, _y, w, h) => { dibujo.dibujado = [w, h] },
+        getImageData: (_x, _y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4).fill(128) }),
       }
       const lienzo: Lienzo = {
         width: ancho,
@@ -71,6 +72,14 @@ describe('procesarFoto (T-047)', () => {
     expect(await medidasDe(r.ia)).toMatchObject({ ancho: 1280, alto: 960, quality: 0.8 })
     expect(await medidasDe(r.miniatura)).toMatchObject({ ancho: 320, alto: 240, quality: 0.7 })
     expect(r).toMatchObject({ ancho: 4000, alto: 3000 })
+  })
+
+  it('mide la calidad sobre una copia de 512 px (T-051)', async () => {
+    const { entorno, dibujos } = entornoFalso({ width: 4000, height: 3000 })
+    const r = await procesarFoto(foto(jpegConExif({ ancho: 4000, alto: 3000 })), entorno)
+
+    expect(dibujos.at(-1)).toMatchObject({ ancho: 512, alto: 384 })
+    expect(r.calidad).toMatchObject({ brillo: 128, borrosa: true, oscura: false, sobreexpuesta: false })
   })
 
   it('salida jpeg', async () => {
