@@ -47,12 +47,30 @@ RUTAS = {
 }
 
 
+def _filtra_hash(obj: Any) -> bool:
+    """True si la respuesta expone un `password_hash` (como clave) o un hash argon2 (como valor).
+
+    Un error de validación puede nombrar el campo rechazado en `loc` (p. ej. `["body", "password_hash"]`);
+    eso no filtra nada y no se considera fuga.
+    """
+    if isinstance(obj, dict):
+        return "password_hash" in obj or any(_filtra_hash(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_filtra_hash(v) for v in obj)
+    return isinstance(obj, str) and obj.startswith("$argon2")
+
+
 class ClienteSeguro(AsyncClient):
     """AsyncClient que verifica que ninguna respuesta filtre `password_hash`."""
 
     async def request(self, *args, **kwargs):
         r = await super().request(*args, **kwargs)
-        assert "password_hash" not in r.text, f"password_hash filtrado en {r.request.method} {r.request.url}"
+        try:
+            cuerpo_json = r.json()
+        except ValueError:
+            cuerpo_json = None
+        filtrado = _filtra_hash(cuerpo_json) if cuerpo_json is not None else "$argon2" in r.text
+        assert not filtrado, f"password_hash filtrado en {r.request.method} {r.request.url}"
         return r
 
 
@@ -117,6 +135,7 @@ async def sembrar_usuarios(db, admin: dict) -> dict[str, dict]:
     usuarios: dict[str, dict] = {}
     for nombre, (rol, areas, edificios, activo) in defs.items():
         doc = {
+            "schema_version": 1,
             "correo": f"{nombre}@e2e.local",
             "nombre": nombre.replace("_", " ").title(),
             "rol": rol,
@@ -124,7 +143,7 @@ async def sembrar_usuarios(db, admin: dict) -> dict[str, dict]:
             "activo": activo,
             "areas": areas,
             "edificios": edificios,
-            "fecha_creacion": datetime.now(timezone.utc),
+            "fecha_alta": datetime.now(timezone.utc),
         }
         res = await db.usuarios.insert_one(doc)
         usuarios[nombre] = {
@@ -188,6 +207,7 @@ class Api:
 
     async def usuario_temporal(self, rol: str = "reportante", **extra) -> dict:
         doc = {
+            "schema_version": 1,
             "correo": f"tmp_{uuid.uuid4().hex[:10]}@e2e.local",
             "nombre": "Temporal E2E",
             "rol": rol,
@@ -195,7 +215,7 @@ class Api:
             "activo": True,
             "areas": [],
             "edificios": [],
-            "fecha_creacion": datetime.now(timezone.utc),
+            "fecha_alta": datetime.now(timezone.utc),
             **extra,
         }
         res = await self.db.usuarios.insert_one(doc)
