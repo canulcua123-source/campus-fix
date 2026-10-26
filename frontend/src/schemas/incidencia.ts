@@ -6,17 +6,19 @@ import { z } from 'zod'
  */
 
 export const PRIORIDADES = ['baja', 'media', 'alta', 'critica'] as const
-export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
+export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada', 'retirada'] as const
+export const ESTADOS_SEGUIMIENTO = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
 export const CATEGORIAS = ['computo_redes', 'infraestructura', 'academico'] as const
 export const TIPOS_DANO = ['filtracion', 'electrico', 'climatizacion', 'cerrajeria', 'luminaria', 'otro'] as const
 export const RIESGOS = ['bajo', 'medio', 'alto'] as const
 export const PLATAFORMAS = ['lms', 'portal_calificaciones', 'correo'] as const
 export const TIPOS_MIME_EVIDENCIA = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
-export const ACCIONES_IA = ['autollenar', 'sugerir', 'preguntar', 'rechazar'] as const
-export const CAMPOS_ACEPTADOS_IA = ['titulo', 'descripcion', 'prioridad', 'tags', 'detalle_especifico'] as const
+export const ACCIONES_IA = ['agentico', 'formulario', 'duplicado', 'autollenar', 'sugerir', 'preguntar', 'rechazar'] as const
+export const COMPUERTAS_IA = ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9'] as const
 
 export type Categoria = (typeof CATEGORIAS)[number]
 export type Estado = (typeof ESTADOS)[number]
+export type EstadoSeguimiento = (typeof ESTADOS_SEGUIMIENTO)[number]
 export type Prioridad = (typeof PRIORIDADES)[number]
 export type TipoMimeEvidencia = (typeof TIPOS_MIME_EVIDENCIA)[number]
 
@@ -27,6 +29,7 @@ export const TRANSICIONES: Record<Estado, readonly Estado[]> = {
   en_espera: ['en_proceso'],
   resuelta: ['cerrada', 'en_proceso'],
   cerrada: [],
+  retirada: [],
 }
 
 export const LIMITES = {
@@ -101,13 +104,25 @@ export const ubicacionSchema = z.object({
   aula: z.string('Indica el aula').min(1, 'Indica el aula').max(60, 'Máximo 60 caracteres'),
 })
 
+const unicos = (v: readonly string[]) => new Set(v).size === v.length
+const campoIaSchema = z.string().regex(/^(titulo|descripcion|prioridad|tags|detalle_especifico\.[a-z][a-z0-9_]{0,49})$/)
+const camposIaSchema = z.array(campoIaSchema).max(15).refine(unicos, 'No repitas campos')
+
+/** IASugerencia (backend/app/schemas/ia.py y esquema_ia_sugerencia de init_db.py). */
 export const iaSugerenciaSchema = z.strictObject({
-  modelo: z.string().min(1).max(100).regex(/^[A-Za-z0-9._:-]+$/),
-  prompt_version: z.string().min(1).max(30).regex(/^[A-Za-z0-9._-]+$/),
+  modo: z.enum(['agentico', 'asistido']),
+  modelo: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9._:/-]+$/),
+  version_prompt: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9._-]+$/),
   confianza: z.number().min(0).max(1),
-  accion: z.enum(ACCIONES_IA),
-  campos_aceptados: z.array(z.enum(CAMPOS_ACEPTADOS_IA)).max(5).refine((v) => new Set(v).size === v.length, 'No repitas campos aceptados'),
+  campos_autollenados: camposIaSchema,
+  proveedor: z.string().trim().min(2).max(30).regex(/^[a-z][a-z0-9_-]+$/).optional(),
+  analisis_id: z.string().regex(/^[A-Za-z0-9_-]{22,64}$/).optional(),
+  accion: z.enum(ACCIONES_IA).optional(),
+  campos_editados_por_usuario: camposIaSchema.optional(),
+  compuertas_fallidas: z.array(z.enum(COMPUERTAS_IA)).max(9).refine(unicos, 'No repitas compuertas').optional(),
+  ubicacion_fuente: z.enum(['qr', 'confirmada', 'selector']).optional(),
 })
+export type IASugerencia = z.infer<typeof iaSugerenciaSchema>
 
 /** IncidenciaIn (POST /incidencias). */
 export const incidenciaSchema = z.object({
@@ -124,9 +139,10 @@ export type IncidenciaIn = IncidenciaForm
 
 /** SeguimientoIn (PATCH /incidencias/{id}/seguimiento). */
 export const seguimientoSchema = z.object({
-  estado_nuevo: z.enum(ESTADOS, 'Selecciona el nuevo estado'),
+  estado_nuevo: z.enum(ESTADOS_SEGUIMIENTO, 'Selecciona el nuevo estado'),
   comentario: z.string('Requerido').min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres'),
-  horas: z.number('Indica las horas').min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas'),
+  horas: z.number('Indica las horas').finite().min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas')
+    .multipleOf(0.25, 'Usa incrementos de 0.25 horas'),
 })
 export type SeguimientoIn = z.infer<typeof seguimientoSchema>
 
@@ -241,6 +257,7 @@ export const incidenciaDetalleSchema = incidenciaListaItemSchema.omit({ score: t
   fecha_resolucion: fecha.optional(),
   schema_version: z.number().optional(),
   ia_sugerencia: iaSugerenciaSchema.optional(),
+  puede_retirar: z.boolean().default(false),
 })
 export type IncidenciaDetalle = z.infer<typeof incidenciaDetalleSchema>
 
@@ -262,4 +279,6 @@ export const evidenciaRegistradaSchema = okSchema.extend({ evidencia_id: z.strin
 export const urlEvidenciaSchema = z.object({ url: z.string(), expira_en: z.number() })
 
 // Compatibilidad: el análisis de imagen vive en schemas/ia.ts.
-export { analisisImagenSchema, type AnalisisImagen } from './ia'
+export {
+  analisisImagenSchema, respuestaAnalisisImagenSchema, type AnalisisImagen, type RespuestaAnalisisImagen,
+} from './ia'

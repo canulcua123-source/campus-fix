@@ -26,14 +26,28 @@ export type AlcanceRol = (typeof ALCANCES)[number]
 export type TipoReportante = (typeof TIPOS_REPORTANTE)[number]
 
 const RE_CLAVE_ROL = /^[a-z_]{3,30}$/
+export const DOMINIO_CORREO = ((import.meta.env.VITE_DOMINIO_CORREO as string | undefined) ?? 'utm.edu.mx').trim().toLowerCase()
+const correoBase = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, 'Escribe tu correo')
+  .max(254, 'Máximo 254 caracteres')
+  .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, 'Correo inválido')
+const perteneceAlDominio = (correo: string) => correo.slice(correo.lastIndexOf('@') + 1) === DOMINIO_CORREO
+const correoInstitucional = correoBase.refine(perteneceAlDominio, `Usa tu correo @${DOMINIO_CORREO}`)
+const correoLogin = correoBase.refine(
+  (correo) => perteneceAlDominio(correo) || correo === 'admin@utm.local',
+  `Usa tu correo @${DOMINIO_CORREO}`,
+)
 
 // ---------- auth ----------
 
 /** LoginIn (POST /auth/login). */
 export const loginSchema = z.object({
-  correo: z.string().min(3, 'Escribe tu correo').max(254, 'Máximo 254 caracteres'),
+  correo: correoLogin,
   password: z.string().min(1, 'Escribe tu contraseña').max(128, 'Máximo 128 caracteres'),
-})
+}).strict()
 export type LoginIn = z.infer<typeof loginSchema>
 
 const usuarioSesion = z.object({
@@ -75,20 +89,16 @@ export const usuarioPatchSchema = z.object({
   edificios: edificios.nullable().optional(),
   tipo_reportante: z.enum(TIPOS_REPORTANTE).nullable().optional(),
   activo: z.boolean().nullable().optional(),
-})
+}).strict()
 export type UsuarioPatch = z.infer<typeof usuarioPatchSchema>
 
 /** UsuarioIn (POST /usuarios). El correo se guarda en minúsculas y sin espacios, como el validador de Pydantic. */
 export const usuarioInSchema = usuarioPatchSchema.extend({
   nombre: nombreUsuario,
-  correo: z
-    .string()
-    .max(254, 'Máximo 254 caracteres')
-    .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/, 'Correo inválido')
-    .transform((v) => v.trim().toLowerCase()),
+  correo: correoInstitucional,
   password: z.string().min(10, 'Mínimo 10 caracteres').max(128, 'Máximo 128 caracteres'),
   rol: claveRol,
-})
+}).strict()
 export type UsuarioIn = z.infer<typeof usuarioInSchema>
 
 /** Usuario de GET/POST/PATCH /usuarios (sin password_hash). */
@@ -120,7 +130,7 @@ export const rolInSchema = z.object({
     .min(1, 'Selecciona al menos un permiso')
     .refine((v) => new Set(v).size === v.length, 'Permisos duplicados'),
   alcance: z.enum(ALCANCES, 'Selecciona el alcance'),
-})
+}).strict()
 export type RolIn = z.infer<typeof rolInSchema>
 
 export const rolSchema = z.object({

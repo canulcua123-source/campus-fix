@@ -4,7 +4,7 @@ import { useAuth } from '../auth/store'
 /** Cliente HTTP único hacia la API (FB-02). Ninguna página llama a `fetch` directamente. */
 export const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000'
 export const TIMEOUT_MS = 20_000
-export const TIMEOUT_IA_MS = 60_000
+export const TIMEOUT_IA_MS = 30_000
 export const MENSAJE_SESION_EXPIRADA = 'Tu sesión expiró. Inicia sesión de nuevo'
 
 export type CodigoError =

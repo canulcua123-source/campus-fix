@@ -61,8 +61,11 @@ async def test_correo_duplicado_409(api):
         {"password": "corta123"},
         {"nombre": "ab"},
         {"correo": "no-es-correo"},
+        {"correo": "usuario@externo.edu.mx"},
+        {"correo": "usuario@evile2e.local"},
         {"correo": {"$ne": ""}},
         {"rol": {"$ne": ""}},
+        {"campo_desconocido": "valor"},
     ],
     ids=[
         "rol_desconocido",
@@ -74,8 +77,11 @@ async def test_correo_duplicado_409(api):
         "password_corta",
         "nombre_corto",
         "correo_invalido",
+        "correo_externo",
+        "correo_parecido",
         "correo_nosql",
         "rol_nosql",
+        "campo_extra",
     ],
 )
 async def test_crear_usuario_invalido_400(api, over):

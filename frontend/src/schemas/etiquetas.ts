@@ -9,6 +9,7 @@ export const ETIQUETAS_ESTADO: Record<Estado, string> = {
   en_espera: 'En espera',
   resuelta: 'Resuelta',
   cerrada: 'Cerrada',
+  retirada: 'Retirada',
 }
 
 export const ETIQUETAS_PRIORIDAD: Record<Prioridad, string> = {

@@ -50,6 +50,9 @@
   --estado-cerrada: #64748b;
   --estado-cerrada-bg: #e2e8f0;
   --estado-cerrada-text: #334155;
+  --estado-retirada: #475569;
+  --estado-retirada-bg: #f1f5f9;
+  --estado-retirada-text: #334155;
 
   /* Prioridad */
   --prioridad-baja: #64748b;
@@ -142,6 +145,9 @@
     --estado-cerrada: #94a3b8;
     --estado-cerrada-bg: #334155;
     --estado-cerrada-text: #e2e8f0;
+    --estado-retirada: #cbd5e1;
+    --estado-retirada-bg: #1e293b;
+    --estado-retirada-text: #e2e8f0;
     --prioridad-baja: #94a3b8;
     --prioridad-baja-bg: #334155;
     --prioridad-baja-text: #e2e8f0;
@@ -205,6 +211,9 @@
   --estado-cerrada: #94a3b8;
   --estado-cerrada-bg: #334155;
   --estado-cerrada-text: #e2e8f0;
+  --estado-retirada: #cbd5e1;
+  --estado-retirada-bg: #1e293b;
+  --estado-retirada-text: #e2e8f0;
   --prioridad-baja: #94a3b8;
   --prioridad-baja-bg: #334155;
   --prioridad-baja-text: #e2e8f0;

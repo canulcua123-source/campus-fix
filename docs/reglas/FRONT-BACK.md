@@ -10,6 +10,8 @@ Archivos clave: `frontend/src/api/client.ts` (`api()`, `ApiError` y subclases, `
 
 **FB-01 · URL base solo por `VITE_API_URL`.** Se define en `frontend/.env` (`.env.example`: `http://localhost:8000`). Nunca escribas la URL de la API en un componente. En producción apunta al dominio HTTPS de la API.
 
+El dominio institucional se configura como `DOMINIO_CORREO` en el backend y `VITE_DOMINIO_CORREO` en la PWA; ambos deben contener exactamente el mismo dominio, sin `@`. El valor local documentado es `utm.edu.mx` y las pruebas E2E usan explícitamente `e2e.local`.
+
 **FB-02 · Un solo cliente: `api()` de `api/client.ts`.** Prohibido `fetch`/`axios` sueltos hacia la API en páginas o componentes. El cliente agrega el Bearer token, serializa `json` (solo entonces pone `Content-Type`), arma `params`, corta a los 20 s (`timeoutMs`; 60 s en IA), valida la respuesta con `schema` (Zod) y convierte los errores en `ApiError`. En pantallas usa los hooks de `api/hooks/` (sección 4), no `api()` directo. La **única** excepción es el `PUT` al bucket (FB-14), que también vive en `api/client.ts` como función propia.
 
 ```ts
@@ -32,7 +34,7 @@ const r = await fetch('http://localhost:8000/incidencias', { method: 'POST', bod
 // ❌ localStorage.setItem('token', r.access_token)
 ```
 
-Consecuencia aceptada: al recargar la página se pide iniciar sesión de nuevo (dura 15 min, `JWT_ACCESS_MINUTES`). La renovación con refresh token en cookie HttpOnly (RF-GEN-02) aún no existe en la API; cuando exista se implementa en `api/client.ts`, no en cada pantalla.
+La API ya ofrece renovación con refresh token en cookie HttpOnly mediante `/auth/refresh` y cierre mediante `/auth/logout` (T-014). La adopción en la PWA corresponde a T-044 y debe implementarse una sola vez en `api/client.ts`, con `credentials: "include"` en login, refresh y logout; mientras tanto, recargar la página puede requerir iniciar sesión de nuevo.
 
 **FB-05 · 401 → volver a iniciar sesión.** Cualquier 401 (token expirado, usuario desactivado) hace: `cerrarSesion("Tu sesión expiró. Inicia sesión de nuevo")` (el aviso queda en `useAuth().aviso` y lo muestra `Login`), `queryClient.clear()` y `RequirePermiso` lleva a `/login`. Se hace **una vez, en `api/client.ts`** (`expirarSesion`, solo si el token rechazado sigue vigente: varias peticiones con 401 producen un solo cierre), no en cada pantalla. Excepción: el 401 de `POST /auth/login` significa "Credenciales inválidas" y se muestra en el formulario.
 
@@ -55,6 +57,8 @@ Consecuencia aceptada: al recargar la página se pide iniciar sesión de nuevo (
 | red caída / 5xx | "Sin conexión con el servidor" + Reintentar | `refetch()` |
 
 Los mensajes de la API llegan en `detail` (HTTPException) o en `error`/`detalle` (validación, 409 de duplicado, 413, 429 de slowapi): ver API.md API-08. Ambos se leen en `mapearError()`. Si la respuesta no es JSON (p. ej. un 502 del proxy en HTML), el cliente no debe romper con `JSON.parse`: usa un mensaje genérico.
+
+**Filtro por categoría.** Con categorías dinámicas, `GET /incidencias?categoria=<clave inexistente>` responde 200 con lista vacía (estado vacío en la PWA, no error). Solo un formato inválido produce 400. Toma las claves de `useCategorias` en lugar de una lista fija.
 
 **FB-08 · 400 de la API → `setError` en el campo.** `detalle[].loc` trae la ruta (`["body","detalle_especifico","computo_redes","vlan"]`). El cliente ya la convierte en `e.campos` (`{ 'detalle_especifico.vlan': 'El valor excede el máximo' }`: sin `body` ni la etiqueta de la unión, mensaje traducido por `type`; sin ruta → `_general`). Lo ideal es que Zod ya lo haya detectado antes (FB-12).
 
@@ -181,12 +185,12 @@ const fd = new FormData()
 fd.append('imagen', comprimida, 'incidencia.jpg')
 if (contexto) fd.append('contexto', contexto.slice(0, 500))
 const sugerencia = analisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
-// ✅✅ o con el hook (multipart, timeout 60 s, respuesta validada)
+// ✅✅ o con el hook (multipart, timeout 30 s; el servidor reintenta dentro de un deadline total de 28 s, respuesta validada)
 const ia = useAnalizarImagen(); ia.mutate({ imagen: comprimida, contexto })
 // ❌ headers: { 'Content-Type': 'multipart/form-data' }   → falta el boundary, 400
 ```
 
-Respuestas: 200 `AnalisisImagen`; 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global o error del modelo. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
+Respuestas: 200 `AnalisisImagen` con `cache: bool` obligatorio (`true` si reutilizó un análisis sin consumir cupo); 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global, Redis no disponible para contabilizar el cupo (falla cerrado) o error del modelo. La respuesta se valida con `respuestaAnalisisImagenSchema`. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
 
 Al crear una incidencia, `ia_sugerencia` es opcional y solo se manda si el usuario aceptó campos sugeridos.
 Su forma es `{modelo, prompt_version, confianza, accion, campos_aceptados}` y está reflejada por
@@ -196,7 +200,7 @@ configuración administrable vive en `GET/PATCH /config/ia`; ambas rutas requier
 
 ## 8. CORS, service worker y fechas
 
-**FB-17 · CORS en dos lugares.** API: `CORS_ORIGINS` (lista separada por comas, sin `/` final) con el origen exacto de la PWA (`http://localhost:5173`, `https://<dominio-pwa>`); nunca `*` (la API usa `allow_credentials=False`: la sesión viaja en `Authorization`, no en cookies). Bucket: reglas CORS con los mismos orígenes, permitiendo `PUT` (subida) y `GET` (lectura) y el encabezado `Content-Type`. Si agregas un dominio de despliegue, actualiza **ambos** en el mismo cambio.
+**FB-17 · CORS en dos lugares.** API: `CORS_ORIGINS` (lista separada por comas, sin `/` final) con el origen exacto de la PWA (`http://localhost:5173`, `https://<dominio-pwa>`); nunca `*`. La API usa `allow_credentials=True` exclusivamente para la cookie HttpOnly de refresh y valida `Origin` en refresh/logout; el access token sigue viajando en `Authorization`. Bucket: reglas CORS con los mismos orígenes, permitiendo `PUT` (subida) y `GET` (lectura) y el encabezado `Content-Type`. Si agregas un dominio de despliegue, actualiza **ambos** en el mismo cambio.
 
 **FB-18 · El service worker no cachea la API ni datos autenticados.** `vite.config.ts` tiene `runtimeCaching: []` y `navigateFallbackDenylist: [/^\/api/]`: solo se precachean los archivos del build. Prohibido agregar reglas de `runtimeCaching` para `VITE_API_URL`, URLs firmadas del bucket o cualquier respuesta con `Authorization`. Lo "sin conexión" se resuelve con la caché en memoria de TanStack Query y `OfflineBanner`, no con el SW.
 

@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.main import app
 from app.routers import ia as ia_router
 
-from .test_analitica_ia import ANALISIS
+from .test_analitica_ia import ANALISIS, _imagen_png
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
@@ -32,6 +32,7 @@ async def _gestor_area(api) -> dict:
                 {
                     "clave": "gestor_area",
                     "nombre": "Gestor de área",
+                    "descripcion": "Rol e2e",
                     "permisos": PERMISOS_GESTOR,
                     "alcance": "area",
                     "sistema": False,
@@ -39,6 +40,7 @@ async def _gestor_area(api) -> dict:
                 {
                     "clave": "lector_area",
                     "nombre": "Lector de área",
+                    "descripcion": "Rol e2e",
                     "permisos": ["incidencias:ver"],
                     "alcance": "area",
                     "sistema": False,
@@ -203,16 +205,25 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
         return ANALISIS
 
     monkeypatch.setattr(ia_router, "analizar_imagen", fake)
+    inicial = (await api.c.get("/config/ia", headers=api.h("admin"))).json()
     cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": 2}, headers=api.h("admin"))
     assert cambio.status_code == 200, cambio.text
     u = await api.usuario_temporal()
-    archivos = lambda: {"imagen": ("f.jpg", io.BytesIO(b"\xff\xd8\xff" + b"0" * 100), "image/jpeg")}  # noqa: E731
+
+    # Imágenes distintas: con caché por imagen, repetir la misma no consumiría cupo.
+    def archivos(numero: int):
+        return {"imagen": ("f.png", io.BytesIO(_imagen_png(200 + numero, 200)), "image/png")}
+
     try:
-        for _ in range(2):
-            assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 200
-        assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 429
+        for numero in range(2):
+            assert (await api.c.post("/ia/analizar-imagen", files=archivos(numero), headers=_h(u))).status_code == 200
+        assert (await api.c.post("/ia/analizar-imagen", files=archivos(2), headers=_h(u))).status_code == 429
     finally:
-        restaurada = await api.c.patch("/config/ia", json={"limite_diario_usuario": 20}, headers=api.h("admin"))
+        restaurada = await api.c.patch(
+            "/config/ia",
+            json={"limite_diario_usuario": inicial["limite_diario_usuario"]},
+            headers=api.h("admin"),
+        )
         assert restaurada.status_code == 200, restaurada.text
 
 
