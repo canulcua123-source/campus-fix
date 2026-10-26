@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.main import app
 from app.routers import ia as ia_router
 
-from .test_analitica_ia import ANALISIS
+from .test_analitica_ia import ANALISIS, PNG
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
@@ -95,9 +95,9 @@ async def test_gestor_no_crea_rol_con_mas_alcance(api):
 async def test_gestor_no_modifica_usuarios_con_mas_acceso(api):
     g = await _gestor_area(api)
     r = await api.c.patch(f"/usuarios/{api.oid('admin')}", json={"activo": False}, headers=_h(g))
-    assert r.status_code == 403
+    assert r.status_code == 404
     r = await api.c.patch(f"/usuarios/{api.oid('directivo')}", json={"nombre": "Cambiado"}, headers=_h(g))
-    assert r.status_code == 403
+    assert r.status_code == 404
     assert (await api.c.get("/auth/me", headers=api.h("admin"))).status_code == 200
 
 
@@ -207,7 +207,7 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
     monkeypatch.setattr(ia_router, "analizar_imagen", fake)
     monkeypatch.setattr(settings, "ia_limite_diario", 2)
     u = await api.usuario_temporal()
-    archivos = lambda: {"imagen": ("f.jpg", io.BytesIO(b"\xff\xd8\xff" + b"0" * 100), "image/jpeg")}  # noqa: E731
+    archivos = lambda: {"imagen": ("f.png", io.BytesIO(PNG), "image/png")}  # noqa: E731
     for _ in range(2):
         assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 200
     assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 429
@@ -250,8 +250,8 @@ async def test_gestor_delegado_solo_ve_y_edita_su_ambito(api):
     # reportantes de todo el campus y pares del mismo rol quedan fuera de su gestión
     assert (
         await api.c.patch(f"/usuarios/{api.oid('reportante_a')}", json={"activo": False}, headers=_h(g))
-    ).status_code == 403
+    ).status_code == 404
     par = await api.usuario_temporal(rol="gestor_area", areas=["infraestructura"])
     assert (
         await api.c.patch(f"/usuarios/{par['_id']}", json={"nombre": "Par cambiado"}, headers=_h(g))
-    ).status_code == 403
+    ).status_code == 404

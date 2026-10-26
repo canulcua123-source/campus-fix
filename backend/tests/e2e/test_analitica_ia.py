@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 
 import pytest
 from bson import ObjectId
+from PIL import Image
 from redis.exceptions import RedisError
 
 import app.routers.analitica as analitica_router
@@ -414,7 +416,15 @@ ANALISIS = AnalisisImagen(
     confianza=0.9,
     advertencias=[],
 )
-PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+
+def _imagen_png(ancho=200, alto=200):
+    salida = BytesIO()
+    Image.new("RGB", (ancho, alto), "white").save(salida, format="PNG")
+    return salida.getvalue()
+
+
+PNG = _imagen_png()
 
 
 @pytest.fixture
@@ -444,6 +454,33 @@ async def test_ia_ok(api, ia_falsa):
     assert ia_falsa == [(len(PNG), "image/png", "pasillo del edificio A")]
 
 
+async def test_ia_rechaza_falso_jpeg_415(api, ia_falsa):
+    r = await _post(api, nombre="programa.jpg", datos=b"MZ" + b"\0" * 100, mime="image/jpeg")
+    assert r.status_code == 415, r.text
+    assert "JPEG, PNG o WebP" in r.json()["detalle"]
+    assert ia_falsa == []
+
+
+async def test_ia_png_renombrado_ok(api, ia_falsa):
+    r = await _post(api, nombre="foto.jpg", datos=PNG, mime="image/jpeg")
+    assert r.status_code == 200, r.text
+    assert ia_falsa == [(len(PNG), "image/png", None)]
+
+
+async def test_ia_imagen_pequena_400(api, ia_falsa):
+    r = await _post(api, datos=_imagen_png(100, 100))
+    assert r.status_code == 400, r.text
+    assert "200–2600 px" in r.json()["detalle"]
+    assert ia_falsa == []
+
+
+async def test_ia_imagen_grande_413(api, ia_falsa):
+    r = await _post(api, datos=b"\x89PNG\r\n\x1a\n" + b"0" * (5 * 1024 * 1024))
+    assert r.status_code == 413, r.text
+    assert "5 MB" in r.json()["detalle"]
+    assert ia_falsa == []
+
+
 @pytest.mark.parametrize("quien,esperado", [("directivo", 403), ("jefe_a", 403), ("tecnico_infra", 200)])
 async def test_ia_permisos(api, ia_falsa, quien, esperado):
     assert (await _post(api, quien=quien)).status_code == esperado
@@ -454,13 +491,12 @@ async def test_ia_permisos(api, ia_falsa, quien, esperado):
     [
         ("a.txt", "text/plain", b"hola"),
         ("a.gif", "image/gif", b"GIF89a"),
-        ("grande.png", "image/png", b"0" * (5 * 1024 * 1024 + 1)),
     ],
-    ids=["texto", "gif", "mayor_5mb"],
+    ids=["texto", "gif"],
 )
-async def test_ia_archivo_invalido(api, ia_falsa, nombre, mime, datos):
+async def test_ia_formato_no_permitido(api, ia_falsa, nombre, mime, datos):
     r = await _post(api, nombre=nombre, datos=datos, mime=mime)
-    assert r.status_code == 400, r.text
+    assert r.status_code == 415, r.text
     assert ia_falsa == []
 
 
