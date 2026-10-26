@@ -1058,6 +1058,103 @@
               }
             }
           }
+        },
+        {
+          "name": "Cambiar prioridad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ok y prioridad', function () { const j = pm.response.json(); pm.expect(j).to.eql({ok: true, prioridad: 'alta'}); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "El coordinador cambia la prioridad de una incidencia de su área; queda en la bitácora como tipo 'prioridad'.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "prioridad"]},
+            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"alta\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Cambiar prioridad: valor inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Prioridad fuera del catálogo responde 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Solo acepta baja, media, alta o critica.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "prioridad"]},
+            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"urgente\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Cambiar prioridad: sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sin incidencias:asignar responde 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_directivo}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "DIR no tiene incidencias:asignar.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "prioridad"]},
+            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"alta\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Cambiar prioridad: fuera de alcance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de alcance responde 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Un coordinador no puede cambiar la prioridad de una incidencia de otra área.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_fuera_area_id}}", "prioridad"]},
+            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"alta\"\n}", "options": {"raw": {"language": "json"}}}
+          }
         }
       ]
     },

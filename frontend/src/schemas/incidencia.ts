@@ -160,6 +160,12 @@ export const asignacionSchema = z.object({
 })
 export type AsignacionIn = z.infer<typeof asignacionSchema>
 
+/** PrioridadIn (PATCH /incidencias/{id}/prioridad). */
+export const prioridadSchema = z.object({
+  prioridad: z.enum(PRIORIDADES, 'Selecciona la prioridad'),
+})
+export type PrioridadIn = z.infer<typeof prioridadSchema>
+
 /** EvidenciaFirmaIn (POST /incidencias/{id}/evidencias/firma). */
 export const evidenciaFirmaSchema = z.object({
   nombre_archivo: z
@@ -248,7 +254,7 @@ export const entradaHistorialSchema = z.object({
   estado_nuevo: z.enum(ESTADOS),
   comentario: z.string(),
   horas: z.number(),
-  tipo: z.literal('asignacion').optional(),
+  tipo: z.enum(['asignacion', 'prioridad']).optional(),
 })
 export type EntradaHistorial = z.infer<typeof entradaHistorialSchema>
 
@@ -273,6 +279,7 @@ export type IncidenciaCreada = z.infer<typeof incidenciaCreadaSchema>
 export const okSchema = z.object({ ok: z.literal(true) })
 export const seguimientoOutSchema = okSchema.extend({ estado: z.enum(ESTADOS) })
 export const asignacionOutSchema = okSchema.extend({ tecnico_asignado: personaRef })
+export const prioridadOutSchema = okSchema.extend({ prioridad: z.enum(PRIORIDADES) })
 
 export const firmaEvidenciaOutSchema = z.object({
   evidencia_id: z.string(),

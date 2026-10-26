@@ -41,6 +41,7 @@ from app.schemas.incidencia import (
     IncidenciaIn,
     IncidenciaDetalleOut,
     Prioridad,
+    PrioridadIn,
     SeguimientoIn,
     TagsIn,
     TomarIncidenciaIn,
@@ -739,6 +740,39 @@ async def asignar(
     if res.matched_count == 0:
         raise HTTPException(409, "La incidencia cambió de estado; intenta de nuevo")
     return {"ok": True, "tecnico_asignado": {"usuario_id": str(tecnico["_id"]), "nombre": tecnico["nombre"]}}
+
+
+@router.patch("/{incidencia_id}/prioridad")
+async def cambiar_prioridad(
+    incidencia_id: str, datos: PrioridadIn, usuario: Annotated[dict, Depends(require_permiso("incidencias:asignar"))]
+):
+    """El coordinador ajusta la prioridad dentro de su alcance; el cambio queda en la bitácora (tipo "prioridad")."""
+    incidencia = await _en_alcance(incidencia_id, usuario, {"estado": 1, "prioridad": 1})
+    if incidencia["estado"] in {"cerrada", "retirada"}:
+        raise HTTPException(409, "La incidencia no admite cambios de prioridad")
+    anterior = incidencia["prioridad"]
+    if anterior == datos.prioridad:
+        return {"ok": True, "prioridad": anterior}
+    ahora = datetime.now(timezone.utc)
+    entrada = {
+        "fecha": ahora,
+        "usuario_id": usuario["_id"],
+        "tipo": "prioridad",
+        "estado_nuevo": incidencia["estado"],
+        "comentario": f"Prioridad: {anterior} → {datos.prioridad}",
+        "horas": 0,
+    }
+    res = await get_db().incidencias_campus.update_one(
+        # Filtro optimista: si otro coordinador la cambió entre la lectura y la escritura, 409.
+        {"_id": incidencia["_id"], "estado": incidencia["estado"], "prioridad": anterior, **filtro_alcance(usuario)},
+        {
+            "$set": {"prioridad": datos.prioridad, "fecha_actualizacion": ahora},
+            "$push": {"historial_seguimiento": _push_historial(entrada)},
+        },
+    )
+    if res.matched_count == 0:
+        raise HTTPException(409, "La incidencia cambió; intenta de nuevo")
+    return {"ok": True, "prioridad": datos.prioridad}
 
 
 MAX_BYTES_EVIDENCIA = 10 * 1024 * 1024

@@ -7,6 +7,7 @@ import { GaleriaEvidencias } from '../components/GaleriaEvidencias'
 import { FormSeguimiento } from '../components/FormSeguimiento'
 import { Timeline } from '../components/Timeline'
 import { EditorTags } from '../components/EditorTags'
+import { SelectorPrioridad } from '../components/SelectorPrioridad'
 import { Badge, BottomSheet, Button, Card, ErrorState, PageHeader, Skeleton } from '../components/ui'
 import {
   datosDetalle, esSoloLectura, formatearFecha, formatearHoras, mensajeErrorDetalle, textoUbicacion,
@@ -62,6 +63,8 @@ export default function DetalleIncidencia() {
 
   const soloLectura = esSoloLectura(usuario?.permisos ?? [])
   const puedeEditarTags = usuario?.permisos.includes('tags:gestionar') ?? false
+  const puedeCambiarPrioridad = (usuario?.permisos.includes('incidencias:asignar') ?? false)
+    && detalle.estado !== 'cerrada' && detalle.estado !== 'retirada'
   const datos = [
     { etiqueta: 'Ubicación', valor: textoUbicacion(detalle.ubicacion) },
     { etiqueta: 'Reportante', valor: detalle.reportante.nombre },
@@ -124,6 +127,13 @@ export default function DetalleIncidencia() {
         <p className="m-0 whitespace-pre-line text-ink">{detalle.descripcion}</p>
         <p className="mb-0 mt-3 text-sm text-muted">Reportada el {formatearFecha(detalle.fecha_creacion)}</p>
       </Card>
+
+      {puedeCambiarPrioridad && (
+        <Card como="section" className="mt-3">
+          <h2 className="mb-3 mt-0 text-base font-semibold text-ink">Prioridad de atención</h2>
+          <SelectorPrioridad incidenciaId={detalle._id} prioridad={detalle.prioridad} />
+        </Card>
+      )}
 
       <Card como="section" className="mt-3">
         <h2 className="mb-3 mt-0 text-base font-semibold text-ink">Etiquetas técnicas</h2>
