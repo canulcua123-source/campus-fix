@@ -12,4 +12,4 @@ anthropic
 python-multipart
 email-validator
 qrcode[pil]>=8.2
-Pillow>=11.3
+Pillow==13.0.0
