@@ -14,11 +14,6 @@ afterEach(() => {
 
 afterAll(() => servidor.close())
 
-if (!URL.createObjectURL) {
-  URL.createObjectURL = vi.fn(() => 'blob:prueba')
-  URL.revokeObjectURL = vi.fn()
-}
-
 if (!window.matchMedia) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: false,

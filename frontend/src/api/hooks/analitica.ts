@@ -1,15 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
-import { analiticaEdificiosQuery, analiticaTagsQuery } from '../analitica'
+import type { FiltrosAnalitica } from '../../schemas/analitica'
+import { analiticaEdificiosQuery, analiticaResumenQuery, analiticaTagsQuery } from '../analitica'
 
-export function useAnaliticaEdificios() {
-  return useQuery(analiticaEdificiosQuery())
+export function useAnaliticaResumen(filtros: FiltrosAnalitica = {}) {
+  return useQuery(analiticaResumenQuery(filtros))
 }
 
-export function useAnaliticaTags() {
-  return useQuery(analiticaTagsQuery())
+export function useAnaliticaEdificios(filtros: FiltrosAnalitica = {}) {
+  return useQuery(analiticaEdificiosQuery(filtros))
 }
 
-/** Ambas consultas del dashboard. */
-export function useAnalitica() {
-  return { edificios: useAnaliticaEdificios(), tags: useAnaliticaTags() }
+export function useAnaliticaTags(filtros: FiltrosAnalitica = {}) {
+  return useQuery(analiticaTagsQuery(filtros))
+}
+
+/** Las tres consultas comparten exactamente los filtros aplicados. */
+export function useAnalitica(filtros: FiltrosAnalitica = {}) {
+  const resumen = useAnaliticaResumen(filtros)
+  const edificios = useAnaliticaEdificios(filtros)
+  const tags = useAnaliticaTags(filtros)
+  return { resumen, edificios, tags }
 }

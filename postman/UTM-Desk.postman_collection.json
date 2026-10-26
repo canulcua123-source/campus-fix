@@ -4,6 +4,24 @@
     "description": "Banco formal de pruebas de la API UTM Desk. Ejecutar en orden con el environment UTM-Desk.local.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response.code === 429) {",
+          "  pm.test('Contrato del 429', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('limite'); pm.expect(j.detalle).to.be.a('string'); });",
+          "  const retryAfter = pm.response.headers.get('Retry-After');",
+          "  if (retryAfter !== undefined && retryAfter !== null) {",
+          "    pm.test('Retry-After numérico cuando está presente', function () { pm.expect(retryAfter).to.match(/^\\d+$/); });",
+          "  }",
+          "  pm.test('El 429 no refleja credenciales', function () { const texto = pm.response.text(); const correo = pm.variables.get('correo'); const password = pm.variables.get('password'); if (correo) pm.expect(texto).not.to.include(correo); if (password) pm.expect(texto).not.to.include(password); });",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
       "name": "Auth",
@@ -18,7 +36,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Devuelve access_token y usuario', function () { const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.expect(j.usuario).to.have.property('rol'); pm.expect(j.usuario.permisos).to.be.an('array'); pm.environment.set('token', j.access_token); });"
+                  "pm.test('Devuelve access_token y usuario sin refresh en JSON', function () { const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.expect(j.usuario).to.have.property('rol'); pm.expect(j.usuario.permisos).to.be.an('array'); pm.expect(j).not.to.have.property('refresh_token'); pm.environment.set('token', j.access_token); });",
+                  "pm.test('Cookie refresh HttpOnly con atributos seguros', function () { const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('HttpOnly'); pm.expect(c).to.include('Path=/auth'); pm.expect(c.toLowerCase()).to.match(/samesite=(lax|none)/); });"
                 ]
               }
             }
@@ -54,6 +73,36 @@
           }
         },
         {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rota cookie y devuelve solo access token', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('access_token', 'token_type'); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.environment.set('token', j.access_token); const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('HttpOnly'); pm.expect(c).to.include('Path=/auth'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Lee el refresh exclusivamente de la cookie HttpOnly, lo rota y actualiza {{token}} con el nuevo access token.",
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            }
+          }
+        },
+        {
           "name": "Perfil actual (/auth/me)",
           "event": [
             {
@@ -85,6 +134,36 @@
               "path": [
                 "auth",
                 "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 204 sin cuerpo', function () { pm.response.to.have.status(204); pm.expect(pm.response.text()).to.eql(''); });",
+                  "pm.test('Expira la cookie refresh', function () { const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('Max-Age=0'); pm.expect(c).to.include('Path=/auth'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Revoca la familia de refresh actual y elimina la cookie. Es idempotente si no existe una sesion vigente.",
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
               ]
             }
           }
@@ -415,7 +494,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-                  "pm.test('Mensaje de error presente', function () { const j = pm.response.json(); pm.expect(j.detail || j.error || j.message).to.exist; });"
+                  "pm.test('Contrato de error 409', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -554,6 +633,138 @@
                 }
               }
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Acciones F2 (T-021)",
+      "description": "Confirmación/reapertura del reportante, comentarios en espera y autoasignación atómica. Preparar los ids indicados en cada solicitud.",
+      "item": [
+        {
+          "name": "Confirmar resolución",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Respuesta de cierre válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('cerrada'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_resuelta_id}} en estado resuelta y propiedad del reportante. Conserva fecha_resolucion.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_resuelta_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_resuelta_id}}", "confirmacion"]},
+            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"confirmar\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Reabrir incidencia dentro de siete días",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Respuesta de reapertura válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('abierta'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_reabrir_id}} resuelta hace no más de siete días. Elimina fecha_resolucion.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_reabrir_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_reabrir_id}}", "confirmacion"]},
+            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa después de la reparación\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Comentario del reportante en espera",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Conserva estado en_espera', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('en_espera'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_espera_id}} en estado en_espera; solo agrega historial y actualiza la fecha.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_espera_id}}/comentarios", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_espera_id}}", "comentarios"]},
+            "body": {"mode": "raw", "raw": "{\n  \"comentario\": \"El problema presenta ahora información adicional\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Tomar incidencia disponible",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Devuelve técnico asignado', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado', 'tecnico_asignado'); pm.expect(j.ok).to.eql(true); pm.expect(j.tecnico_asignado.usuario_id).to.be.a('string'); pm.expect(j.tecnico_asignado.nombre).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}", "description": "Token de un técnico del área"}],
+            "description": "Autoasigna atómicamente {{incidencia_disponible_id}} si está en el área, no es terminal y carece de técnico.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_disponible_id}}/tomar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_disponible_id}}", "tomar"]}
+          }
+        },
+        {
+          "name": "Reapertura fuera de plazo (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Requiere {{incidencia_resuelta_vencida_id}} con fecha_resolucion anterior a siete días; no debe escribir historial.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_resuelta_vencida_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_resuelta_vencida_id}}", "confirmacion"]},
+            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa fuera del plazo permitido\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Autoasignación duplicada (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}", "description": "Token de técnico"}],
+            "description": "Requiere {{incidencia_tomada_id}} ya asignada; el segundo intento no debe duplicar historial.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_tomada_id}}/tomar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_tomada_id}}", "tomar"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retirar mi reporte (T-023)",
+      "description": "Retiro atómico por el reportante original dentro de los primeros 15 minutos, únicamente si la incidencia sigue abierta y sin técnico asignado.",
+      "item": [
+        {
+          "name": "Retirar reporte elegible",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Respuesta de retiro válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('retirada'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"}],
+            "description": "Requiere {{incidencia_retirar_id}} propia, abierta, sin técnico y creada hace 15 minutos o menos.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_retirar_id}}/retirar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_retirar_id}}", "retirar"]}
+          }
+        },
+        {
+          "name": "Retiro no elegible (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"}],
+            "description": "Requiere {{incidencia_retirar_conflicto_id}} vencida, asignada o en estado distinto de abierta.",
+            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_retirar_conflicto_id}}/retirar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_retirar_conflicto_id}}", "retirar"]}
           }
         }
       ]
@@ -859,7 +1070,7 @@
       "description": "Indicadores agregados.",
       "item": [
         {
-          "name": "Analítica por edificio",
+          "name": "Edificios",
           "event": [
             {
               "listen": "test",
@@ -890,12 +1101,17 @@
               "path": [
                 "analitica",
                 "edificios"
+              ],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
               ]
             }
           }
         },
         {
-          "name": "Analítica de tags",
+          "name": "Etiquetas",
           "event": [
             {
               "listen": "test",
@@ -926,8 +1142,323 @@
               "path": [
                 "analitica",
                 "tags"
+              ],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
               ]
             }
+          }
+        },
+        {
+          "name": "Resumen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de KPIs', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('abiertas', 'en_proceso', 'criticas', 'resueltas_periodo'); Object.values(j).forEach(v => { pm.expect(v).to.be.a('number'); pm.expect(v).to.be.at.least(0); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "KPIs sin filtros. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"]
+            }
+          }
+        },
+        {
+          "name": "Resumen - periodo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ejemplo con periodo UTC inclusivo por fechas calendario.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01" },
+                { "key": "hasta", "value": "2026-12-31" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - categoría",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ejemplo filtrado por una categoría válida.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?categoria=infraestructura",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [{ "key": "categoria", "value": "infraestructura" }]
+            }
+          }
+        },
+        {
+          "name": "Resumen - filtros combinados",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ejemplo con periodo y categoría; los filtros nunca amplían el alcance autorizado.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31&categoria=infraestructura",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01" },
+                { "key": "hasta", "value": "2026-12-31" },
+                { "key": "categoria", "value": "infraestructura" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - filtro inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Fecha inexistente: debe responder 400 con el contrato común.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-02-30",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"],
+              "query": [{ "key": "desde", "value": "2026-02-30" }]
+            }
+          }
+        },
+        {
+          "name": "Resumen - sin autenticación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Solicitud sin JWT: debe responder 401.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"]
+            }
+          }
+        },
+        {
+          "name": "Resumen - sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_reportante}}" }],
+            "description": "Reportante sin analitica:ver: debe responder 403.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "resumen"]
+            }
+          }
+        },
+        {
+          "name": "Aulas crónicas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de aulas crónicas', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.property('edificio').that.is.a('string'); pm.expect(f).to.have.property('aula').that.is.a('string'); pm.expect(f).to.have.property('total').that.is.a('number').and.at.least(3); if (Object.prototype.hasOwnProperty.call(f, 'piso')) pm.expect(f.piso).to.be.a('number'); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Ubicaciones con al menos tres incidencias creadas en la ventana UTC de los últimos 30 días. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/aulas-cronicas",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "aulas-cronicas"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Carga de técnicos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de carga por técnico', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.all.keys('tecnico_id', 'incidencias_activas', 'horas_acumuladas'); pm.expect(f.tecnico_id).to.match(/^[0-9a-f]{24}$/); pm.expect(f.incidencias_activas).to.be.a('number').and.at.least(1); pm.expect(f.horas_acumuladas).to.be.a('number').and.at.least(0); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Incidencias activas asignadas y horas persistidas acumuladas por técnico. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/carga-tecnicos",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "carga-tecnicos"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tendencia mensual",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de tendencia mensual', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.all.keys('periodo', 'categoria', 'total'); pm.expect(f.periodo).to.match(/^\\d{4}-(0[1-9]|1[0-2])$/); pm.expect(['computo_redes', 'infraestructura', 'academico']).to.include(f.categoria); pm.expect(f.total).to.be.a('number').and.at.least(1); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Conteo mensual por categoría usando fecha_creacion en UTC. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/tendencia",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "tendencia"],
+              "query": [
+                { "key": "desde", "value": "2026-01-01", "disabled": true },
+                { "key": "hasta", "value": "2026-12-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Métricas de IA (solo admin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                "pm.test('Agregados de IA sin eventos crudos', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('periodo', 'totales', 'tasa_deshacer', 'tasa_edicion', 'correccion_tecnica_72h', 'cobertura_agentica', 'tiempo_toque_folio', 'compuertas_fallidas', 'latencia_ia', 'errores_ia', 'timeouts_ia', 'costos', 'semanal'); pm.expect(j).not.to.have.any.keys('actor_clave', 'correo', 'nombre'); });"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "description": "Tablero agregado exclusivo del rol admin. Filtros opcionales, periodo máximo de 180 días.",
+            "url": {
+              "raw": "{{base_url}}/analitica/ia",
+              "host": ["{{base_url}}"],
+              "path": ["analitica", "ia"],
+              "query": [
+                { "key": "desde", "value": "2026-10-01", "disabled": true },
+                { "key": "hasta", "value": "2026-10-31", "disabled": true },
+                { "key": "categoria", "value": "infraestructura", "disabled": true },
+                { "key": "proveedor", "value": "claude", "disabled": true },
+                { "key": "modelo", "value": "claude-opus-5-5", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Métricas IA - no administrador",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"] }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_reportante}}" }],
+            "description": "Un usuario que no es admin recibe 403 aunque esté autenticado.",
+            "url": { "raw": "{{base_url}}/analitica/ia", "host": ["{{base_url}}"], "path": ["analitica", "ia"] }
           }
         }
       ]
@@ -987,6 +1518,102 @@
                 }
               ]
             }
+          }
+        },
+        {
+          "name": "Confirmar adhesión a duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta pública de adhesión', function () { const j = pm.response.json(); pm.expect(j.ok).to.eql(true); pm.expect(j.codigo).to.be.a('string'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.adhesiones).to.be.at.least(1); pm.expect(j.registrada).to.be.a('boolean'); pm.expect(j).not.to.have.any.keys('usuario_id', 'reportante', 'correo', 'nombre'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Confirma una coincidencia opaca emitida por G8. Es idempotente por usuario y no crea otra incidencia. T-033 aún debe integrar la emisión de coincidencia_id.",
+            "url": {
+              "raw": "{{base_url}}/ia/duplicados/adhesiones",
+              "host": ["{{base_url}}"],
+              "path": ["ia", "duplicados", "adhesiones"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"coincidencia_id\": \"{{coincidencia_id}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            }
+          }
+        },
+        {
+          "name": "Registrar evento de oferta IA",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                "pm.test('Respuesta idempotente y mínima', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('analisis_id', 'evento', 'registrado', 'es_final'); pm.expect(j).not.to.have.any.keys('costo_estimado_usd', 'tokens_entrada', 'actor_clave'); });"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "Requiere un analisis_id emitido y ligado al mismo usuario por el backend agéntico. T-033/T-036 aún deben proporcionar esa oferta.",
+            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
+            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"{{analisis_id}}\",\n  \"evento\": \"editado\",\n  \"motivo\": \"usuario_edito\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Evento IA - oferta inexistente",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });"] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
+            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"deshecho\"\n}", "options": { "raw": { "language": "json" } } }
+          }
+        },
+        {
+          "name": "Evento IA - costo falsificado",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"] }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "description": "El navegador no puede declarar costo, tokens ni latencia.",
+            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
+            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"editado\",\n  \"costo_estimado_usd\": 99\n}", "options": { "raw": { "language": "json" } } }
           }
         }
       ]
@@ -1098,7 +1725,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-                  "pm.test('Detalle de conflicto', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 409', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1326,12 +1953,161 @@
               ]
             }
           }
+        },
+        {
+          "name": "Crear categoría dinámica (201)",
+          "event": [
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+              "const ahora = Date.now();",
+              "pm.collectionVariables.set('categoria_clave', 'servicios_postman_' + String(ahora).slice(-8));",
+              "let numero = ahora % 17576; let prefijo = '';",
+              "for (let i = 0; i < 3; i += 1) { prefijo = String.fromCharCode(65 + (numero % 26)) + prefijo; numero = Math.floor(numero / 26); }",
+              "pm.collectionVariables.set('categoria_prefijo', prefijo);"
+            ]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+              "pm.test('Categoría personalizada creada', function () { const j = pm.response.json(); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); pm.expect(j.version).to.eql(1); pm.expect(j.activa).to.eql(true); pm.expect(j.sistema).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Crea una categoría personalizada. Requiere categorias:gestionar.",
+            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
+            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios de Postman\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"tipo_servicio\", \"etiqueta\": \"Tipo de servicio\", \"tipo\": \"lista\", \"requerido\": true, \"opciones\": [\"limpieza\", \"mobiliario\"]}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Categoría con campo inseguro (400)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+            "pm.test('Contrato de error seguro', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('$ne'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Rechaza un nombre de campo que podría representar un operador MongoDB.",
+            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
+            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"categoria_insegura\",\n  \"nombre\": \"Categoría insegura\",\n  \"prefijo\": \"INS\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"$ne\", \"etiqueta\": \"Campo inseguro\", \"tipo\": \"texto\", \"requerido\": true}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Categoría duplicada (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Conflicto sin datos internos', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('DuplicateKeyError'); });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Repite la categoría creada anteriormente y comprueba el conflicto.",
+            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
+            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios duplicados\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"detalle\", \"etiqueta\": \"Detalle\", \"tipo\": \"texto\", \"requerido\": true, \"max\": 120}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Editar categoría dinámica",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Edición parcial aplicada', function () { const j = pm.response.json(); pm.expect(j.nombre).to.eql('Servicios de Postman actualizados'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); });"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Edita únicamente los campos enviados; cambiar la definición incrementa version.",
+            "url": {"raw": "{{base_url}}/categorias/{{categoria_clave}}", "host": ["{{base_url}}"], "path": ["categorias", "{{categoria_clave}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"nombre\": \"Servicios de Postman actualizados\"\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Desactivar categoría dinámica",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Categoría desactivada sin eliminarse', function () { const j = pm.response.json(); pm.expect(j.activa).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Desactiva lógicamente la categoría personalizada; no elimina el documento.",
+            "url": {"raw": "{{base_url}}/categorias/{{categoria_clave}}", "host": ["{{base_url}}"], "path": ["categorias", "{{categoria_clave}}"]},
+            "body": {"mode": "raw", "raw": "{\n  \"activa\": false\n}", "options": {"raw": {"language": "json"}}}
+          }
+        },
+        {
+          "name": "Proteger categoría del sistema (409)",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); });"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "description": "Comprueba que una categoría original no puede desactivarse.",
+            "url": {"raw": "{{base_url}}/categorias/computo_redes", "host": ["{{base_url}}"], "path": ["categorias", "computo_redes"]},
+            "body": {"mode": "raw", "raw": "{\n  \"activa\": false\n}", "options": {"raw": {"language": "json"}}}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auditoria administrativa",
+      "description": "Consulta paginada de T-022, exclusiva del administrador.",
+      "item": [
+        {
+          "name": "Listar auditoria por recurso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Pagina de auditoria segura', function () { const j = pm.response.json(); pm.expect(j.pagina).to.eql(1); pm.expect(j.limite).to.eql(20); pm.expect(j.total).to.be.a('number'); pm.expect(j.resultados).to.be.an('array'); pm.expect(pm.response.text()).to.not.include('password_hash'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"}
+            ],
+            "description": "Lista la primera pagina de eventos de usuarios en orden estable descendente.",
+            "url": {
+              "raw": "{{base_url}}/auditoria?pagina=1&limite=20&recurso=usuarios",
+              "host": ["{{base_url}}"],
+              "path": ["auditoria"],
+              "query": [
+                {"key": "pagina", "value": "1"},
+                {"key": "limite", "value": "20"},
+                {"key": "recurso", "value": "usuarios"}
+              ]
+            }
+          }
         }
       ]
     },
     {
       "name": "Pruebas negativas",
-      "description": "Casos de error esperados: validación, autenticación, permisos y no encontrado.",
+      "description": "Casos de error esperados: validación, autenticación, permisos, no encontrado y conflictos; todos verifican {error, detalle}.",
       "item": [
         {
           "name": "Detalle de otra categoría",
@@ -1342,7 +2118,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1390,7 +2166,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1438,7 +2214,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1486,7 +2262,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 401', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_autenticado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1515,7 +2291,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 401', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_autenticado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1549,7 +2325,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 403', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('sin_permiso'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1585,7 +2361,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 404', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_encontrado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1621,7 +2397,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 400', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1657,7 +2433,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 403', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('sin_permiso'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1713,6 +2489,46 @@
     {
       "key": "correo_nuevo",
       "value": ""
-    }
+    },
+    {
+      "key": "incidencia_resuelta_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_reabrir_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_espera_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_disponible_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_resuelta_vencida_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_tomada_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_retirar_id",
+      "value": ""
+    },
+        {
+            "key": "incidencia_retirar_conflicto_id",
+            "value": ""
+        },
+        {
+            "key": "coincidencia_id",
+            "value": ""
+        },
+        {
+            "key": "analisis_id",
+            "value": ""
+        }
   ]
 }

@@ -1,0 +1,2807 @@
+[
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-0929-RED-9000",
+    "titulo": "Sin conexión en el laboratorio",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "resuelta",
+    "prioridad": "baja",
+    "ubicacion": {
+      "edificio": "A",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "101"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.3.173.191",
+      "vlan": {
+        "$numberInt": "10"
+      },
+      "puerto_uplink": "Gi0/19",
+      "equipos_afectados": {
+        "$numberInt": "28"
+      }
+    },
+    "tags": [
+      "red",
+      "wifi"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "9a1de644-815e-46d1-bb8f-aa1837f8a88b",
+        "nombre_archivo": "evidencia_0.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "254"
+        },
+        "url_storage": "evidencias/INC-2026-0929-RED-9000/9a1de644-815e-46d1-bb8f-aa1837f8a88b.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1790672400000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "5.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790672400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790679600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790712000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "2.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1790672400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1790712000000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1790712000000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000000"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1002-INF-9001",
+    "titulo": "Luminaria fundida en pasillo",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "resuelta",
+    "prioridad": "media",
+    "ubicacion": {
+      "edificio": "B",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "201"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "otro",
+      "riesgo_seguridad": "medio",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": false
+    },
+    "tags": [
+      "luminaria",
+      "lms"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "18c26797-6142-4a7d-97be-31111a2a73ed",
+        "nombre_archivo": "evidencia_1.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "935"
+        },
+        "url_storage": "evidencias/INC-2026-1002-INF-9001/18c26797-6142-4a7d-97be-31111a2a73ed.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1790920800000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "8.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790920800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791007200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791039600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1790920800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791039600000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791039600000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000001"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1007-ACA-9002",
+    "titulo": "Error al subir tareas al LMS",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "resuelta",
+    "prioridad": "alta",
+    "ubicacion": {
+      "edificio": "C",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "107"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "correo",
+      "codigo_curso": "FIS-421",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "79"
+      }
+    },
+    "tags": [
+      "laboratorio",
+      "luminaria",
+      "wifi"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "c5e7ce8a-3a57-4a8e-a948-8d990bbb2599",
+        "nombre_archivo": "evidencia_2.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "792"
+        },
+        "url_storage": "evidencias/INC-2026-1007-ACA-9002/c5e7ce8a-3a57-4a8e-a948-8d990bbb2599.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791392400000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "5.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791392400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791428400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791518400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791392400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791518400000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791518400000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000002"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1017-RED-9003",
+    "titulo": "Sin conexión en el laboratorio",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "resuelta",
+    "prioridad": "critica",
+    "ubicacion": {
+      "edificio": "Biblioteca",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "306"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.11.90.55",
+      "vlan": {
+        "$numberInt": "30"
+      },
+      "puerto_uplink": "Gi0/23",
+      "equipos_afectados": {
+        "$numberInt": "5"
+      }
+    },
+    "tags": [
+      "switch",
+      "urgente",
+      "luminaria",
+      "wifi"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "fd5166e6-451b-4cf3-a123-fdf77656af72",
+        "nombre_archivo": "evidencia_3.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "1340"
+        },
+        "url_storage": "evidencias/INC-2026-1017-RED-9003/fd5166e6-451b-4cf3-a123-fdf77656af72.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1792213200000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "4.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792213200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792317600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792368000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1792213200000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1792368000000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1792368000000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000003"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1012-INF-9004",
+    "titulo": "Luminaria fundida en pasillo",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "resuelta",
+    "prioridad": "baja",
+    "ubicacion": {
+      "edificio": "Laboratorios",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "205"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "electrico",
+      "riesgo_seguridad": "alto",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": false
+    },
+    "tags": [
+      "luminaria",
+      "aire_acondicionado",
+      "calificaciones"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "757750a9-a491-40b2-aa1f-ca65e27a984d",
+        "nombre_archivo": "evidencia_4.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "492"
+        },
+        "url_storage": "evidencias/INC-2026-1012-INF-9004/757750a9-a491-40b2-aa1f-ca65e27a984d.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791770400000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "2.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791770400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791871200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791903600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791770400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791903600000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791903600000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000004"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1011-ACA-9005",
+    "titulo": "Error al subir tareas al LMS",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "resuelta",
+    "prioridad": "media",
+    "ubicacion": {
+      "edificio": "A",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "206"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "lms",
+      "codigo_curso": "ISC-352",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "11"
+      }
+    },
+    "tags": [
+      "wifi",
+      "switch"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "ae340454-cac5-468c-a8f4-9481a0a04dc4",
+        "nombre_archivo": "evidencia_5.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "1064"
+        },
+        "url_storage": "evidencias/INC-2026-1011-ACA-9005/ae340454-cac5-468c-a8f4-9481a0a04dc4.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791705600000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "7.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791705600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791738000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791828000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791705600000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791828000000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791828000000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000005"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-0930-RED-9006",
+    "titulo": "Sin conexión en el laboratorio",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "resuelta",
+    "prioridad": "alta",
+    "ubicacion": {
+      "edificio": "B",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "209"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.3.174.228",
+      "vlan": {
+        "$numberInt": "30"
+      },
+      "puerto_uplink": "Gi0/21",
+      "equipos_afectados": {
+        "$numberInt": "22"
+      }
+    },
+    "tags": [
+      "filtracion",
+      "calificaciones"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "f42d47cc-00d4-4f59-b427-3ca3287d06ca",
+        "nombre_archivo": "evidencia_6.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "739"
+        },
+        "url_storage": "evidencias/INC-2026-0930-RED-9006/f42d47cc-00d4-4f59-b427-3ca3287d06ca.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1790762400000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "8.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790762400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790812800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790888400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1790762400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1790888400000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1790888400000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000006"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1003-INF-9007",
+    "titulo": "Aire acondicionado no enfría",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "resuelta",
+    "prioridad": "critica",
+    "ubicacion": {
+      "edificio": "A",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "101"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "luminaria",
+      "riesgo_seguridad": "alto",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": true
+    },
+    "tags": [
+      "switch",
+      "urgente",
+      "red"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "04fc6d82-7d15-4385-92fb-e43b99546eb4",
+        "nombre_archivo": "evidencia_7.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "429"
+        },
+        "url_storage": "evidencias/INC-2026-1003-INF-9007/04fc6d82-7d15-4385-92fb-e43b99546eb4.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791010800000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "4.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791010800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791075600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791180000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791010800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791180000000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791180000000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000007"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1008-ACA-9008",
+    "titulo": "Error al subir tareas al LMS",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "resuelta",
+    "prioridad": "baja",
+    "ubicacion": {
+      "edificio": "Biblioteca",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "308"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "correo",
+      "codigo_curso": "MAT-165",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "84"
+      }
+    },
+    "tags": [
+      "urgente",
+      "switch",
+      "filtracion"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "6c52c49f-9b49-4d26-9f57-c59a8715a103",
+        "nombre_archivo": "evidencia_8.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "633"
+        },
+        "url_storage": "evidencias/INC-2026-1008-ACA-9008/6c52c49f-9b49-4d26-9f57-c59a8715a103.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791428400000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "2.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791428400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791460800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791493200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791428400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791493200000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791493200000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000008"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1002-RED-9009",
+    "titulo": "Sin conexión en el laboratorio",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "cerrada",
+    "prioridad": "media",
+    "ubicacion": {
+      "edificio": "Laboratorios",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "202"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.7.16.88",
+      "vlan": {
+        "$numberInt": "10"
+      },
+      "puerto_uplink": "Gi0/19",
+      "equipos_afectados": {
+        "$numberInt": "36"
+      }
+    },
+    "tags": [
+      "laboratorio",
+      "luminaria"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "a18ff6b6-b535-406e-922c-9a5601d74256",
+        "nombre_archivo": "evidencia_9.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "320"
+        },
+        "url_storage": "evidencias/INC-2026-1002-RED-9009/a18ff6b6-b535-406e-922c-9a5601d74256.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1790920800000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "6.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790920800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791007200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791057600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791115200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "cerrada",
+        "comentario": "Cambio a cerrada (demo)",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1790920800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791115200000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791057600000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000009"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1012-INF-9010",
+    "titulo": "Aire acondicionado no enfría",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "abierta",
+    "prioridad": "alta",
+    "ubicacion": {
+      "edificio": "A",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "202"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "electrico",
+      "riesgo_seguridad": "medio",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": false
+    },
+    "tags": [
+      "urgente",
+      "switch"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "922fe15a-e1e3-4b63-af7d-dc76b92da22b",
+        "nombre_archivo": "evidencia_10.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "1380"
+        },
+        "url_storage": "evidencias/INC-2026-1012-INF-9010/922fe15a-e1e3-4b63-af7d-dc76b92da22b.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791799200000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "0.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791799200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791799200000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791799200000"
+      }
+    },
+    "_id": {
+      "$oid": "65000000000000000000000a"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1004-ACA-9011",
+    "titulo": "Error al subir tareas al LMS",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "en_proceso",
+    "prioridad": "critica",
+    "ubicacion": {
+      "edificio": "B",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "102"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "correo",
+      "codigo_curso": "FIS-281",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "54"
+      }
+    },
+    "tags": [
+      "aire_acondicionado",
+      "red",
+      "wifi"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "56dc8907-ba6c-44ab-a712-303a0f844fef",
+        "nombre_archivo": "evidencia_11.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "423"
+        },
+        "url_storage": "evidencias/INC-2026-1004-ACA-9011/56dc8907-ba6c-44ab-a712-303a0f844fef.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791090000000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "4.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791090000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791187200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791090000000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791187200000"
+      }
+    },
+    "_id": {
+      "$oid": "65000000000000000000000b"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1012-RED-9012",
+    "titulo": "Sin conexión en el laboratorio",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "en_espera",
+    "prioridad": "baja",
+    "ubicacion": {
+      "edificio": "C",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "208"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.2.113.208",
+      "vlan": {
+        "$numberInt": "10"
+      },
+      "puerto_uplink": "Gi0/2",
+      "equipos_afectados": {
+        "$numberInt": "35"
+      }
+    },
+    "tags": [
+      "wifi",
+      "luminaria"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "7b3a4e3e-7c52-4a17-a80a-c07a2a935d62",
+        "nombre_archivo": "evidencia_12.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "637"
+        },
+        "url_storage": "evidencias/INC-2026-1012-RED-9012/7b3a4e3e-7c52-4a17-a80a-c07a2a935d62.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791784800000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "8.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791784800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791813600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791835200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_espera",
+        "comentario": "Cambio a en_espera (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791784800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791835200000"
+      }
+    },
+    "_id": {
+      "$oid": "65000000000000000000000c"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1007-INF-9013",
+    "titulo": "Filtración en techo del aula",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "resuelta",
+    "prioridad": "media",
+    "ubicacion": {
+      "edificio": "Biblioteca",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "205"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "otro",
+      "riesgo_seguridad": "alto",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": false
+    },
+    "tags": [
+      "aire_acondicionado",
+      "switch",
+      "luminaria",
+      "urgente"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "944528c0-0ef8-42d6-b7fd-564637bb3eec",
+        "nombre_archivo": "evidencia_13.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "1310"
+        },
+        "url_storage": "evidencias/INC-2026-1007-INF-9013/944528c0-0ef8-42d6-b7fd-564637bb3eec.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791370800000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "8.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791370800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791396000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791403200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791370800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791403200000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791403200000"
+      }
+    },
+    "_id": {
+      "$oid": "65000000000000000000000d"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1018-ACA-9014",
+    "titulo": "Correo institucional rechaza mensajes",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "cerrada",
+    "prioridad": "alta",
+    "ubicacion": {
+      "edificio": "A",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "101"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "lms",
+      "codigo_curso": "MAT-360",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "10"
+      }
+    },
+    "tags": [
+      "wifi",
+      "laboratorio"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "675dd5af-3c36-4296-9ca0-2eecacdabacc",
+        "nombre_archivo": "evidencia_14.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "445"
+        },
+        "url_storage": "evidencias/INC-2026-1018-ACA-9014/675dd5af-3c36-4296-9ca0-2eecacdabacc.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1792288800000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "5.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792288800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792299600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792371600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792436400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "cerrada",
+        "comentario": "Cambio a cerrada (demo)",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1792288800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1792436400000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1792371600000"
+      }
+    },
+    "_id": {
+      "$oid": "65000000000000000000000e"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1001-RED-9015",
+    "titulo": "WiFi intermitente en aula",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "abierta",
+    "prioridad": "critica",
+    "ubicacion": {
+      "edificio": "A",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "301"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.2.107.170",
+      "vlan": {
+        "$numberInt": "30"
+      },
+      "puerto_uplink": "Gi0/9",
+      "equipos_afectados": {
+        "$numberInt": "14"
+      }
+    },
+    "tags": [
+      "lms",
+      "luminaria",
+      "filtracion",
+      "urgente"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "4ccc9bc2-a53f-4a28-abf3-e3fc21813d25",
+        "nombre_archivo": "evidencia_15.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "1136"
+        },
+        "url_storage": "evidencias/INC-2026-1001-RED-9015/4ccc9bc2-a53f-4a28-abf3-e3fc21813d25.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1790830800000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "0.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790830800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1790830800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1790830800000"
+      }
+    },
+    "_id": {
+      "$oid": "65000000000000000000000f"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1009-INF-9016",
+    "titulo": "Luminaria fundida en pasillo",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "en_proceso",
+    "prioridad": "baja",
+    "ubicacion": {
+      "edificio": "B",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "302"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "luminaria",
+      "riesgo_seguridad": "bajo",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": false
+    },
+    "tags": [
+      "lms",
+      "wifi"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "48f4ef12-5e99-43d2-be89-6c64e117dac3",
+        "nombre_archivo": "evidencia_16.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "523"
+        },
+        "url_storage": "evidencias/INC-2026-1009-INF-9016/48f4ef12-5e99-43d2-be89-6c64e117dac3.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791540000000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "4.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791540000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791547200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791540000000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791547200000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000010"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1004-ACA-9017",
+    "titulo": "Correo institucional rechaza mensajes",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "en_espera",
+    "prioridad": "media",
+    "ubicacion": {
+      "edificio": "C",
+      "piso": {
+        "$numberInt": "3"
+      },
+      "aula": "305"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "lms",
+      "codigo_curso": "MAT-235",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "14"
+      }
+    },
+    "tags": [
+      "urgente",
+      "switch"
+    ],
+    "evidencias_adjuntas": [
+      {
+        "evidencia_id": "35ebd32d-9ad6-40ab-8821-2ddb45b89cd9",
+        "nombre_archivo": "evidencia_17.jpg",
+        "tipo_mime": "image/jpeg",
+        "peso_kb": {
+          "$numberInt": "902"
+        },
+        "url_storage": "evidencias/INC-2026-1004-ACA-9017/35ebd32d-9ad6-40ab-8821-2ddb45b89cd9.jpg",
+        "fecha_carga": {
+          "$date": {
+            "$numberLong": "1791140400000"
+          }
+        },
+        "subido_por": {
+          "$oid": "64f000000000000000000013"
+        }
+      }
+    ],
+    "horas_invertidas": {
+      "$numberDouble": "4.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791140400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791226800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791302400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_espera",
+        "comentario": "Cambio a en_espera (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791140400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791302400000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000011"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1012-RED-9018",
+    "titulo": "WiFi intermitente en aula",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "resuelta",
+    "prioridad": "alta",
+    "ubicacion": {
+      "edificio": "Biblioteca",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "102"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.13.212.72",
+      "vlan": {
+        "$numberInt": "10"
+      },
+      "puerto_uplink": "Gi0/1",
+      "equipos_afectados": {
+        "$numberInt": "22"
+      }
+    },
+    "tags": [
+      "filtracion",
+      "switch"
+    ],
+    "evidencias_adjuntas": [],
+    "horas_invertidas": {
+      "$numberDouble": "7.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791820800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791925200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791990000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791820800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791990000000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791990000000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000012"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-0925-INF-9019",
+    "titulo": "Aire acondicionado no enfría",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "cerrada",
+    "prioridad": "critica",
+    "ubicacion": {
+      "edificio": "Laboratorios",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "303"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "filtracion",
+      "riesgo_seguridad": "medio",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": false
+    },
+    "tags": [
+      "calificaciones",
+      "switch"
+    ],
+    "evidencias_adjuntas": [],
+    "horas_invertidas": {
+      "$numberDouble": "5.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790373600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790442000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790510400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "1.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1790528400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "cerrada",
+        "comentario": "Cambio a cerrada (demo)",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1790373600000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1790528400000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1790510400000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000013"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1018-ACA-9020",
+    "titulo": "Error al subir tareas al LMS",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "abierta",
+    "prioridad": "baja",
+    "ubicacion": {
+      "edificio": "A",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "106"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "correo",
+      "codigo_curso": "MAT-441",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "13"
+      }
+    },
+    "tags": [
+      "urgente",
+      "calificaciones",
+      "switch"
+    ],
+    "evidencias_adjuntas": [],
+    "horas_invertidas": {
+      "$numberDouble": "0.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792292400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1792292400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1792292400000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000014"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1012-RED-9021",
+    "titulo": "WiFi intermitente en aula",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "computo_redes",
+    "estado": "en_proceso",
+    "prioridad": "media",
+    "ubicacion": {
+      "edificio": "B",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "103"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "computo_redes",
+      "ip": "10.10.200.240",
+      "vlan": {
+        "$numberInt": "99"
+      },
+      "puerto_uplink": "Gi0/22",
+      "equipos_afectados": {
+        "$numberInt": "16"
+      }
+    },
+    "tags": [
+      "switch",
+      "wifi",
+      "calificaciones"
+    ],
+    "evidencias_adjuntas": [],
+    "horas_invertidas": {
+      "$numberDouble": "2.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791788400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791885600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "2.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791788400000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791885600000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000015"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1017-INF-9022",
+    "titulo": "Luminaria fundida en pasillo",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "infraestructura",
+    "estado": "en_espera",
+    "prioridad": "alta",
+    "ubicacion": {
+      "edificio": "C",
+      "piso": {
+        "$numberInt": "2"
+      },
+      "aula": "204"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "infraestructura",
+      "tipo_dano": "filtracion",
+      "riesgo_seguridad": "alto",
+      "requiere_insumos": true,
+      "insumos": [
+        "cable",
+        "cinta aislante"
+      ],
+      "requiere_contratista": true
+    },
+    "tags": [
+      "filtracion",
+      "wifi",
+      "laboratorio"
+    ],
+    "evidencias_adjuntas": [],
+    "horas_invertidas": {
+      "$numberDouble": "6.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792270800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792303200000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "2.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1792404000000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_espera",
+        "comentario": "Cambio a en_espera (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1792270800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1792404000000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000016"
+    }
+  },
+  {
+    "schema_version": {
+      "$numberInt": "1"
+    },
+    "demo": true,
+    "codigo": "INC-2026-1007-ACA-9023",
+    "titulo": "Error al subir tareas al LMS",
+    "descripcion": "Incidencia sintética generada para demostración del sistema UTM Desk.",
+    "categoria": "academico",
+    "estado": "resuelta",
+    "prioridad": "critica",
+    "ubicacion": {
+      "edificio": "Biblioteca",
+      "piso": {
+        "$numberInt": "1"
+      },
+      "aula": "105"
+    },
+    "reportante": {
+      "usuario_id": {
+        "$oid": "64f000000000000000000013"
+      },
+      "nombre": "Usuario Sintético T-013"
+    },
+    "detalle_especifico": {
+      "categoria": "academico",
+      "plataforma": "correo",
+      "codigo_curso": "FIS-119",
+      "periodo": "2026-2",
+      "estudiantes_impactados": {
+        "$numberInt": "13"
+      }
+    },
+    "tags": [
+      "calificaciones",
+      "lms",
+      "urgente",
+      "luminaria"
+    ],
+    "evidencias_adjuntas": [],
+    "horas_invertidas": {
+      "$numberDouble": "7.0"
+    },
+    "historial_seguimiento": [
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791388800000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "abierta",
+        "comentario": "Incidencia creada",
+        "horas": {
+          "$numberDouble": "0.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791453600000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "en_proceso",
+        "comentario": "Cambio a en_proceso (demo)",
+        "horas": {
+          "$numberDouble": "4.0"
+        }
+      },
+      {
+        "fecha": {
+          "$date": {
+            "$numberLong": "1791536400000"
+          }
+        },
+        "usuario_id": {
+          "$oid": "64f000000000000000000013"
+        },
+        "estado_nuevo": "resuelta",
+        "comentario": "Cambio a resuelta (demo)",
+        "horas": {
+          "$numberDouble": "3.0"
+        }
+      }
+    ],
+    "fecha_creacion": {
+      "$date": {
+        "$numberLong": "1791388800000"
+      }
+    },
+    "fecha_actualizacion": {
+      "$date": {
+        "$numberLong": "1791536400000"
+      }
+    },
+    "fecha_resolucion": {
+      "$date": {
+        "$numberLong": "1791536400000"
+      }
+    },
+    "_id": {
+      "$oid": "650000000000000000000017"
+    }
+  }
+]

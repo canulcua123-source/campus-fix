@@ -1,12 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQuery } from '@tanstack/react-query'
 import imageCompression from 'browser-image-compression'
 import { Camera, Sparkles } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { aulaQuery } from '../api/aulas'
 import { api } from '../api/client'
-import { crearIncidencia } from '../api/incidencias'
-import { useSubirEvidencia } from '../hooks/useSubirEvidencia'
+import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
+import type { ReanudarSubida } from '../api/evidencias'
 import {
   CATEGORIAS, PRIORIDADES, analisisImagenSchema, incidenciaSchema,
   type AnalisisImagen, type Categoria, type IncidenciaCreada, type IncidenciaForm,
@@ -37,6 +39,9 @@ function normalizarTag(t: string): string {
 
 export default function Reportar() {
   const navigate = useNavigate()
+  const [parametros] = useSearchParams()
+  const aulaId = parametros.get('aula')?.trim() ?? ''
+  const aula = useQuery({ ...aulaQuery(aulaId), enabled: Boolean(aulaId) })
   const entrada = useRef<HTMLInputElement>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
@@ -49,6 +54,7 @@ export default function Reportar() {
   const [creada, setCreada] = useState<IncidenciaCreada | null>(null)
   const [errorFoto, setErrorFoto] = useState<string | null>(null)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const progresoFoto = useRef<ReanudarSubida>({}) // conserva firma y PUT hechos para reintentar solo el paso fallido
 
   const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = useForm<IncidenciaForm>({
     resolver: zodResolver(incidenciaSchema),
@@ -59,7 +65,16 @@ export default function Reportar() {
     },
   })
   const categoria = useWatch({ control, name: 'detalle_especifico.categoria' })
-  const { mutateAsync: subirFoto } = useSubirEvidencia()
+  const { mutateAsync: crear } = useCrearIncidencia()
+  const { mutateAsync: subirFoto } = useEvidencia()
+  const ubicacionFijada = Boolean(aula.data)
+
+  useEffect(() => {
+    if (!aula.data) return
+    setValue('ubicacion.edificio', aula.data.ubicacion.edificio, { shouldValidate: true })
+    setValue('ubicacion.piso', aula.data.ubicacion.piso, { shouldValidate: true })
+    setValue('ubicacion.aula', aula.data.ubicacion.aula, { shouldValidate: true })
+  }, [aula.data, setValue])
 
   // register de campos del detalle (la unión discriminada no se resuelve en tipos de ruta)
   const d = (nombre: string, opts?: RegisterOptions) =>
@@ -77,6 +92,7 @@ export default function Reportar() {
     try {
       const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
       setFoto(comprimida)
+      progresoFoto.current = {}
       setVista(URL.createObjectURL(comprimida))
       const fd = new FormData()
       fd.append('imagen', comprimida, 'incidencia.jpg')
@@ -106,7 +122,7 @@ export default function Reportar() {
     setErrorFoto(null)
     setSubiendoFoto(true)
     try {
-      await subirFoto({ incidenciaId, archivo: foto, nombre: 'incidencia.jpg' })
+      await subirFoto({ incidenciaId, archivo: foto, nombre: 'incidencia.jpg', reanudar: progresoFoto.current })
       navigate('/mis-tickets')
     } catch (e) {
       setErrorFoto(e instanceof Error ? e.message : 'No se pudo adjuntar la foto')
@@ -118,7 +134,7 @@ export default function Reportar() {
   async function enviar(datos: IncidenciaForm) {
     setErrorEnvio(null)
     try {
-      const nueva = await crearIncidencia(datos)
+      const nueva = await crear(datos)
       if (!foto) {
         navigate('/mis-tickets')
         return
@@ -179,6 +195,17 @@ export default function Reportar() {
       <h1 className="titulo-pagina">Nueva incidencia</h1>
       {vista && <img src={vista} alt="Foto de la incidencia" className="mb-3 max-h-56 rounded-card object-cover" />}
       {aviso && <p role="status" className="card mb-3 text-sm">{aviso}</p>}
+      {aulaId && aula.isPending && <p role="status" className="card mb-3 text-sm">Comprobando la ubicación del código QR…</p>}
+      {aulaId && aula.isError && (
+        <p role="alert" className="card mb-3 text-sm text-warn">
+          No pudimos reconocer el aula del código QR. Puedes seleccionar la ubicación manualmente.
+        </p>
+      )}
+      {aula.data && (
+        <p role="status" className="card mb-3 text-sm text-ok">
+          Ubicación fijada por el código QR: {aula.data.ubicacion.edificio}, piso {aula.data.ubicacion.piso}, aula {aula.data.ubicacion.aula}.
+        </p>
+      )}
       {ia?.es_incidencia_valida && (
         <div className="mb-3 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-panel-2 px-3 py-1 text-xs font-semibold text-brand">
@@ -203,12 +230,13 @@ export default function Reportar() {
         </select>
 
         <label className="etiqueta" htmlFor="edificio">Edificio</label>
-        <input id="edificio" {...register('ubicacion.edificio')} />
+        <input id="edificio" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada} {...register('ubicacion.edificio')} />
         <Err msg={errors.ubicacion?.edificio?.message} />
         <label className="etiqueta" htmlFor="piso">Piso (opcional)</label>
-        <input id="piso" type="number" inputMode="numeric" {...register('ubicacion.piso', { setValueAs: (v) => (v === '' || v == null ? null : Number(v)) })} />
+        <input id="piso" type="number" inputMode="numeric" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+          {...register('ubicacion.piso', { setValueAs: (v) => (v === '' || v == null ? null : Number(v)) })} />
         <label className="etiqueta" htmlFor="aula">Aula</label>
-        <input id="aula" {...register('ubicacion.aula')} />
+        <input id="aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada} {...register('ubicacion.aula')} />
         <Err msg={errors.ubicacion?.aula?.message} />
 
         <label className="etiqueta" htmlFor="categoria">Categoría</label>
