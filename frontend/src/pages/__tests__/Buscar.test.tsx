@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { BASE } from '../../api/client'
 import { useAuth } from '../../auth/store'
 import { AppShell } from '../../components/AppShell'
@@ -13,6 +14,29 @@ import { servidor } from '../../test/msw/server'
 import Buscar from '../Buscar'
 
 vi.mock('../../components/UpdatePrompt', () => ({ UpdatePrompt: () => null }))
+
+beforeAll(() => {
+  servidor.listen({ onUnhandledRequest: 'error' })
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+})
+
+afterEach(() => {
+  cleanup()
+  servidor.resetHandlers()
+  useAuth.setState({ token: null, usuario: null, aviso: null })
+})
+
+afterAll(() => servidor.close())
 
 const RESULTADOS: IncidenciaListaItem[] = [
   {
