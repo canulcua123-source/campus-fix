@@ -4,10 +4,12 @@ from typing import Annotated, Any, Literal
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pymongo.errors import DuplicateKeyError
 
+from app.core.auditoria import registrar_auditoria
 from app.core.db import get_db
+from app.core.config import PATRON_CORREO, validar_dominio_correo
 from app.core.security import hashear_password, puede_otorgar, require_permiso
 from app.core.serial import a_json
 
@@ -20,6 +22,8 @@ PROYECCION = {"password_hash": 0}
 
 
 class UsuarioPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     nombre: str | None = Field(default=None, min_length=3, max_length=80)
     rol: str | None = Field(default=None, pattern=r"^[a-z_]{3,30}$")
     areas: list[Categoria] | None = Field(default=None, max_length=3)
@@ -30,21 +34,26 @@ class UsuarioPatch(BaseModel):
 
 class UsuarioIn(UsuarioPatch):
     nombre: str = Field(min_length=3, max_length=80)
-    correo: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    correo: str = Field(min_length=3, max_length=254, pattern=PATRON_CORREO)
     password: str = Field(min_length=10, max_length=128)
     rol: str = Field(pattern=r"^[a-z_]{3,30}$")
 
+    @field_validator("correo", mode="before")
+    @classmethod
+    def _minusculas(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
+
     @field_validator("correo")
     @classmethod
-    def _minusculas(cls, v: str) -> str:
-        return v.strip().lower()
+    def _dominio_institucional(cls, v: str) -> str:
+        return validar_dominio_correo(v)
 
 
 async def _validar_asignacion(rol: str, areas: list | None, edificios: list | None, creador: dict) -> dict[str, Any]:
     """Valida el rol y devuelve los campos de alcance a guardar (solo los que aplican al alcance del rol)."""
     doc_rol = await get_db().roles.find_one({"clave": rol})
     if doc_rol is None:
-        raise HTTPException(400, f"El rol {rol!r} no existe")
+        raise HTTPException(400, "El rol indicado no existe")
     alcance = doc_rol.get("alcance", "propio")
     campos: dict[str, Any] = {}
     if alcance == "area":
@@ -66,10 +75,12 @@ async def _filtro_usuarios_gestionables(actor: dict) -> dict[str, Any]:
     permisos_actor = set(actor["_permisos"])
     alcance_actor = actor["_alcance"]
     roles_permitidos: list[str] = []
+    roles_prohibidos: list[str] = []
     cursor = get_db().roles.find({}, {"clave": 1, "permisos": 1, "alcance": 1})
     async for rol in cursor:
         permisos_objetivo = set(rol.get("permisos", []))
         if not permisos_objetivo <= permisos_actor:
+            roles_prohibidos.append(rol["clave"])
             continue
         if alcance_actor != "global" and (
             rol.get("alcance", "propio") != alcance_actor or permisos_objetivo >= permisos_actor
@@ -77,15 +88,17 @@ async def _filtro_usuarios_gestionables(actor: dict) -> dict[str, Any]:
             continue
         roles_permitidos.append(rol["clave"])
 
-    gestionables: dict[str, Any] = {"rol": {"$in": roles_permitidos}}
     if alcance_actor == "global":
-        return gestionables
+        # Un usuario con rol inexistente no tiene permisos: el gestor global puede verlo y corregirlo.
+        return {"rol": {"$nin": roles_prohibidos}}
+
+    gestionables: dict[str, Any] = {"rol": {"$in": roles_permitidos}}
 
     campo = "areas" if alcance_actor == "area" else "edificios"
     gestionables["$expr"] = {
         "$setIsSubset": [
             {"$ifNull": [f"${campo}", []]},
-            actor.get(campo, []),
+            {"$literal": list(actor.get(campo, []))},
         ]
     }
     # El propio perfil se muestra para permitir editar el nombre, pero las
@@ -123,6 +136,13 @@ async def crear(datos: UsuarioIn, usuario: Annotated[dict, Depends(require_permi
     except DuplicateKeyError:
         raise HTTPException(409, "Ya existe un usuario con ese correo")
     doc["_id"] = res.inserted_id
+    await registrar_auditoria(
+        actor=usuario,
+        accion="crear",
+        recurso="usuarios",
+        recurso_id=str(res.inserted_id),
+        despues=doc,
+    )
     return a_json(doc)
 
 
@@ -157,4 +177,14 @@ async def editar(
     res = await get_db().usuarios.update_one(filtro_gestionable, update)
     if res.matched_count == 0:
         raise HTTPException(404, "Usuario no encontrado")
-    return a_json(await get_db().usuarios.find_one({"_id": oid}, PROYECCION))
+    actualizado = await get_db().usuarios.find_one({"_id": oid}, PROYECCION)
+    if actualizado is not None:
+        await registrar_auditoria(
+            actor=usuario,
+            accion="editar",
+            recurso="usuarios",
+            recurso_id=usuario_id,
+            antes=actual,
+            despues=actualizado,
+        )
+    return a_json(actualizado)

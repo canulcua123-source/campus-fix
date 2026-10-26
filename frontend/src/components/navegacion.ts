@@ -1,5 +1,5 @@
 import {
-  BarChart3, Building2, Camera, ClipboardList, FileText, History, Home, Inbox, KanbanSquare, LayoutDashboard, ListChecks,
+  BarChart3, BrainCircuit, Building2, Camera, ClipboardList, FileText, History, Home, Inbox, KanbanSquare, LayoutDashboard, ListChecks,
   Search, Settings, Shield, Tags, UserRound, Users, Wrench, type LucideIcon,
 } from 'lucide-react'
 
@@ -40,6 +40,7 @@ const I = {
   edificios: { to: '/admin/edificios', etiqueta: 'Edificios', icono: Building2, permiso: 'usuarios:gestionar' },
   auditoria: { to: '/admin/auditoria', etiqueta: 'Auditoría', icono: History, permiso: 'usuarios:gestionar' },
   configuracion: { to: '/admin/configuracion', etiqueta: 'Configuración', icono: Settings, permiso: 'usuarios:gestionar' },
+  metricasIA: { to: '/admin/metricas-ia', etiqueta: 'Métricas IA', icono: BrainCircuit, permiso: 'analitica:ver' },
 } satisfies Record<string, ItemNav>
 
 interface Config {
@@ -58,8 +59,8 @@ export const NAVEGACION: Record<PerfilNav, Config> = {
   },
   directivo: { movil: [I.dashboard, I.buscar, I.perfil], lateral: [I.dashboard, I.incidencias, I.reportes] },
   admin: {
-    movil: [I.usuarios, I.roles, I.categorias, I.perfil],
-    lateral: [I.usuarios, I.roles, I.categorias, I.edificios, I.auditoria, I.configuracion],
+    movil: [I.usuarios, I.roles, I.categorias, I.metricasIA, I.perfil],
+    lateral: [I.usuarios, I.roles, I.categorias, I.metricasIA, I.edificios, I.auditoria, I.configuracion],
   },
 }
 

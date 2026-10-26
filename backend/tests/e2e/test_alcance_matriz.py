@@ -1,5 +1,7 @@
 """Matriz e2e independiente para el alcance de incidencias y usuarios."""
 
+import random
+import string
 import uuid
 from datetime import datetime, timezone
 
@@ -32,6 +34,11 @@ ENDPOINTS = (
 )
 CASOS = [(rol, endpoint) for rol in ROLES for endpoint in ENDPOINTS]
 MARCA = f"alcance_{uuid.uuid4().hex[:8]}"
+
+
+def _sufijo_letras() -> str:
+    """Las claves de rol solo admiten [a-z_] (validador $jsonSchema de roles)."""
+    return "".join(random.choices(string.ascii_lowercase, k=8))
 
 
 def _ids_visibles(rol: str, recursos: dict[str, dict]) -> set[str]:
@@ -265,14 +272,26 @@ async def test_alcance_edificio_personalizado(api):
 
 
 async def test_patch_usuario_no_gestionable_404(api):
-    sufijo = uuid.uuid4().hex[:8]
+    sufijo = _sufijo_letras()
     clave_gestor = f"gestor_{sufijo}"
     clave_lector = f"lector_{sufijo}"
     permisos_gestor = ["usuarios:gestionar", "incidencias:ver"]
     await api.db.roles.insert_many(
         [
-            {"clave": clave_gestor, "nombre": "Gestor de prueba", "permisos": permisos_gestor, "alcance": "area"},
-            {"clave": clave_lector, "nombre": "Lector de prueba", "permisos": ["incidencias:ver"], "alcance": "area"},
+            {
+                "clave": clave_gestor,
+                "nombre": "Gestor de prueba",
+                "descripcion": "Rol de prueba",
+                "permisos": permisos_gestor,
+                "alcance": "area",
+            },
+            {
+                "clave": clave_lector,
+                "nombre": "Lector de prueba",
+                "descripcion": "Rol de prueba",
+                "permisos": ["incidencias:ver"],
+                "alcance": "area",
+            },
         ]
     )
     actor = await api.usuario_temporal(rol=clave_gestor, areas=["infraestructura"])
@@ -289,7 +308,11 @@ async def test_patch_usuario_no_gestionable_404(api):
         f"/usuarios/{inexistente}", json=cuerpo, headers={"Authorization": f"Bearer {actor['token']}"}
     )
     assert respuesta_fuera.status_code == respuesta_inexistente.status_code == 404
-    assert respuesta_fuera.json() == respuesta_inexistente.json() == {"detail": "Usuario no encontrado"}
+    assert (
+        respuesta_fuera.json()
+        == respuesta_inexistente.json()
+        == {"error": "no_encontrado", "detalle": "Usuario no encontrado"}
+    )
     assert respuesta_fuera.headers["content-type"] == respuesta_inexistente.headers["content-type"]
     assert respuesta_fuera.headers.get("content-length") == respuesta_inexistente.headers.get("content-length")
     assert await api.db.usuarios.find_one({"_id": inexistente}) is None
@@ -320,3 +343,31 @@ async def test_patch_usuario_no_gestionable_404(api):
         headers={"Authorization": f"Bearer {actor['token']}"},
     )
     assert autoescalado.status_code == 400
+
+
+async def test_admin_global_gestiona_usuario_con_rol_inexistente(api):
+    huerfano = await api.usuario_temporal(rol=f"rol_borrado_{_sufijo_letras()}")
+    ids = {u["_id"] for u in (await api.c.get("/usuarios", headers=api.h("admin"))).json()}
+    assert str(huerfano["_id"]) in ids
+    r = await api.c.patch(f"/usuarios/{huerfano['_id']}", json={"activo": False}, headers=api.h("admin"))
+    assert r.status_code == 200 and r.json()["activo"] is False
+
+
+async def test_gestor_delegado_no_ve_usuario_con_rol_inexistente(api):
+    sufijo = _sufijo_letras()
+    clave_gestor = f"gestor_{sufijo}"
+    await api.db.roles.insert_one(
+        {
+            "clave": clave_gestor,
+            "nombre": "Gestor de prueba",
+            "descripcion": "Rol de prueba",
+            "permisos": ["usuarios:gestionar", "incidencias:ver"],
+            "alcance": "area",
+        }
+    )
+    actor = await api.usuario_temporal(rol=clave_gestor, areas=["infraestructura"])
+    huerfano = await api.usuario_temporal(rol=f"rol_borrado_{sufijo}", areas=["infraestructura"])
+    headers = {"Authorization": f"Bearer {actor['token']}"}
+    assert str(huerfano["_id"]) not in {u["_id"] for u in (await api.c.get("/usuarios", headers=headers)).json()}
+    r = await api.c.patch(f"/usuarios/{huerfano['_id']}", json={"nombre": "No aplica"}, headers=headers)
+    assert r.status_code == 404

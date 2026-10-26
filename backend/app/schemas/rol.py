@@ -1,6 +1,6 @@
 from typing import Literal, get_args
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 CATALOGO_PERMISOS = [
     "incidencias:crear",
@@ -35,6 +35,8 @@ assert list(get_args(Permiso)) == CATALOGO_PERMISOS
 
 
 class RolIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     clave: str = Field(pattern=r"^[a-z_]{3,30}$")
     nombre: str = Field(min_length=3, max_length=50)
     descripcion: str = Field(default="", max_length=200)
