@@ -4,7 +4,7 @@
 
 - La API emite JWT firmados únicamente con `HS256`. El verificador fija ese algoritmo y rechaza `none`, `HS512` y cualquier otro valor inesperado.
 - Cada token exige `sub`, `iss`, `aud`, `iat` y `exp`. El emisor es `utm-desk`, la audiencia es `utm-desk-api` y `sub` debe ser un `ObjectId` de usuario válido.
-- `iat` y `exp` son instantes UTC. La diferencia es siempre de 15 minutos; la configuración rechaza cualquier otro valor para `JWT_ACCESS_MINUTES`.
+- `iat` y `exp` son instantes UTC. La diferencia es de 15 minutos por defecto; la configuración rechaza valores de `JWT_ACCESS_MINUTES` fuera de 1 a 15.
 - Los claims obligatorios no se pueden sobrescribir al emitir un token.
 
 El JWT solo acredita la identidad. Aunque un token manipulado incluya `rol`, `permisos` o `alcance`, esos valores no se usan para autorizar.
@@ -23,13 +23,13 @@ No se cachean roles ni permisos. Si se añade una caché en el futuro, deberá i
 
 Se conserva **10 solicitudes por minuto por IP**. Es el valor ya usado por la API y sus pruebas, y evita un límite demasiado agresivo para personas que comparten la salida NAT del campus. Se complementa con bloqueos de intentos fallidos: 10 en 15 minutos por combinación de cuenta e IP, y 50 en 15 minutos por cuenta entre todas las IP.
 
-La constante `LIMITE_LOGIN` es la fuente de verdad del decorador de `/auth/login`. `docs/reglas/API.md` documenta el mismo valor y la prueba e2e verifica la constante, el documento y el comportamiento HTTP real.
+La constante `LIMITE_LOGIN` es la fuente de verdad del decorador de `/auth/login`; `docs/reglas/API.md` documenta el mismo valor y la prueba e2e verifica la constante y el comportamiento HTTP real.
 
-## Estado de refresh y logout (dependencia #14)
+## Refresh y logout
 
-En la revisión de `dev` usada para este cambio no existen `POST /auth/refresh`, `POST /auth/logout`, cookies de refresh, `jti` ni familias de rotación. No se añadieron contratos parciales o simulados: hacerlo aquí duplicaría o volvería incompatible T-014.
+`POST /auth/refresh` consulta al usuario por `sub` y exige `activo: true` antes de rotar el token y emitir un access nuevo; un usuario desactivado recibe 401 (`test_refresh_usuario_desactivado_401`). Login, `get_usuario_actual` y refresh aplican el mismo criterio (`activo` debe ser exactamente `true`).
 
-Cuando T-014 se implemente, el refresh deberá consultar al usuario por `sub` y exigir `activo: true` antes de rotar o emitir tokens. La prueba `test_refresh_usuario_desactivado_401` corresponde a esa implementación y no puede representar comportamiento real mientras el endpoint no exista.
+`JWT_ACCESS_MINUTES` acepta de 1 a 15 minutos: se puede acortar la vida del access token, nunca alargarla.
 
 ## Contrato público
 

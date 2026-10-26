@@ -1,10 +1,18 @@
+import logging
+
 from fastapi import HTTPException
+from jwt import PyJWTError
 from limits import parse
+from limits.errors import StorageError
+from redis.exceptions import RedisError
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
 
 from app.core.config import settings
+from app.core.errores import cabeceras_retry_after, segundos_hasta_reinicio
+
+logger = logging.getLogger(__name__)
 
 LIMITE_LOGIN = "10/minute"
 
@@ -19,8 +27,8 @@ def clave_usuario(request: Request) -> str:
     if auth.lower().startswith("bearer "):
         try:
             return f"usuario:{decodificar_token(auth[7:])['sub']}"
-        except Exception:
-            pass
+        except (KeyError, TypeError, PyJWTError):
+            return f"ip:{get_remote_address(request)}"
     return f"ip:{get_remote_address(request)}"
 
 
@@ -36,5 +44,18 @@ async def limite_general(request: Request) -> None:
     """
     if request.url.path == "/health":
         return
-    if not limiter.limiter.hit(parse(settings.limite_general), "general", clave_usuario(request)):
-        raise HTTPException(429, "Demasiadas peticiones; espera un momento")
+    limite = parse(settings.limite_general)
+    clave = clave_usuario(request)
+    if limiter.limiter.hit(limite, "general", clave):
+        return
+    try:
+        reinicio, _ = limiter.limiter.get_window_stats(limite, "general", clave)
+        segundos = segundos_hasta_reinicio(reinicio)
+    except (RedisError, StorageError):
+        logger.exception("No fue posible consultar la ventana del límite global")
+        segundos = None
+    raise HTTPException(
+        429,
+        "Demasiadas peticiones; espera un momento",
+        headers=cabeceras_retry_after(segundos),
+    )

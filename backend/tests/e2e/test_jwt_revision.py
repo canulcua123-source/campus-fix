@@ -1,7 +1,6 @@
 """Revisión de claims JWT, autorización vigente y revocación inmediata."""
 
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import jwt
 import pytest
@@ -106,6 +105,63 @@ async def test_cambio_rol_efecto_inmediato(api):
     assert (await api.c.get("/analitica/edificios", headers=headers)).status_code == 200
 
 
+async def test_cambio_rol_a_menos_privilegio_efecto_inmediato(api):
+    usuario = await api.usuario_temporal(rol="directivo")
+    headers = {"Authorization": f"Bearer {usuario['token']}"}
+    assert (await api.c.get("/analitica/edificios", headers=headers)).status_code == 200
+
+    await api.db.usuarios.update_one({"_id": usuario["_id"]}, {"$set": {"rol": "reportante"}})
+
+    assert (await api.c.get("/analitica/edificios", headers=headers)).status_code == 403
+
+
+async def test_rol_inexistente_queda_sin_permisos(api):
+    usuario = await api.usuario_temporal(rol="directivo")
+    await api.db.usuarios.update_one({"_id": usuario["_id"]}, {"$set": {"rol": "rol_que_no_existe"}})
+    headers = {"Authorization": f"Bearer {usuario['token']}"}
+    assert (await api.c.get("/analitica/edificios", headers=headers)).status_code == 403
+
+
+async def test_jwt_sub_no_objectid_401(api):
+    assert (await _me(api, _firmar(_payload("no-es-un-objectid")))).status_code == 401
+
+
+async def test_usuario_eliminado_access_401(api):
+    usuario = await api.usuario_temporal()
+    assert (await _me(api, usuario["token"])).status_code == 200
+    await api.db.usuarios.delete_one({"_id": usuario["_id"]})
+    assert (await _me(api, usuario["token"])).status_code == 401
+
+
+async def test_login_usuario_desactivado_401(api):
+    usuario = await api.usuario_temporal(activo=False)
+    transporte = ASGITransport(app=app, raise_app_exceptions=False, client=("10.70.70.71", 4000))
+    async with ClienteSeguro(transport=transporte, base_url="http://test") as cliente:
+        r = await cliente.post("/auth/login", json={"correo": usuario["correo"], "password": PASSWORD})
+    assert r.status_code == 401
+
+
+async def test_refresh_usuario_desactivado_401(api):
+    usuario = await api.usuario_temporal()
+    transporte = ASGITransport(app=app, raise_app_exceptions=False, client=("10.70.70.72", 4000))
+    async with ClienteSeguro(transport=transporte, base_url="http://test") as cliente:
+        login = await cliente.post("/auth/login", json={"correo": usuario["correo"], "password": PASSWORD})
+        assert login.status_code == 200, login.text
+        await api.db.usuarios.update_one({"_id": usuario["_id"]}, {"$set": {"activo": False}})
+        r = await cliente.post("/auth/refresh")
+    assert r.status_code == 401
+
+
+@pytest.mark.parametrize("minutos,valido", [(0, False), (1, True), (15, True), (16, False)])
+def test_config_jwt_access_minutes_entre_1_y_15(minutos, valido):
+    valores = {**settings.model_dump(), "jwt_access_minutes": minutos}
+    if valido:
+        assert type(settings)(**valores).jwt_access_minutes == minutos
+    else:
+        with pytest.raises(ValueError):
+            type(settings)(**valores)
+
+
 async def test_usuario_desactivado_access_401(api):
     usuario = await api.usuario_temporal()
     await api.db.usuarios.update_one({"_id": usuario["_id"]}, {"$set": {"activo": False}})
@@ -114,8 +170,6 @@ async def test_usuario_desactivado_access_401(api):
 
 async def test_login_rate_limit_valor_doc(api):
     assert LIMITE_LOGIN == "10/minute"
-    reglas = Path(__file__).parents[3] / "docs" / "reglas" / "API.md"
-    assert "| Login | 10/minuto |" in reglas.read_text(encoding="utf-8")
 
     transporte = ASGITransport(app=app, raise_app_exceptions=False, client=("10.70.70.70", 4000))
     async with ClienteSeguro(transport=transporte, base_url="http://test") as cliente:

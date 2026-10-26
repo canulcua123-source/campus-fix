@@ -1,6 +1,9 @@
+import re
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,9 +15,13 @@ class Settings(BaseSettings):
     mongodb_admin_uri: str = ""
     mongodb_db: str = "utm_desk"
     redis_url: str = "redis://localhost:6379/0"
+    dominio_correo: str = "utm.edu.mx"
     jwt_secret: str = "cambia-esto"
     jwt_access_minutes: int = 15
     jwt_refresh_days: int = 7
+    refresh_cookie_secure: bool = True
+    refresh_cookie_samesite: Literal["lax", "none"] = "lax"
+    limite_refresh: str = "10/minute"
     cors_origins: str = "http://localhost:5173"
     r2_account_id: str = ""
     r2_access_key_id: str = ""
@@ -34,6 +41,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     ia_habilitada: bool = True
     ia_modelo: str = "claude-opus-5-5"
+    ia_umbral_costo_diario_usd: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
     @field_validator("jwt_secret")
     @classmethod
@@ -45,10 +53,21 @@ class Settings(BaseSettings):
 
     @field_validator("jwt_access_minutes")
     @classmethod
-    def _access_token_quince_minutos(cls, v: int) -> int:
-        if v != 15:
-            raise ValueError("JWT_ACCESS_MINUTES debe ser 15")
+    def _access_token_maximo_quince_minutos(cls, v: int) -> int:
+        if not 1 <= v <= 15:
+            raise ValueError("JWT_ACCESS_MINUTES debe estar entre 1 y 15")
         return v
+
+    @field_validator("dominio_correo")
+    @classmethod
+    def _dominio_correo_valido(cls, v: str) -> str:
+        dominio = v.strip().lower()
+        if len(dominio) > 253 or not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
+            dominio,
+        ):
+            raise ValueError("DOMINIO_CORREO debe contener un dominio sin protocolo ni @")
+        return dominio
 
     @field_validator("cors_origins")
     @classmethod
@@ -57,6 +76,12 @@ class Settings(BaseSettings):
         if "*" in v:
             raise ValueError("CORS_ORIGINS no admite '*': lista los dominios del frontend separados por coma")
         return v
+
+    @model_validator(mode="after")
+    def _cookie_refresh_segura(self):
+        if self.refresh_cookie_samesite == "none" and not self.refresh_cookie_secure:
+            raise ValueError("SameSite=None requiere REFRESH_COOKIE_SECURE=true")
+        return self
 
     @property
     def cors_lista(self) -> list[str]:
@@ -69,3 +94,12 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+PATRON_CORREO = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+def validar_dominio_correo(correo: str, permitidos: tuple[str, ...] = ()) -> str:
+    """Exige el dominio institucional vigente (DOMINIO_CORREO), leído en cada validación y no al importar."""
+    if correo in permitidos or correo.rpartition("@")[2] == settings.dominio_correo:
+        return correo
+    raise PydanticCustomError("string_pattern_mismatch", "El correo debe pertenecer al dominio institucional")
