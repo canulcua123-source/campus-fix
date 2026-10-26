@@ -31,7 +31,7 @@ function seleccionarFoto() {
 beforeEach(() => {
   dobles.analizarImagen.mockReset()
   dobles.procesarFoto.mockReset()
-  dobles.procesarFoto.mockImplementation(async (archivo: File) => ({ evidencia: archivo, ia: archivo, miniatura: archivo, ancho: 1, alto: 1 }))
+  dobles.procesarFoto.mockImplementation(async (archivo: File) => ({ evidencia: archivo, ia: archivo, miniatura: archivo, calidad: { nitidez: 500, brillo: 120, borrosa: false, oscura: false, sobreexpuesta: false }, ancho: 1, alto: 1 }))
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:foto') })
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
 })
@@ -39,7 +39,7 @@ beforeEach(() => {
 describe('Reportar', () => {
   it('analiza el derivado ia (1280 px) y no el archivo original (T-047)', async () => {
     const ia = new File(['ia'], 'ia.jpg', { type: 'image/jpeg' })
-    dobles.procesarFoto.mockImplementation(async (archivo: File) => ({ evidencia: archivo, ia, miniatura: archivo, ancho: 1, alto: 1 }))
+    dobles.procesarFoto.mockImplementation(async (archivo: File) => ({ evidencia: archivo, ia, miniatura: archivo, calidad: { nitidez: 500, brillo: 120, borrosa: false, oscura: false, sobreexpuesta: false }, ancho: 1, alto: 1 }))
     dobles.analizarImagen.mockReturnValue(new Promise(() => undefined))
     renderReportar()
 
@@ -149,6 +149,59 @@ function respuestaIA(prioridad: 'baja' | 'media' | 'alta' | 'critica' = 'alta') 
     },
   }
 }
+
+describe('Reportar: control de calidad de la foto (T-051)', () => {
+  function fotoBorrosa() {
+    dobles.procesarFoto.mockImplementation(async (archivo: File) => ({
+      evidencia: archivo, ia: archivo, miniatura: archivo, ancho: 1, alto: 1,
+      calidad: { nitidez: 10, brillo: 30, borrosa: true, oscura: true, sobreexpuesta: false },
+    }))
+  }
+
+  it('avisa sin bloquear y solo analiza al elegir "Usar de todos modos", con calidad_cliente', async () => {
+    fotoBorrosa()
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+
+    seleccionarFoto()
+
+    expect(await screen.findByText('La foto parece borrosa y está muy oscura.')).toBeInTheDocument()
+    expect(dobles.analizarImagen).not.toHaveBeenCalled()
+    const titulo = screen.getByLabelText('Título')
+    await userEvent.type(titulo, 'Escrito durante el aviso')
+    expect(titulo).toHaveValue('Escrito durante el aviso')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Usar de todos modos' }))
+
+    await waitFor(() => expect(dobles.analizarImagen).toHaveBeenCalledOnce())
+    expect(dobles.analizarImagen.mock.calls[0][0]).toMatchObject({ calidad_cliente: ['borrosa', 'oscura'] })
+    expect(screen.queryByText('La foto parece borrosa y está muy oscura.')).not.toBeInTheDocument()
+  })
+
+  it('"Repetir" vuelve a abrir la cámara sin analizar la foto descartada', async () => {
+    fotoBorrosa()
+    renderReportar()
+    seleccionarFoto()
+    await screen.findByText(/La foto parece borrosa/)
+    const entrada = screen.getByLabelText('Foto de la incidencia')
+    const click = vi.spyOn(entrada, 'click').mockImplementation(() => undefined)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Repetir' }))
+
+    expect(click).toHaveBeenCalledOnce()
+    expect(dobles.analizarImagen).not.toHaveBeenCalled()
+    expect(screen.queryByText(/La foto parece borrosa/)).not.toBeInTheDocument()
+  })
+
+  it('una foto que pasa el control se analiza sin calidad_cliente', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+    seleccionarFoto()
+
+    await waitFor(() => expect(dobles.analizarImagen).toHaveBeenCalledOnce())
+    expect(dobles.analizarImagen.mock.calls[0][0].calidad_cliente).toBeUndefined()
+  })
+})
 
 describe('Reportar con IA no bloqueante (T-024)', () => {
   it('el formulario es editable mientras la IA analiza y se puede continuar sin IA', async () => {

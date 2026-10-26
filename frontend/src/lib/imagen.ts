@@ -1,3 +1,5 @@
+import { aEscalaDeGrises, medirCalidad, type Calidad } from './calidad'
+
 /**
  * Procesamiento de la foto en el cliente (T-047, docs/algoritmo-foto-ia.md §1.2 y §2.1):
  * decodifica con orientación EXIF → genera derivados JPEG sin metadatos (la recodificación descarta EXIF/GPS).
@@ -15,6 +17,14 @@ export const CONFIG_FOTO = {
   /** Si el derivado `ia` lo excede, baja la calidad en pasos de 0.1 hasta `calidadMinima`. */
   maxBytesIA: 1.5 * 1024 * 1024,
   calidadMinima: 0.6,
+  /** Control de calidad (T-051) sobre una copia gris de este lado largo. */
+  ladoAnalisisCalidad: 512,
+  /** var(Laplaciano) < 60 ⇒ posible borrosa (ESTIMADO: calibrar con el set de evaluación). */
+  umbralNitidez: 60,
+  /** Brillo medio < 45 ⇒ muy oscura (ESTIMADO). */
+  umbralOscuro: 45,
+  /** Brillo medio > 225 ⇒ sobreexpuesta (ESTIMADO). */
+  umbralSobreexpuesto: 225,
 }
 
 /** `accept` del input: JPEG primero para que iOS transcodifique HEIC a JPEG (nunca `image/heic`). */
@@ -34,6 +44,8 @@ export interface DerivadosFoto {
   ia: Blob
   /** 320 px, q 0.70: vista previa. */
   miniatura: Blob
+  /** Nitidez y brillo (aviso no bloqueante; pista `calidad_cliente`). */
+  calidad: Calidad
   /** Dimensiones del original ya orientado. */
   ancho: number
   alto: number
@@ -54,6 +66,7 @@ export interface Contexto2D {
   fillRect(x: number, y: number, w: number, h: number): void
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
   drawImage(imagen: never, dx: number, dy: number, dw: number, dh: number): void
+  getImageData(x: number, y: number, w: number, h: number): { data: ArrayLike<number> }
 }
 
 export interface Lienzo {
@@ -220,6 +233,14 @@ async function codificarConTope(lienzo: Lienzo, calidad: number, maxBytes: numbe
   return blob
 }
 
+/** Copia gris reducida para el control de calidad (~5–30 ms a 512 px en un teléfono medio). */
+function escalaDeGrises(entorno: EntornoImagen, f: Fuente, ladoLargo: number) {
+  const lienzo = dibujar(entorno, f, ladoLargo)
+  const ctx = lienzo.getContext('2d')
+  if (!ctx) throw new ErrorImagen('No se pudo procesar la foto en este dispositivo.')
+  return aEscalaDeGrises(ctx.getImageData(0, 0, lienzo.width, lienzo.height).data, lienzo.width, lienzo.height)
+}
+
 /** Valida tamaño y tipo, decodifica con orientación y genera los derivados `evidencia`, `ia` y `miniatura`. */
 export async function procesarFoto(archivo: Blob, entorno: EntornoImagen = entornoNavegador(), cfg = CONFIG_FOTO): Promise<DerivadosFoto> {
   if (archivo.size > cfg.maxBytesEntrada) {
@@ -239,7 +260,8 @@ export async function procesarFoto(archivo: Blob, entorno: EntornoImagen = entor
     const evidencia = await aBlob(dibujar(entorno, fuente, cfg.ladoLargoEvidencia), cfg.calidadEvidencia)
     const ia = await codificarConTope(dibujar(entorno, fuente, cfg.ladoLargoIA), cfg.calidadIA, cfg.maxBytesIA, cfg.calidadMinima)
     const miniatura = await aBlob(dibujar(entorno, fuente, cfg.ladoLargoMiniatura), cfg.calidadMiniatura)
-    return { evidencia, ia, miniatura, ancho: fuente.ancho, alto: fuente.alto }
+    const calidad = medirCalidad(escalaDeGrises(entorno, fuente, cfg.ladoAnalisisCalidad), cfg)
+    return { evidencia, ia, miniatura, calidad, ancho: fuente.ancho, alto: fuente.alto }
   } finally {
     mapa.close?.()
   }

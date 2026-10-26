@@ -127,6 +127,33 @@ async def test_modo_asistido_solo_requiere_ia_usar(api, ia_falsa, agentico_verif
         await api.db.roles.update_one({"_id": rol["_id"]}, {"$set": {"permisos": rol["permisos"]}})
 
 
+async def test_calidad_cliente_hace_fallar_g4_y_degrada_a_formulario(api, ia_falsa, agentico_verificable):
+    """T-051: la pista del control de calidad del cliente llega a las compuertas (G4) y no consume cupo agéntico."""
+    clave_usuario, clave_aula = _claves(api)
+    r = await api.c.post(
+        "/ia/analizar-imagen",
+        files={"imagen": ("foto.png", PNG, "image/png")},
+        data={"calidad_cliente": "borrosa,oscura"},
+        headers=api.h("reportante_a"),
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["accion"] == "formulario"
+    assert await get_redis().mget(clave_usuario, clave_aula) == [None, None]
+
+
+async def test_calidad_cliente_desconocida_responde_400(api, ia_falsa):
+    r = await api.c.post(
+        "/ia/analizar-imagen",
+        files={"imagen": ("foto.png", PNG, "image/png")},
+        data={"calidad_cliente": "borrosa,inventada"},
+        headers=api.h("reportante_a"),
+    )
+
+    assert r.status_code == 400, r.text
+    assert ia_falsa == []
+
+
 async def test_oferta_agentica_consume_ambos_cupos(api, ia_falsa, agentico_verificable):
     clave_usuario, clave_aula = _claves(api)
     r = await _post(api)

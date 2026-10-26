@@ -16,7 +16,7 @@ beforeAll(() => {
 })
 
 vi.mock('../../lib/fotoEnSegundoPlano', () => ({
-  procesarFotoEnSegundoPlano: vi.fn(async (archivo: File) => ({ evidencia: archivo, ia: archivo, miniatura: archivo, ancho: 1, alto: 1 })),
+  procesarFotoEnSegundoPlano: vi.fn(async (archivo: File) => ({ evidencia: archivo, ia: archivo, miniatura: archivo, calidad: { nitidez: 500, brillo: 120, borrosa: false, oscura: false, sobreexpuesta: false }, ancho: 1, alto: 1 })),
 }))
 
 const SUGERENCIA = {

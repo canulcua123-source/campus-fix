@@ -28,6 +28,18 @@ afterEach(() => {
 })
 
 describe('analizarImagen', () => {
+  it('envía calidad_cliente como pista separada por comas (T-051)', async () => {
+    const fetchMock = vi.fn(async () => respuesta(200, ANALISIS))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await analizarImagen({ imagen: imagen(), calidad_cliente: ['borrosa', 'oscura'] })
+    await analizarImagen({ imagen: imagen(), calidad_cliente: [] })
+
+    const cuerpos = fetchMock.mock.calls.map((c) => (c as unknown as [string, RequestInit])[1].body as FormData)
+    expect(cuerpos[0].get('calidad_cliente')).toBe('borrosa,oscura')
+    expect(cuerpos[1].has('calidad_cliente')).toBe(false)
+  })
+
   it('aborta a los 30s', async () => {
     vi.useFakeTimers()
     const señales: AbortSignal[] = []
