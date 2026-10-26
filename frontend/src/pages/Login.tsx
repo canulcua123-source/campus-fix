@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { BarChart3, Camera, CircleAlert, Eye, EyeOff, ListChecks, LogIn, Wrench } from 'lucide-react'
-import { api } from '../api/client'
-import { useAuth, type Usuario } from '../auth/store'
+import { mensajeDeError } from '../api/client'
+import { useLogin } from '../api/hooks/auth'
+import { useAuth } from '../auth/store'
 import { Button, Input } from '../components/ui'
 
 const VENTAJAS = [
@@ -25,30 +26,29 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [verPassword, setVerPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [cargando, setCargando] = useState(false)
-  const iniciarSesion = useAuth((s) => s.iniciarSesion)
+  const entrar = useLogin()
+  const usuario = useAuth((s) => s.usuario)
   const aviso = useAuth((s) => s.aviso)
   const navigate = useNavigate()
   const location = useLocation()
+  const candidato = (location.state as { desde?: unknown } | null)?.desde
+  // Solo rutas internas: evita redirecciones abiertas (`//dominio`).
+  const destino = typeof candidato === 'string' && candidato.startsWith('/') && !candidato.startsWith('//') ? candidato : '/'
 
-  async function enviar(e: FormEvent) {
+  function enviar(e: FormEvent) {
     e.preventDefault()
-    setCargando(true)
     setError(null)
-    try {
-      const r = await api<{ access_token: string; usuario: Usuario }>('/auth/login', { method: 'POST', json: { correo, password } })
-      iniciarSesion(r.access_token, r.usuario)
-      const candidato = (location.state as { desde?: unknown } | null)?.desde
-      const destino = typeof candidato === 'string' && candidato.startsWith('/') && !candidato.startsWith('//')
-        ? candidato
-        : '/'
-      navigate(destino, { replace: true })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No fue posible iniciar sesión')
-    } finally {
-      setCargando(false)
-    }
+    entrar.mutate(
+      { correo, password },
+      {
+        onSuccess: () => navigate(destino, { replace: true }),
+        onError: (err) => setError(mensajeDeError(err, 'No fue posible iniciar sesión')),
+      },
+    )
   }
+
+  // Sesión restaurada con el refresh silencioso (o ya iniciada): no tiene caso mostrar el formulario.
+  if (usuario && !entrar.isPending) return <Navigate to={destino} replace />
 
   return (
     <div className="flex min-h-dvh bg-canvas" style={{ paddingTop: 'var(--safe-top)', paddingBottom: 'var(--safe-bottom)' }}>
@@ -141,8 +141,8 @@ export default function Login() {
               </p>
             )}
 
-            <Button type="submit" tamano="lg" cargando={cargando} icono={<LogIn size={18} aria-hidden />} className="w-full">
-              {cargando ? 'Entrando…' : 'Entrar'}
+            <Button type="submit" tamano="lg" cargando={entrar.isPending} icono={<LogIn size={18} aria-hidden />} className="w-full">
+              {entrar.isPending ? 'Entrando…' : 'Entrar'}
             </Button>
           </form>
 

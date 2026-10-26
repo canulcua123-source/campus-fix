@@ -190,13 +190,19 @@ describe('401 cierra sesion', () => {
 
   it('un 401 tardío de un token anterior no cierra la sesión nueva', async () => {
     let soltar: (r: Response) => void = () => {}
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((res) => { soltar = res })))
+    const f = vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>((res) => { soltar = res }))
+      .mockImplementation(async () => respuesta(200, []))
+    vi.stubGlobal('fetch', f)
     useAuth.setState({ token: 'viejo', usuario })
-    const p = capturar(api('/incidencias'))
+    const p = api('/incidencias')
     useAuth.setState({ token: 'nuevo', usuario })
     soltar(respuesta(401, { detail: 'Token inválido o expirado' }))
-    await p
+    // Se reintenta con el token vigente, sin pedir refresh ni cerrar la sesión nueva.
+    await expect(p).resolves.toEqual([])
     expect(useAuth.getState().token).toBe('nuevo')
+    expect(f).toHaveBeenCalledTimes(2)
+    expect(new Headers(f.mock.calls[1][1].headers).get('Authorization')).toBe('Bearer nuevo')
   })
 })
 

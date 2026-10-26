@@ -13,6 +13,7 @@ import Inicio from './pages/Inicio'
 import Login from './pages/Login'
 import MisTickets from './pages/MisTickets'
 import MetricasIA from './pages/MetricasIA'
+import Perfil from './pages/Perfil'
 import Reportar from './pages/Reportar'
 
 // Guía visual del equipo: solo en desarrollo (Vite elimina este import en producción).
@@ -25,6 +26,7 @@ export default function App() {
       {Estilos && <Route path="/_estilos" element={<Suspense fallback={null}><Estilos /></Suspense>} />}
       <Route element={<RequirePermiso><AppShell /></RequirePermiso>}>
         <Route index element={<Inicio />} />
+        <Route path="perfil" element={<Perfil />} />
         <Route path="reportar" element={<RequirePermiso permiso="incidencias:crear"><Reportar /></RequirePermiso>} />
         <Route path="mis-tickets" element={<RequirePermiso permiso="incidencias:ver"><MisTickets /></RequirePermiso>} />
         <Route path="incidencias/:id" element={<RequirePermiso permiso="incidencias:ver"><DetalleIncidencia /></RequirePermiso>} />

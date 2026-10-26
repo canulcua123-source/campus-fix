@@ -9,7 +9,7 @@ beforeAll(() => servidor.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   cleanup()
   servidor.resetHandlers()
-  useAuth.setState({ token: null, usuario: null, aviso: null })
+  useAuth.setState({ token: null, usuario: null, aviso: null, restaurando: false })
 })
 
 afterAll(() => servidor.close())

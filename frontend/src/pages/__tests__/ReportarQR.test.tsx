@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { BASE } from '../../api/client'
 import { RequirePermiso } from '../../auth/RequirePermiso'
 import { useAuth } from '../../auth/store'
+import { DOMINIO_CORREO } from '../../schemas/usuario'
 import { servidor } from '../../test/msw/server'
 import Login from '../Login'
 import Reportar from '../Reportar'
@@ -109,6 +110,7 @@ describe('Sesión y ruta QR T-012', () => {
   it('conserva /reportar?aula= después de iniciar sesión', async () => {
     servidor.use(http.post(`${BASE}/auth/login`, () => HttpResponse.json({
       access_token: 'token-prueba',
+      token_type: 'bearer',
       usuario: { nombre: 'Reportante', rol: 'reportante', alcance: 'propio', permisos: ['incidencias:crear'] },
     })))
     const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -127,7 +129,7 @@ describe('Sesión y ruta QR T-012', () => {
 
     await screen.findByRole('heading', { name: 'Bienvenido' })
     const usuario = userEvent.setup()
-    await usuario.type(screen.getByLabelText(/Correo institucional/), 'persona@example.test')
+    await usuario.type(screen.getByLabelText(/Correo institucional/), `persona@${DOMINIO_CORREO}`)
     await usuario.type(screen.getByLabelText(/Contraseña/), 'clave-segura')
     await usuario.click(screen.getByRole('button', { name: 'Entrar' }))
 

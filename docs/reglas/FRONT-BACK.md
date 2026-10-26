@@ -34,11 +34,11 @@ const r = await fetch('http://localhost:8000/incidencias', { method: 'POST', bod
 // ❌ localStorage.setItem('token', r.access_token)
 ```
 
-La API ya ofrece renovación con refresh token en cookie HttpOnly mediante `/auth/refresh` y cierre mediante `/auth/logout` (T-014). La adopción en la PWA corresponde a T-044 y debe implementarse una sola vez en `api/client.ts`, con `credentials: "include"` en login, refresh y logout; mientras tanto, recargar la página puede requerir iniciar sesión de nuevo.
+El refresh token vive en una cookie HttpOnly que la PWA nunca lee (T-014). Solo `POST /auth/login`, `/auth/refresh` y `/auth/logout` viajan con `credentials: "include"`; el resto de la API usa únicamente `Authorization`. Al abrir la app, `restaurarSesion()` (`api/auth.ts`, llamado en `main.tsx`) hace un refresh silencioso y pide `/auth/me`; mientras corre, `useAuth().restaurando` es `true` y `RequirePermiso` espera en lugar de mandar a `/login` (T-044).
 
-**FB-05 · 401 → volver a iniciar sesión.** Cualquier 401 (token expirado, usuario desactivado) hace: `cerrarSesion("Tu sesión expiró. Inicia sesión de nuevo")` (el aviso queda en `useAuth().aviso` y lo muestra `Login`), `queryClient.clear()` y `RequirePermiso` lleva a `/login`. Se hace **una vez, en `api/client.ts`** (`expirarSesion`, solo si el token rechazado sigue vigente: varias peticiones con 401 producen un solo cierre), no en cada pantalla. Excepción: el 401 de `POST /auth/login` significa "Credenciales inválidas" y se muestra en el formulario.
+**FB-05 · 401 → renovar una vez y, si no se puede, volver a iniciar sesión.** Ante un 401 de un endpoint autenticado, `api()` llama a `refrescarSesion()` (un solo `POST /auth/refresh` compartido por todas las peticiones concurrentes) y reintenta **una vez** con el token nuevo. Si el refresh falla o el reintento vuelve a dar 401, hace: `cerrarSesion("Tu sesión expiró. Inicia sesión de nuevo")` (el aviso queda en `useAuth().aviso` y lo muestra `Login`), `queryClient.clear()` y `RequirePermiso` lleva a `/login`. Se hace **una vez, en `api/client.ts`** (`expirarSesion`, solo si el token rechazado sigue vigente: varias peticiones con 401 producen un solo cierre), no en cada pantalla. Excepción: el 401 de `POST /auth/login` significa "Credenciales inválidas" y se muestra en el formulario.
 
-**FB-06 · Cerrar sesión limpia todo:** `cerrarSesion()` + `queryClient.clear()`. Si no, el siguiente usuario en el mismo celular vería datos en caché del anterior.
+**FB-06 · Cerrar sesión limpia todo:** `useLogout()` llama a `POST /auth/logout` (revoca la cookie) y, aunque la red falle, `cerrarSesion()` + `queryClient.clear()`. Si no, el siguiente usuario en el mismo celular vería datos en caché del anterior.
 
 ## 3. Errores
 
