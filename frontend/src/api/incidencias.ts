@@ -1,8 +1,8 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
   asignacionOutSchema, asignacionSchema, busquedaSchema, incidenciaCreadaSchema, incidenciaDetalleSchema, incidenciaListaSchema,
-  incidenciaSchema, okSchema, seguimientoOutSchema, seguimientoSchema, tagsSchema,
-  type AsignacionIn, type FiltrosIncidencias, type IncidenciaIn, type SeguimientoIn, type TagsIn,
+  incidenciaSchema, okSchema, prioridadOutSchema, prioridadSchema, seguimientoOutSchema, seguimientoSchema, tagsSchema,
+  type AsignacionIn, type FiltrosIncidencias, type IncidenciaIn, type PrioridadIn, type SeguimientoIn, type TagsIn,
 } from '../schemas/incidencia'
 import { api, validarEntrada } from './client'
 import { claves, limpiarFiltros } from './keys'
@@ -52,4 +52,8 @@ export function quitarTags(id: string, datos: TagsIn) {
 
 export function asignar(id: string, datos: AsignacionIn) {
   return api(`${ruta(id)}/asignacion`, { method: 'PATCH', json: validarEntrada(asignacionSchema, datos), schema: asignacionOutSchema })
+}
+
+export function cambiarPrioridad(id: string, datos: PrioridadIn) {
+  return api(`${ruta(id)}/prioridad`, { method: 'PATCH', json: validarEntrada(prioridadSchema, datos), schema: prioridadOutSchema })
 }

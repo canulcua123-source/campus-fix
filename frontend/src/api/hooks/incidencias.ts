@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AsignacionIn, FiltrosIncidencias, IncidenciaIn, SeguimientoIn, TagsIn } from '../../schemas/incidencia'
+import type { AsignacionIn, FiltrosIncidencias, IncidenciaIn, PrioridadIn, SeguimientoIn, TagsIn } from '../../schemas/incidencia'
 import { ApiError } from '../client'
 import { subirEvidencia, urlEvidenciaQuery, type SubidaEvidencia } from '../evidencias'
 import {
-  agregarTags, asignar, buscarQuery, crearIncidencia, incidenciaQuery, incidenciasQuery, quitarTags, registrarSeguimiento,
+  agregarTags, asignar, buscarQuery, cambiarPrioridad, crearIncidencia, incidenciaQuery, incidenciasQuery, quitarTags, registrarSeguimiento,
   retirarIncidencia,
 } from '../incidencias'
 import { claves } from '../keys'
@@ -57,6 +57,15 @@ export function useAsignar(id: string) {
   const invalidar = useInvalidarIncidencia(id)
   return useMutation({
     mutationFn: (datos: AsignacionIn) => asignar(id, datos),
+    onSuccess: invalidar,
+    onError: (e) => esConflicto(e) && invalidar(),
+  })
+}
+
+export function usePrioridad(id: string) {
+  const invalidar = useInvalidarIncidencia(id)
+  return useMutation({
+    mutationFn: (datos: PrioridadIn) => cambiarPrioridad(id, datos),
     onSuccess: invalidar,
     onError: (e) => esConflicto(e) && invalidar(),
   })
