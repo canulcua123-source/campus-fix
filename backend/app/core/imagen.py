@@ -1,3 +1,4 @@
+import asyncio
 import warnings
 from dataclasses import dataclass
 from io import BytesIO
@@ -103,4 +104,5 @@ async def leer_y_validar_imagen(archivo: ArchivoAsync, max_bytes: int = MAX_BYTE
     finally:
         await archivo.seek(0)
 
-    return validar_imagen(b"".join(fragmentos))
+    # verify()/load() de Pillow son CPU-bound: en un hilo para no bloquear el event loop.
+    return await asyncio.to_thread(validar_imagen, b"".join(fragmentos))
