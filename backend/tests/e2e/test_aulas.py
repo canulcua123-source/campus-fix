@@ -1,13 +1,14 @@
 from datetime import datetime, timezone
 
 import pytest
+import pytest_asyncio
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 ID_VALIDO = "AbCdEfGhIjKlMnOpQrStUv"
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def aula(api):
     await api.db.aulas.delete_many({})
     await api.db.aulas.insert_one(

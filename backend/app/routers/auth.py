@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -11,7 +10,7 @@ from jwt import PyJWTError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from redis.exceptions import RedisError
 
-from app.core.config import settings
+from app.core.config import PATRON_CORREO, settings, validar_dominio_correo
 from app.core.db import get_db, get_redis
 from app.core.errores import cabeceras_retry_after
 from app.core.limiter import limiter
@@ -34,19 +33,25 @@ MAX_FALLOS_CUENTA = 50  # por cuenta desde cualquier IP: frena fuerza bruta dist
 VENTANA_FALLOS = 15 * 60
 COOKIE_REFRESH = "refresh_token"
 RUTA_COOKIE_REFRESH = "/auth"
-PATRON_CORREO_LOGIN = rf"^(?:[^@\s]+@{re.escape(settings.dominio_correo)}|admin@utm\.local)$"
+# Cuenta sembrada por scripts/init_db.py; queda fuera del dominio institucional a propósito.
+CORREO_ADMIN_SEMBRADO = "admin@utm.local"
 
 
 class LoginIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    correo: str = Field(min_length=3, max_length=254, pattern=PATRON_CORREO_LOGIN)
+    correo: str = Field(min_length=3, max_length=254, pattern=PATRON_CORREO)
     password: str = Field(min_length=1, max_length=128)
 
     @field_validator("correo", mode="before")
     @classmethod
     def _normalizar_correo(cls, v):
         return v.strip().lower() if isinstance(v, str) else v
+
+    @field_validator("correo")
+    @classmethod
+    def _dominio_institucional(cls, v: str) -> str:
+        return validar_dominio_correo(v, permitidos=(CORREO_ADMIN_SEMBRADO,))
 
 
 def _validar_origen_csrf(request: Request) -> None:
@@ -223,5 +228,7 @@ async def cerrar_sesion(request: Request):
 @router.get("/me")
 async def yo(usuario: Annotated[dict, Depends(get_usuario_actual)]):
     info = await permisos_del_usuario(usuario)
-    datos = {k: usuario[k] for k in ("nombre", "correo", "rol", "areas", "edificios", "tipo_reportante") if k in usuario}
+    datos = {
+        k: usuario[k] for k in ("nombre", "correo", "rol", "areas", "edificios", "tipo_reportante") if k in usuario
+    }
     return {"_id": str(usuario["_id"]), **datos, "permisos": info["permisos"], "alcance": info["alcance"]}

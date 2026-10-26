@@ -13,6 +13,7 @@ from redis.exceptions import RedisError
 from slowapi import Limiter
 
 from app.core import limiter as limiter_modulo
+from app.core.config import settings
 from app.core.errores import registrar_manejadores_errores
 from app.main import _agregar_cabeceras_seguridad, app
 from app.routers import auth, incidencias, usuarios
@@ -254,7 +255,7 @@ class _RedisLoginDoble:
 async def test_login_bloqueado_usa_ttl_real_y_no_refleja_credenciales(
     monkeypatch, fallos_ip, fallos_cuenta, ttl_ip, ttl_cuenta, esperado
 ):
-    correo = "persona.secreta@ejemplo.test"
+    correo = f"persona.secreta@{settings.dominio_correo}"
     password = "password-que-no-debe-reflejarse"
     ip = "203.0.113.16"
     redis = _RedisLoginDoble(correo, ip, fallos_ip, fallos_cuenta, ttl_ip, ttl_cuenta)

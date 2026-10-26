@@ -91,7 +91,10 @@ def test_contratos_rechazan_entradas_invalidas(modelo, cuerpo):
 
 
 def test_comentario_valido_y_confirmacion_opcional():
-    assert ComentarioReportanteIn(comentario="  Informacion adicional valida  ").comentario == "Informacion adicional valida"
+    assert (
+        ComentarioReportanteIn(comentario="  Informacion adicional valida  ").comentario
+        == "Informacion adicional valida"
+    )
     assert ConfirmacionIn(accion="confirmar").comentario is None
 
 
@@ -170,9 +173,7 @@ async def test_autoasignacion_atomica_sin_cambiar_estado(monkeypatch):
     coleccion = ColeccionFalsa({"_id": ObjectId(), "estado": "abierta"})
     _usar_coleccion(monkeypatch, coleccion)
 
-    respuesta = await router_incidencias.tomar_incidencia.__wrapped__(
-        None, str(coleccion.documento["_id"]), usuario
-    )
+    respuesta = await router_incidencias.tomar_incidencia.__wrapped__(None, str(coleccion.documento["_id"]), usuario)
 
     assert respuesta["estado"] == "abierta"
     assert respuesta["tecnico_asignado"]["usuario_id"] == str(usuario["_id"])

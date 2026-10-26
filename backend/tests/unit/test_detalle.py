@@ -51,9 +51,7 @@ def _detalle(**cambios) -> dict:
 
 def test_modelo_dinamico_tipos():
     modelo = construir_modelo_detalle(_definicion())
-    salida = modelo.model_validate(_detalle(pacientes=3)).model_dump(
-        mode="json", exclude_unset=True, exclude_none=True
-    )
+    salida = modelo.model_validate(_detalle(pacientes=3)).model_dump(mode="json", exclude_unset=True, exclude_none=True)
     assert salida == _detalle(pacientes=3)
     assert "pacientes" not in validar_detalle_dinamico(_definicion(), _detalle())
 

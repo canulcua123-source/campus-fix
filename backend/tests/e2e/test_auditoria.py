@@ -42,9 +42,7 @@ async def test_auditoria_registra_alta_usuario(api):
 
 async def test_auditoria_sin_password(api):
     usuario = await _crear_usuario(api)
-    evento = await api.db.auditoria.find_one(
-        {"accion": "crear", "recurso": "usuarios", "recurso_id": usuario["_id"]}
-    )
+    evento = await api.db.auditoria.find_one({"accion": "crear", "recurso": "usuarios", "recurso_id": usuario["_id"]})
 
     assert evento is not None
     serializado = json.dumps(evento, default=str).lower()

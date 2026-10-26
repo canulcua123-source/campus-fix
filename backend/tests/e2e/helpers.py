@@ -1,4 +1,5 @@
 """Utilidades compartidas por la suite e2e."""
+
 import copy
 import uuid
 from datetime import datetime, timezone
@@ -13,16 +14,26 @@ PASSWORD = "Password-E2E-123"
 
 DETALLES = {
     "computo_redes": {
-        "categoria": "computo_redes", "ip": "10.0.0.5", "vlan": 20,
-        "puerto_uplink": "Gi0/1", "equipos_afectados": 3,
+        "categoria": "computo_redes",
+        "ip": "10.0.0.5",
+        "vlan": 20,
+        "puerto_uplink": "Gi0/1",
+        "equipos_afectados": 3,
     },
     "infraestructura": {
-        "categoria": "infraestructura", "tipo_dano": "electrico", "riesgo_seguridad": "medio",
-        "requiere_insumos": True, "insumos": ["cable"], "requiere_contratista": False,
+        "categoria": "infraestructura",
+        "tipo_dano": "electrico",
+        "riesgo_seguridad": "medio",
+        "requiere_insumos": True,
+        "insumos": ["cable"],
+        "requiere_contratista": False,
     },
     "academico": {
-        "categoria": "academico", "plataforma": "lms", "codigo_curso": "MAT-101",
-        "periodo": "2026-2", "estudiantes_impactados": 30,
+        "categoria": "academico",
+        "plataforma": "lms",
+        "codigo_curso": "MAT-101",
+        "periodo": "2026-2",
+        "estudiantes_impactados": 30,
     },
 }
 
@@ -36,12 +47,30 @@ RUTAS = {
 }
 
 
+def _filtra_hash(obj: Any) -> bool:
+    """True si la respuesta expone un `password_hash` (como clave) o un hash argon2 (como valor).
+
+    Un error de validación puede nombrar el campo rechazado en `loc` (p. ej. `["body", "password_hash"]`);
+    eso no filtra nada y no se considera fuga.
+    """
+    if isinstance(obj, dict):
+        return "password_hash" in obj or any(_filtra_hash(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_filtra_hash(v) for v in obj)
+    return isinstance(obj, str) and obj.startswith("$argon2")
+
+
 class ClienteSeguro(AsyncClient):
     """AsyncClient que verifica que ninguna respuesta filtre `password_hash`."""
 
     async def request(self, *args, **kwargs):
         r = await super().request(*args, **kwargs)
-        assert "password_hash" not in r.text, f"password_hash filtrado en {r.request.method} {r.request.url}"
+        try:
+            cuerpo_json = r.json()
+        except ValueError:
+            cuerpo_json = None
+        filtrado = _filtra_hash(cuerpo_json) if cuerpo_json is not None else "$argon2" in r.text
+        assert not filtrado, f"password_hash filtrado en {r.request.method} {r.request.url}"
         return r
 
 
@@ -69,13 +98,26 @@ def sin_nulos(obj: Any, ruta: str = "") -> list[str]:
 
 
 async def sembrar_usuarios(db, admin: dict) -> dict[str, dict]:
-    await db.roles.insert_many([
-        {"clave": "jefe_edificio", "nombre": "Jefe de edificio", "descripcion": "e2e",
-         "permisos": ["incidencias:ver", "incidencias:buscar", "seguimiento:registrar", "tags:gestionar"],
-         "alcance": "edificio", "sistema": False},
-        {"clave": "gestor_roles", "nombre": "Gestor de roles", "descripcion": "e2e",
-         "permisos": ["roles:gestionar", "incidencias:ver"], "alcance": "global", "sistema": False},
-    ])
+    await db.roles.insert_many(
+        [
+            {
+                "clave": "jefe_edificio",
+                "nombre": "Jefe de edificio",
+                "descripcion": "e2e",
+                "permisos": ["incidencias:ver", "incidencias:buscar", "seguimiento:registrar", "tags:gestionar"],
+                "alcance": "edificio",
+                "sistema": False,
+            },
+            {
+                "clave": "gestor_roles",
+                "nombre": "Gestor de roles",
+                "descripcion": "e2e",
+                "permisos": ["roles:gestionar", "incidencias:ver"],
+                "alcance": "global",
+                "sistema": False,
+            },
+        ]
+    )
     h = hashear_password(PASSWORD)
     defs = {
         "reportante_a": ("reportante", [], [], True),
@@ -94,15 +136,31 @@ async def sembrar_usuarios(db, admin: dict) -> dict[str, dict]:
     for nombre, (rol, areas, edificios, activo) in defs.items():
         doc = {
             "schema_version": 1,
-            "correo": f"{nombre}@e2e.local", "nombre": nombre.replace("_", " ").title(), "rol": rol,
-            "password_hash": h, "activo": activo, "areas": areas, "edificios": edificios,
+            "correo": f"{nombre}@e2e.local",
+            "nombre": nombre.replace("_", " ").title(),
+            "rol": rol,
+            "password_hash": h,
+            "activo": activo,
+            "areas": areas,
+            "edificios": edificios,
             "fecha_alta": datetime.now(timezone.utc),
         }
         res = await db.usuarios.insert_one(doc)
-        usuarios[nombre] = {"_id": res.inserted_id, "correo": doc["correo"], "nombre": doc["nombre"], "rol": rol,
-                            "token": crear_access_token(str(res.inserted_id))}
-    usuarios["admin"] = {"_id": admin["_id"], "correo": admin["correo"], "nombre": admin["nombre"], "rol": "admin",
-                         "token": crear_access_token(str(admin["_id"])), "password": "AdminE2E-Password1"}
+        usuarios[nombre] = {
+            "_id": res.inserted_id,
+            "correo": doc["correo"],
+            "nombre": doc["nombre"],
+            "rol": rol,
+            "token": crear_access_token(str(res.inserted_id)),
+        }
+    usuarios["admin"] = {
+        "_id": admin["_id"],
+        "correo": admin["correo"],
+        "nombre": admin["nombre"],
+        "rol": "admin",
+        "token": crear_access_token(str(admin["_id"])),
+        "password": "AdminE2E-Password1",
+    }
     return usuarios
 
 
@@ -126,7 +184,9 @@ class Api:
     async def doc(self, inc_id: str) -> dict:
         return await self.db.incidencias_campus.find_one({"_id": ObjectId(inc_id)})
 
-    async def seguimiento(self, inc_id: str, estado: str, quien: str = "admin", horas: float = 1, comentario: str = "Avance de prueba"):
+    async def seguimiento(
+        self, inc_id: str, estado: str, quien: str = "admin", horas: float = 1, comentario: str = "Avance de prueba"
+    ):
         return await self.c.patch(
             f"/incidencias/{inc_id}/seguimiento",
             json={"estado_nuevo": estado, "comentario": comentario, "horas": horas},
@@ -138,15 +198,25 @@ class Api:
             r = await self.seguimiento(inc_id, e)
             assert r.status_code == 200, f"{e}: {r.status_code} {r.text}"
 
-    async def crear_en(self, estado: str, quien: str = "reportante_a", categoria: str = "infraestructura", **kw) -> dict:
+    async def crear_en(
+        self, estado: str, quien: str = "reportante_a", categoria: str = "infraestructura", **kw
+    ) -> dict:
         inc = await self.crear(quien, categoria, **kw)
         await self.a_estado(inc["_id"], estado)
         return inc
 
     async def usuario_temporal(self, rol: str = "reportante", **extra) -> dict:
-        doc = {"schema_version": 1, "correo": f"tmp_{uuid.uuid4().hex[:10]}@e2e.local",
-               "nombre": "Temporal E2E", "rol": rol,
-               "password_hash": hashear_password(PASSWORD), "activo": True, "areas": [], "edificios": [],
-               "fecha_alta": datetime.now(timezone.utc), **extra}
+        doc = {
+            "schema_version": 1,
+            "correo": f"tmp_{uuid.uuid4().hex[:10]}@e2e.local",
+            "nombre": "Temporal E2E",
+            "rol": rol,
+            "password_hash": hashear_password(PASSWORD),
+            "activo": True,
+            "areas": [],
+            "edificios": [],
+            "fecha_alta": datetime.now(timezone.utc),
+            **extra,
+        }
         res = await self.db.usuarios.insert_one(doc)
         return {"_id": res.inserted_id, "correo": doc["correo"], "token": crear_access_token(str(res.inserted_id))}

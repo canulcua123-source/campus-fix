@@ -30,12 +30,14 @@ def test_pipeline_aulas_cronicas_inicia_con_alcance_y_limita_30_dias():
     assert partes[0] == alcance
     assert {"fecha_creacion": {"$gte": ahora - timedelta(days=30), "$lte": ahora}} in partes
     assert {"fecha_creacion": {"$type": "date"}} in partes
-    assert pipeline[1] == {"$project": {
-        "_id": 0,
-        "edificio": "$ubicacion.edificio",
-        "piso": "$ubicacion.piso",
-        "aula": "$ubicacion.aula",
-    }}
+    assert pipeline[1] == {
+        "$project": {
+            "_id": 0,
+            "edificio": "$ubicacion.edificio",
+            "piso": "$ubicacion.piso",
+            "aula": "$ubicacion.aula",
+        }
+    }
     assert pipeline[2]["$group"]["_id"] == {
         "edificio": "$edificio",
         "piso": "$piso",
@@ -90,11 +92,14 @@ def test_pipeline_tendencia_agrupa_mes_categoria_en_utc_y_ordena():
 
 def test_contratos_analitica_f2_rechazan_resultados_invalidos():
     assert AulaCronica(edificio="A", piso=1, aula="101", total=3).total == 3
-    assert CargaTecnico(
-        tecnico_id="0123456789abcdef01234567",
-        incidencias_activas=2,
-        horas_acumuladas=3.75,
-    ).horas_acumuladas == 3.75
+    assert (
+        CargaTecnico(
+            tecnico_id="0123456789abcdef01234567",
+            incidencias_activas=2,
+            horas_acumuladas=3.75,
+        ).horas_acumuladas
+        == 3.75
+    )
     assert TendenciaMensual(periodo="2026-01", categoria="infraestructura", total=2).periodo == "2026-01"
 
     with pytest.raises(ValidationError):
@@ -124,15 +129,19 @@ def test_openapi_documenta_endpoints_y_filtros_analitica_f2():
 @pytest.mark.asyncio
 async def test_endpoints_f2_reutilizan_cache_ttl_300_y_validan_resultados(monkeypatch):
     llamadas_cache = []
-    resultados = iter([
-        [{"edificio": "A", "piso": 1, "aula": "101", "total": 3}],
-        [{
-            "tecnico_id": "0123456789abcdef01234567",
-            "incidencias_activas": 2,
-            "horas_acumuladas": 3.75,
-        }],
-        [{"periodo": "2026-10", "categoria": "infraestructura", "total": 4}],
-    ])
+    resultados = iter(
+        [
+            [{"edificio": "A", "piso": 1, "aula": "101", "total": 3}],
+            [
+                {
+                    "tecnico_id": "0123456789abcdef01234567",
+                    "incidencias_activas": 2,
+                    "horas_acumuladas": 3.75,
+                }
+            ],
+            [{"periodo": "2026-10", "categoria": "infraestructura", "total": 4}],
+        ]
+    )
 
     async def usuario_falso():
         return {"_id": "usuario-prueba", "areas": []}

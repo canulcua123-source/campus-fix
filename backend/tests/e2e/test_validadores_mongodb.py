@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 from pymongo.errors import WriteError
 
+from scripts.migrar_admin_t008 import migrar_usuarios
 from scripts.init_db import (
     asegurar_coleccion,
     categorias_sistema,
@@ -34,7 +35,7 @@ def _usuario(**cambios) -> dict:
 
 def _rol(**cambios) -> dict:
     doc = {
-        "clave": f"rol_{uuid.uuid4().hex[:10]}",
+        "clave": "rol_" + uuid.uuid4().hex[:10].translate(str.maketrans("0123456789", "ghijklmnop")),
         "nombre": "Rol de prueba",
         "descripcion": "Creado para comprobar el validador MongoDB",
         "permisos": ["incidencias:ver"],
@@ -150,3 +151,23 @@ async def test_inicializacion_es_idempotente(api):
         opciones = await _opciones_coleccion(api.db, nombre)
         assert await api.db[nombre].count_documents({}) == antes[nombre]["cantidad"]
         assert opciones["validator"] == antes[nombre]["validador"] == esquemas[nombre]
+
+
+async def test_migracion_lleva_a_todos_los_usuarios_al_esquema_y_es_idempotente(api):
+    antiguo = _usuario(fecha_creacion=datetime(2026, 1, 5, tzinfo=timezone.utc))
+    del antiguo["schema_version"], antiguo["fecha_alta"]
+    res = await api.db.usuarios.insert_one(antiguo, bypass_document_validation=True)
+    try:
+        assert await api.db.usuarios.count_documents({"$nor": [esquema_usuarios()]}) == 1
+        assert await migrar_usuarios(api.db, aplicar=False) == 1  # simulación: no cambia nada
+        assert await api.db.usuarios.count_documents({"$nor": [esquema_usuarios()]}) == 1
+
+        assert await migrar_usuarios(api.db, aplicar=True) == 1
+        assert await migrar_usuarios(api.db, aplicar=True) == 0
+        migrado = await api.db.usuarios.find_one({"_id": res.inserted_id})
+        assert migrado["schema_version"] == 1
+        assert migrado["fecha_alta"] == datetime(2026, 1, 5, tzinfo=timezone.utc)
+        assert "fecha_creacion" not in migrado
+        assert await api.db.usuarios.count_documents({"$nor": [esquema_usuarios()]}) == 0
+    finally:
+        await api.db.usuarios.delete_one({"_id": res.inserted_id})

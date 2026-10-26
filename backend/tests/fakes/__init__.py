@@ -1,2 +1,1 @@
 """Dobles de prueba reutilizables."""
-

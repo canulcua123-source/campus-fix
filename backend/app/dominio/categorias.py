@@ -9,9 +9,7 @@ CAMPOS_RESERVADOS = frozenset({"categoria"})
 
 def _sin_acentos(texto: str) -> str:
     return "".join(
-        caracter
-        for caracter in unicodedata.normalize("NFD", texto)
-        if unicodedata.category(caracter) != "Mn"
+        caracter for caracter in unicodedata.normalize("NFD", texto) if unicodedata.category(caracter) != "Mn"
     )
 
 
@@ -43,4 +41,3 @@ def normalizar_nombre_campo(texto: str) -> str:
 def es_categoria_sistema(clave: str, sistema: bool = False) -> bool:
     """Protege semillas antiguas por clave y documentos nuevos por su marca explícita."""
     return sistema or clave in CATEGORIAS_SISTEMA
-

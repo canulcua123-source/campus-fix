@@ -273,7 +273,9 @@ async def registrar_huella(
     categoria = incidencia.get("categoria")
     _validar_contexto(aula_id, categoria)
     aula = await db.aulas.find_one({"id_publico": aula_id, "activa": True}, {"edificio": 1, "piso": 1, "aula": 1})
-    if aula is None or any(incidencia.get("ubicacion", {}).get(campo) != aula[campo] for campo in ("edificio", "piso", "aula")):
+    if aula is None or any(
+        incidencia.get("ubicacion", {}).get(campo) != aula[campo] for campo in ("edificio", "piso", "aula")
+    ):
         raise RegistroHuellaInvalido("El aula no corresponde a la ubicacion de la incidencia")
     fecha = _fecha_utc(incidencia["fecha_creacion"], "fecha_creacion")
     huellas = calcular_huellas(datos_imagen, tipo_mime)

@@ -4,7 +4,7 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
-from app.services.vision.duplicados import (
+from app.services.duplicados import (
     MAX_BYTES_IMAGEN,
     ImagenHuellaInvalida,
     calcular_dhash,

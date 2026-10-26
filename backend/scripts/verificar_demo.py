@@ -51,11 +51,7 @@ def _resultado(clave: str, descripcion: str, cumple: bool, detalle: str) -> Resu
 
 
 def _es_fecha_utc(valor: object) -> bool:
-    return (
-        isinstance(valor, datetime)
-        and valor.tzinfo is not None
-        and valor.utcoffset() == timedelta(0)
-    )
+    return isinstance(valor, datetime) and valor.tzinfo is not None and valor.utcoffset() == timedelta(0)
 
 
 def _es_hora_valida(valor: object) -> bool:
@@ -270,7 +266,10 @@ def _documento_compatible(documento: object) -> bool:
         return False
     try:
         IncidenciaIn.model_validate(
-            {clave: documento[clave] for clave in ("titulo", "descripcion", "prioridad", "ubicacion", "detalle_especifico", "tags")},
+            {
+                clave: documento[clave]
+                for clave in ("titulo", "descripcion", "prioridad", "ubicacion", "detalle_especifico", "tags")
+            },
             strict=True,
         )
     except ValidationError:
@@ -327,7 +326,9 @@ def verificar_requisitos(documentos: list[dict]) -> list[ResultadoVerificacion]:
     }
     ahora = datetime.now(timezone.utc) + timedelta(seconds=1)
 
-    resoluciones = [doc.get("fecha_resolucion") for doc in documentos if isinstance(doc, dict) and "fecha_resolucion" in doc]
+    resoluciones = [
+        doc.get("fecha_resolucion") for doc in documentos if isinstance(doc, dict) and "fecha_resolucion" in doc
+    ]
     resoluciones_validas = all(
         _es_fecha_utc(fecha)
         and doc.get("estado") in {"resuelta", "cerrada"}
@@ -358,23 +359,21 @@ def verificar_requisitos(documentos: list[dict]) -> list[ResultadoVerificacion]:
         if evidencias:
             con_evidencias += 1
         evidencias_validas = evidencias_validas and all(
-            _evidencia_valida(evidencia, doc.get("codigo"), doc.get("fecha_creacion"))
-            for evidencia in evidencias
+            _evidencia_valida(evidencia, doc.get("codigo"), doc.get("fecha_creacion")) for evidencia in evidencias
         )
 
     ubicaciones = Counter(
         (ubicacion["edificio"], ubicacion.get("piso"), ubicacion["aula"])
         for doc in documentos
-        if isinstance(doc, dict) and isinstance((ubicacion := doc.get("ubicacion")), dict)
+        if isinstance(doc, dict)
+        and isinstance((ubicacion := doc.get("ubicacion")), dict)
         and isinstance(ubicacion.get("edificio"), str)
         and isinstance(ubicacion.get("piso"), int)
         and isinstance(ubicacion.get("aula"), str)
     )
-    ubicacion_recurrente, maximo_recurrencia = (ubicaciones.most_common(1)[0] if ubicaciones else (None, 0))
+    ubicacion_recurrente, maximo_recurrencia = ubicaciones.most_common(1)[0] if ubicaciones else (None, 0)
     nulos = [
-        ruta
-        for indice, documento in enumerate(documentos)
-        for ruta in _rutas_nulas(documento, f"documentos[{indice}]")
+        ruta for indice, documento in enumerate(documentos) for ruta in _rutas_nulas(documento, f"documentos[{indice}]")
     ]
     codigos = [doc.get("codigo") for doc in documentos if isinstance(doc, dict) and isinstance(doc.get("codigo"), str)]
     documentos_dict = sum(isinstance(doc, dict) for doc in documentos)

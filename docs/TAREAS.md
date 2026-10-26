@@ -1643,7 +1643,7 @@ Botón de un toque, tarjeta con ventana de 10 s [Deshacer] [Editar], pausa en `v
 - **Épica:** IA · **Rol:** DBA MongoDB · **Prioridad:** Debería · **Fase:** F2 · **Semana:** 4 · **Estimación:** 8 h
 - **Depende de:** T-033
 - **Cubre:** RF-COO-06, RNF-12, RNF-17
-- **Archivos:** `backend/scripts/init_db.py`, `backend/app/services/vision/duplicados.py`, `backend/app/routers/ia.py`, `backend/tests/e2e/test_duplicados.py`
+- **Archivos:** `backend/scripts/init_db.py`, `backend/app/services/duplicados.py`, `backend/app/routers/ia.py`, `backend/tests/e2e/test_duplicados.py`
 
 ⚑ pendiente de aprobación del PO (cambia reglas de negocio o de BD). Colección `huellas_reportes` (TTL 24 h) con sha256 y dHash por aula+categoría; si el usuario confirma «Sí, es el mismo» se suma una adhesión y no se crea ticket. Nunca consultar `incidencias_campus` fuera de alcance. Ver `docs/algoritmo-foto-ia.md` sección A y tarea T22 de §6.
 

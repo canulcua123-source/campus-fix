@@ -18,7 +18,7 @@ from app.services.ia_eventos import (
     OfertaIAVencida,
     registrar_evento_cliente,
 )
-from app.services.vision.duplicados import (
+from app.services.duplicados import (
     CoincidenciaNoElegible,
     CoincidenciaNoEncontrada,
     confirmar_adhesion,

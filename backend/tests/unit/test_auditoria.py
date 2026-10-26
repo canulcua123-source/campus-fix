@@ -11,6 +11,7 @@ from fastapi import HTTPException
 os.environ["JWT_SECRET"] = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
 
 import app.core.auditoria as servicio_auditoria  # noqa: E402
+from app.core.config import settings  # noqa: E402
 import app.routers.auditoria as router_auditoria  # noqa: E402
 import app.routers.usuarios as router_usuarios  # noqa: E402
 from app.core.auditoria import (  # noqa: E402
@@ -23,6 +24,12 @@ from app.core.auditoria import (  # noqa: E402
 from scripts.init_db import crear_indices, esquema_auditoria  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _dominio_institucional(monkeypatch):
+    # `settings` es único por proceso: si las e2e se importaron antes, su dominio sería e2e.local.
+    monkeypatch.setattr(settings, "dominio_correo", "utm.edu.mx")
+
+
 def _actor(rol: str = "admin") -> dict:
     return {
         "_id": ObjectId(),
@@ -33,33 +40,39 @@ def _actor(rol: str = "admin") -> dict:
 
 
 def test_resumenes_usan_listas_positivas_y_excluyen_secretos():
-    usuario = resumir_usuario({
-        "rol": "tecnico",
-        "activo": True,
-        "areas": ["infraestructura"],
-        "correo": "privado@ejemplo.test",
-        "nombre": "Persona Privada",
-        "password": "secreto",
-        "password_hash": "hash-secreto",
-        "access_token": "token-secreto",
-        "perfil": {"refresh_token": "anidado"},
-    })
-    rol = resumir_rol({
-        "clave": "tecnico",
-        "alcance": "area",
-        "permisos": ["incidencias:ver", "seguimiento:registrar"],
-        "sistema": True,
-        "secret": "no-copiar",
-    })
-    categoria = resumir_categoria({
-        "clave": "laboratorios",
-        "version": 2,
-        "activa": False,
-        "prefijo": "LAB",
-        "campos": [{"nombre": "password", "tipo": "texto"}],
-        "sistema": False,
-        "api_key": "no-copiar",
-    })
+    usuario = resumir_usuario(
+        {
+            "rol": "tecnico",
+            "activo": True,
+            "areas": ["infraestructura"],
+            "correo": "privado@ejemplo.test",
+            "nombre": "Persona Privada",
+            "password": "secreto",
+            "password_hash": "hash-secreto",
+            "access_token": "token-secreto",
+            "perfil": {"refresh_token": "anidado"},
+        }
+    )
+    rol = resumir_rol(
+        {
+            "clave": "tecnico",
+            "alcance": "area",
+            "permisos": ["incidencias:ver", "seguimiento:registrar"],
+            "sistema": True,
+            "secret": "no-copiar",
+        }
+    )
+    categoria = resumir_categoria(
+        {
+            "clave": "laboratorios",
+            "version": 2,
+            "activa": False,
+            "prefijo": "LAB",
+            "campos": [{"nombre": "password", "tipo": "texto"}],
+            "sistema": False,
+            "api_key": "no-copiar",
+        }
+    )
 
     assert usuario == {"rol": "tecnico", "activo": True, "areas": ["infraestructura"]}
     assert rol == {"clave": "tecnico", "alcance": "area", "cantidad_permisos": 2, "sistema": True}
@@ -193,7 +206,12 @@ def test_esquema_auditoria_es_estricto_seguro_y_sin_ttl():
     esquema = esquema_auditoria()["$jsonSchema"]
 
     assert set(esquema["required"]) == {
-        "actor_id", "accion", "recurso", "recurso_id", "despues", "fecha",
+        "actor_id",
+        "accion",
+        "recurso",
+        "recurso_id",
+        "despues",
+        "fecha",
     }
     assert esquema["additionalProperties"] is False
     assert esquema["properties"]["actor_id"] == {"bsonType": "objectId"}
@@ -256,7 +274,7 @@ class CursorFalso:
         return self
 
     def __aiter__(self):
-        seleccion = self.documentos[self.salto:self.salto + self.tope]
+        seleccion = self.documentos[self.salto : self.salto + self.tope]
         self._iterador = iter(seleccion)
         return self
 

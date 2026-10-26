@@ -348,7 +348,7 @@ exigirActualizacion(
 
 const incidenciaRestaurada = db.incidencias_campus.findOne(filtroDemoExacto);
 exigir(incidenciaRestaurada.prioridad === {json.dumps(prioridad_original)}, "No se restauró la prioridad original.");
-exigir(Math.abs(Number(incidenciaRestaurada.horas_invertidas) - {float(objetivo['horas_invertidas'])}) < 1e-9,
+exigir(Math.abs(Number(incidenciaRestaurada.horas_invertidas) - {float(objetivo["horas_invertidas"])}) < 1e-9,
   "No se restauraron las horas originales.");
 exigir(!incidenciaRestaurada.tags.includes("demo_push_t013") &&
   !incidenciaRestaurada.tags.includes("demo_set_t013"), "Quedaron etiquetas temporales.");

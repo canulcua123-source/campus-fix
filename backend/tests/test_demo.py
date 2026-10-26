@@ -83,8 +83,7 @@ def test_generador_es_reproducible_y_reserva_aula_recurrente():
 
     assert primera == segunda
     ubicaciones = Counter(
-        (doc["ubicacion"]["edificio"], doc["ubicacion"]["piso"], doc["ubicacion"]["aula"])
-        for doc in primera
+        (doc["ubicacion"]["edificio"], doc["ubicacion"]["piso"], doc["ubicacion"]["aula"]) for doc in primera
     )
     assert ubicaciones[("A", 1, "101")] >= 3
     assert Counter(doc["categoria"] for doc in primera) == {

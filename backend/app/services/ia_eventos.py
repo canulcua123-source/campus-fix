@@ -91,11 +91,11 @@ async def registrar_oferta(
             {"analisis_id": identificador},
             {"actor_clave": 1, "evento": 1},
         )
-        if existente is None or not hmac.compare_digest(
-            existente.get("actor_clave", ""), documento["actor_clave"]
-        ):
+        if existente is None or not hmac.compare_digest(existente.get("actor_clave", ""), documento["actor_clave"]):
             raise EventoIAConflictivo("El identificador ya está en uso") from None
-        return ResultadoRegistroEvento(identificador, existente["evento"], False, bool(existente["evento"] in EVENTOS_FINALES))
+        return ResultadoRegistroEvento(
+            identificador, existente["evento"], False, bool(existente["evento"] in EVENTOS_FINALES)
+        )
     return ResultadoRegistroEvento(identificador, "ofrecido", True, False)
 
 

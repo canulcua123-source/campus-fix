@@ -15,4 +15,3 @@ def test_longitud_2_a_30():
     for valor in ("a", "a" * 31, "tag-con-guion", "símbolo!"):
         with pytest.raises(ValueError):
             normalizar_tag(valor)
-

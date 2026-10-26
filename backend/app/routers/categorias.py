@@ -18,7 +18,9 @@ from app.schemas.categoria import CategoriaIn, CategoriaOut, CategoriaPatch
 router = APIRouter(prefix="/categorias", tags=["categorias"])
 
 
-@router.get("", response_model=list[CategoriaOut], response_model_exclude_none=True, summary="Listar categorías activas")
+@router.get(
+    "", response_model=list[CategoriaOut], response_model_exclude_none=True, summary="Listar categorías activas"
+)
 async def listar_categorias(_: Annotated[dict, Depends(get_usuario_actual)]):
     docs = [c async for c in get_db().categorias.find({"activa": True}).sort("clave", 1)]
     return a_json(docs)

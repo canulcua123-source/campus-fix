@@ -42,7 +42,11 @@ class ColeccionEventosFalsa:
             return None
         if proyeccion is None:
             return copy.deepcopy(documento)
-        return {clave: copy.deepcopy(documento[clave]) for clave, incluir in proyeccion.items() if incluir and clave in documento}
+        return {
+            clave: copy.deepcopy(documento[clave])
+            for clave, incluir in proyeccion.items()
+            if incluir and clave in documento
+        }
 
     async def find_one_and_update(self, filtro, actualizacion, return_document=None):
         del return_document
@@ -117,20 +121,20 @@ async def test_ia_evento_registrado():
 async def test_un_evento_final_por_oferta():
     db = BaseFalsa()
     actor = ObjectId()
-    await registrar_oferta(
-        db, actor_id=actor, secreto=SECRETO, datos=oferta(), analisis_id="b" * 32, ahora=AHORA
+    await registrar_oferta(db, actor_id=actor, secreto=SECRETO, datos=oferta(), analisis_id="b" * 32, ahora=AHORA)
+    resultados = await asyncio.gather(
+        *[
+            registrar_evento_cliente(
+                db,
+                analisis_id="b" * 32,
+                evento="deshecho",
+                actor_id=actor,
+                secreto=SECRETO,
+                ahora=AHORA + timedelta(seconds=10),
+            )
+            for _ in range(2)
+        ]
     )
-    resultados = await asyncio.gather(*[
-        registrar_evento_cliente(
-            db,
-            analisis_id="b" * 32,
-            evento="deshecho",
-            actor_id=actor,
-            secreto=SECRETO,
-            ahora=AHORA + timedelta(seconds=10),
-        )
-        for _ in range(2)
-    ])
     assert sum(resultado.registrado for resultado in resultados) == 1
     assert all(resultado.evento == "deshecho" and resultado.es_final for resultado in resultados)
 

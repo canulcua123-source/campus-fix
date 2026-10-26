@@ -11,3 +11,6 @@ dist
 utm_desk_*.archive.gz
 utm_desk_*.archive.gz.sha256
 utm_desk_*.archive.gz.part.*
+
+# Clave local del admin generada por scripts/init_db.py (nunca se versiona).
+backend/.admin-local

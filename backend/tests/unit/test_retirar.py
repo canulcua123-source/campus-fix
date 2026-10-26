@@ -88,9 +88,7 @@ async def test_retiro_atomico_incluye_todas_las_precondiciones(monkeypatch):
     coleccion = ColeccionFalsa(None, 1)
     _usar_coleccion(monkeypatch, coleccion)
 
-    respuesta = await router_incidencias.retirar_incidencia.__wrapped__(
-        None, str(incidencia_id), usuario
-    )
+    respuesta = await router_incidencias.retirar_incidencia.__wrapped__(None, str(incidencia_id), usuario)
 
     assert respuesta == {"ok": True, "estado": "retirada"}
     base, alcance = coleccion.filtro["$and"]
@@ -120,9 +118,7 @@ async def test_retiro_no_elegible_devuelve_409(monkeypatch):
     _usar_coleccion(monkeypatch, ColeccionFalsa(documento, 0))
 
     with pytest.raises(HTTPException) as conflicto:
-        await router_incidencias.retirar_incidencia.__wrapped__(
-            None, str(documento["_id"]), usuario
-        )
+        await router_incidencias.retirar_incidencia.__wrapped__(None, str(documento["_id"]), usuario)
     assert conflicto.value.status_code == 409
     assert conflicto.value.detail == "La incidencia ya no puede retirarse"
 
@@ -134,9 +130,7 @@ async def test_retiro_ajeno_no_revela_existencia(monkeypatch):
     _usar_coleccion(monkeypatch, ColeccionFalsa(documento, 0))
 
     with pytest.raises(HTTPException) as no_encontrada:
-        await router_incidencias.retirar_incidencia.__wrapped__(
-            None, str(documento["_id"]), usuario
-        )
+        await router_incidencias.retirar_incidencia.__wrapped__(None, str(documento["_id"]), usuario)
     assert no_encontrada.value.status_code == 404
 
 
@@ -154,12 +148,7 @@ async def test_doble_retiro_concurrente_solo_actualiza_una_vez(monkeypatch):
     _usar_coleccion(monkeypatch, coleccion)
 
     resultados = await asyncio.gather(
-        *(
-            router_incidencias.retirar_incidencia.__wrapped__(
-                None, str(documento["_id"]), usuario
-            )
-            for _ in range(2)
-        ),
+        *(router_incidencias.retirar_incidencia.__wrapped__(None, str(documento["_id"]), usuario) for _ in range(2)),
         return_exceptions=True,
     )
 

@@ -49,9 +49,9 @@ class IASugerencia(BaseModel):
     campos_autollenados: list[CampoIA] = Field(max_length=15)
     proveedor: str | None = Field(default=None, min_length=2, max_length=30, pattern=r"^[a-z][a-z0-9_-]+$")
     analisis_id: str | None = Field(default=None, pattern=PatronIdentificadorAnalisis)
-    accion: Literal[
-        "agentico", "formulario", "duplicado", "autollenar", "sugerir", "preguntar", "rechazar"
-    ] | None = None
+    accion: Literal["agentico", "formulario", "duplicado", "autollenar", "sugerir", "preguntar", "rechazar"] | None = (
+        None
+    )
     campos_editados_por_usuario: list[CampoIA] | None = Field(default=None, max_length=15)
     compuertas_fallidas: list[CompuertaIA] | None = Field(default=None, max_length=9)
     ubicacion_fuente: Literal["qr", "confirmada", "selector"] | None = None

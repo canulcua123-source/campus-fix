@@ -8,7 +8,7 @@ from bson import ObjectId
 from PIL import Image
 from pymongo.errors import DuplicateKeyError
 
-from app.services.vision.duplicados import (
+from app.services.duplicados import (
     CoincidenciaNoElegible,
     CoincidenciaNoEncontrada,
     buscar_por_huellas,
@@ -137,7 +137,12 @@ async def test_detectar_emite_capacidad_opaca_y_respuesta_sin_pii():
     cuerpo = resultado.model_dump()
     assert len(cuerpo["coincidencia_id"]) == 43
     assert set(cuerpo) == {
-        "accion", "coincidencia_id", "codigo", "categoria", "reportado_hace_minutos", "adhesiones",
+        "accion",
+        "coincidencia_id",
+        "codigo",
+        "categoria",
+        "reportado_hace_minutos",
+        "adhesiones",
     }
     guardado = db.coincidencias_duplicados.insert_one.await_args.args[0]
     assert "usuario_id" not in guardado

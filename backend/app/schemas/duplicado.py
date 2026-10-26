@@ -34,4 +34,3 @@ class AdhesionOut(BaseModel):
     categoria: str = Field(pattern=PATRON_CATEGORIA)
     adhesiones: int = Field(ge=1)
     registrada: bool
-

@@ -45,7 +45,9 @@ def test_generacion_offline_crea_artefactos_validos_y_reproducibles(tmp_path):
     assert all(isinstance(documento["_id"], ObjectId) for documento in documentos)
     assert all(documento["reportante"]["usuario_id"] == USUARIO_SINTETICO_ID for documento in documentos)
     assert all(documento["demo"] is True for documento in documentos)
-    assert all(documento.get("fecha_resolucion", referencia) >= referencia - timedelta(days=60) for documento in documentos)
+    assert all(
+        documento.get("fecha_resolucion", referencia) >= referencia - timedelta(days=60) for documento in documentos
+    )
 
 
 def test_script_incluye_definiciones_canonicas_seguridad_y_requisitos():

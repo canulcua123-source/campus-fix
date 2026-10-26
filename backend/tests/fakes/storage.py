@@ -39,4 +39,3 @@ class FakeStorage:
         self._comprobar()
         self.llamadas.append(("tamano_objeto", clave))
         return self.tamanos.get(clave)
-

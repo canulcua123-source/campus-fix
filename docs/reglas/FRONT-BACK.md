@@ -58,6 +58,8 @@ La API ya ofrece renovación con refresh token en cookie HttpOnly mediante `/aut
 
 Los mensajes de la API llegan en `detail` (HTTPException) o en `error`/`detalle` (validación, 409 de duplicado, 413, 429 de slowapi): ver API.md API-08. Ambos se leen en `mapearError()`. Si la respuesta no es JSON (p. ej. un 502 del proxy en HTML), el cliente no debe romper con `JSON.parse`: usa un mensaje genérico.
 
+**Filtro por categoría.** Con categorías dinámicas, `GET /incidencias?categoria=<clave inexistente>` responde 200 con lista vacía (estado vacío en la PWA, no error). Solo un formato inválido produce 400. Toma las claves de `useCategorias` en lugar de una lista fija.
+
 **FB-08 · 400 de la API → `setError` en el campo.** `detalle[].loc` trae la ruta (`["body","detalle_especifico","computo_redes","vlan"]`). El cliente ya la convierte en `e.campos` (`{ 'detalle_especifico.vlan': 'El valor excede el máximo' }`: sin `body` ni la etiqueta de la unión, mensaje traducido por `type`; sin ruta → `_general`). Lo ideal es que Zod ya lo haya detectado antes (FB-12).
 
 ```ts

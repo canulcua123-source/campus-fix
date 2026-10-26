@@ -45,11 +45,7 @@ class FiltrosAnalitica(BaseModel):
     def intervalo_utc(self) -> tuple[datetime | None, datetime | None]:
         """Devuelve [desde, día posterior a hasta) para incluir completo el límite superior."""
         inicio = datetime.combine(self.desde, time.min, tzinfo=timezone.utc) if self.desde else None
-        fin = (
-            datetime.combine(self.hasta + timedelta(days=1), time.min, tzinfo=timezone.utc)
-            if self.hasta
-            else None
-        )
+        fin = datetime.combine(self.hasta + timedelta(days=1), time.min, tzinfo=timezone.utc) if self.hasta else None
         return inicio, fin
 
     def para_cache(self) -> dict[str, str | None]:
@@ -133,15 +129,9 @@ class FiltrosMetricasIA(BaseModel):
     def intervalo_utc(self, ahora: datetime | None = None) -> tuple[datetime, datetime]:
         instante = (ahora or datetime.now(timezone.utc)).astimezone(timezone.utc)
         fin = (
-            datetime.combine(self.hasta + timedelta(days=1), time.min, tzinfo=timezone.utc)
-            if self.hasta
-            else instante
+            datetime.combine(self.hasta + timedelta(days=1), time.min, tzinfo=timezone.utc) if self.hasta else instante
         )
-        inicio = (
-            datetime.combine(self.desde, time.min, tzinfo=timezone.utc)
-            if self.desde
-            else fin - timedelta(days=30)
-        )
+        inicio = datetime.combine(self.desde, time.min, tzinfo=timezone.utc) if self.desde else fin - timedelta(days=30)
         if fin - inicio > timedelta(days=180):
             inicio = fin - timedelta(days=180)
         return inicio, fin

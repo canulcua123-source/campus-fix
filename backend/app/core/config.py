@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -86,3 +87,12 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+PATRON_CORREO = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+def validar_dominio_correo(correo: str, permitidos: tuple[str, ...] = ()) -> str:
+    """Exige el dominio institucional vigente (DOMINIO_CORREO), leído en cada validación y no al importar."""
+    if correo in permitidos or correo.rpartition("@")[2] == settings.dominio_correo:
+        return correo
+    raise PydanticCustomError("string_pattern_mismatch", "El correo debe pertenecer al dominio institucional")

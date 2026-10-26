@@ -7,7 +7,7 @@ from bson import ObjectId
 import app.routers.incidencias as router_incidencias
 
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 AHORA = datetime(2026, 10, 25, 18, 0, tzinfo=timezone.utc)
 
 
@@ -37,7 +37,6 @@ def _reloj_fijo(monkeypatch):
     monkeypatch.setattr(router_incidencias, "ahora_utc", lambda: AHORA)
 
 
-@pytest.mark.asyncio
 async def test_retirar_ok(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=14))
     anterior = {
@@ -67,14 +66,12 @@ async def test_retirar_ok(api):
     assert await api.db.incidencias_campus.count_documents({"_id": ObjectId(incidencia["_id"])}) == 1
 
 
-@pytest.mark.asyncio
 async def test_retirar_limite_exacto_15_minutos(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=15))
     respuesta = await _retirar(api, incidencia["_id"])
     assert respuesta.status_code == 200, respuesta.text
 
 
-@pytest.mark.asyncio
 async def test_retirar_fuera_ventana_409(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=15, microseconds=1))
     respuesta = await _retirar(api, incidencia["_id"])
@@ -83,7 +80,6 @@ async def test_retirar_fuera_ventana_409(api):
     assert (await api.doc(incidencia["_id"]))["estado"] == "abierta"
 
 
-@pytest.mark.asyncio
 async def test_retirar_asignada_409(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=5))
     asignacion = await api.c.patch(
@@ -98,7 +94,6 @@ async def test_retirar_asignada_409(api):
     assert (await api.doc(incidencia["_id"]))["estado"] == "abierta"
 
 
-@pytest.mark.asyncio
 async def test_retirar_otro_usuario(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=5))
     respuesta = await _retirar(api, incidencia["_id"], "reportante_b")
@@ -106,7 +101,6 @@ async def test_retirar_otro_usuario(api):
     assert respuesta.json()["error"] == "no_encontrado"
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("estado", ["en_proceso", "en_espera", "resuelta", "cerrada"])
 async def test_retirar_rechaza_estados_distintos_de_abierta(api, estado):
     incidencia = await api.crear_en(estado)
@@ -119,17 +113,17 @@ async def test_retirar_rechaza_estados_distintos_de_abierta(api, estado):
     assert (await api.doc(incidencia["_id"]))["estado"] == estado
 
 
-@pytest.mark.asyncio
 async def test_retirar_rechaza_fecha_ausente(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=5))
     await api.db.incidencias_campus.update_one(
-        {"_id": ObjectId(incidencia["_id"])}, {"$unset": {"fecha_creacion": ""}}
+        {"_id": ObjectId(incidencia["_id"])},
+        {"$unset": {"fecha_creacion": ""}},
+        bypass_document_validation=True,  # simula un documento heredado que el validador ya no admitiría
     )
     respuesta = await _retirar(api, incidencia["_id"])
     assert respuesta.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_doble_retiro_concurrente(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=5))
     respuestas = await asyncio.gather(
@@ -142,7 +136,6 @@ async def test_doble_retiro_concurrente(api):
     assert len(retiros) == 1
 
 
-@pytest.mark.asyncio
 async def test_asignacion_y_retiro_concurrentes_solo_tienen_un_ganador(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=5))
     retiro, asignacion = await asyncio.gather(
@@ -164,7 +157,6 @@ async def test_asignacion_y_retiro_concurrentes_solo_tienen_un_ganador(api):
         assert retiro.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_incidencia_retirada_no_admite_asignacion_ni_nuevo_retiro(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=5))
     assert (await _retirar(api, incidencia["_id"])).status_code == 200
@@ -178,7 +170,6 @@ async def test_incidencia_retirada_no_admite_asignacion_ni_nuevo_retiro(api):
     assert asignacion.status_code == 409
 
 
-@pytest.mark.asyncio
 async def test_seguimiento_no_permite_eludir_reglas_de_retiro(api):
     incidencia = await _crear_con_antiguedad(api, timedelta(minutes=5))
     respuesta = await api.c.patch(
@@ -190,7 +181,6 @@ async def test_seguimiento_no_permite_eludir_reglas_de_retiro(api):
     assert (await api.doc(incidencia["_id"]))["estado"] == "abierta"
 
 
-@pytest.mark.asyncio
 async def test_retirar_requiere_autenticacion_y_id_valido(api):
     sin_token = await api.c.post(f"/incidencias/{ObjectId()}/retirar")
     id_invalido = await api.c.post("/incidencias/no-es-objectid/retirar", headers=api.h("reportante_a"))

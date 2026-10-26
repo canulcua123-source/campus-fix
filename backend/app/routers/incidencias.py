@@ -46,7 +46,7 @@ from app.schemas.incidencia import (
     TomarIncidenciaIn,
     TomarIncidenciaOut,
 )
-from app.services.vision.duplicados import actualizar_elegibilidad_huella
+from app.services.duplicados import actualizar_elegibilidad_huella
 
 router = APIRouter(prefix="/incidencias", tags=["incidencias"])
 _STORAGE_DIRECTO = get_storage()
@@ -449,25 +449,31 @@ async def confirmar_o_reabrir(
         comentario = datos.comentario or "Resolución confirmada por el reportante"
         update: dict[str, Any] = {
             "$set": {"estado": estado_resultante, "fecha_actualizacion": ahora},
-            "$push": {"historial_seguimiento": _push_historial(
-                _entrada_historial(ahora, usuario, estado_resultante, comentario)
-            )},
+            "$push": {
+                "historial_seguimiento": _push_historial(
+                    _entrada_historial(ahora, usuario, estado_resultante, comentario)
+                )
+            },
         }
     else:
         estado_resultante = "abierta"
         comentario = datos.comentario or "Reapertura solicitada por el reportante"
-        condiciones.append({
-            "fecha_resolucion": {
-                "$gte": ahora - timedelta(days=7),
-                "$lte": ahora,
+        condiciones.append(
+            {
+                "fecha_resolucion": {
+                    "$gte": ahora - timedelta(days=7),
+                    "$lte": ahora,
+                }
             }
-        })
+        )
         update = {
             "$set": {"estado": estado_resultante, "fecha_actualizacion": ahora},
             "$unset": {"fecha_resolucion": ""},
-            "$push": {"historial_seguimiento": _push_historial(
-                _entrada_historial(ahora, usuario, estado_resultante, comentario)
-            )},
+            "$push": {
+                "historial_seguimiento": _push_historial(
+                    _entrada_historial(ahora, usuario, estado_resultante, comentario)
+                )
+            },
         }
     res = await get_db().incidencias_campus.update_one({"$and": condiciones}, update)
     if res.matched_count == 0:
@@ -501,16 +507,20 @@ async def comentar_en_espera(
 ):
     ahora = datetime.now(timezone.utc)
     res = await get_db().incidencias_campus.update_one(
-        {"$and": [
-            {"_id": _oid(incidencia_id), "estado": "en_espera"},
-            filtro_alcance(usuario),
-            {"reportante.usuario_id": usuario["_id"]},
-        ]},
+        {
+            "$and": [
+                {"_id": _oid(incidencia_id), "estado": "en_espera"},
+                filtro_alcance(usuario),
+                {"reportante.usuario_id": usuario["_id"]},
+            ]
+        },
         {
             "$set": {"fecha_actualizacion": ahora},
-            "$push": {"historial_seguimiento": _push_historial(
-                _entrada_historial(ahora, usuario, "en_espera", datos.comentario)
-            )},
+            "$push": {
+                "historial_seguimiento": _push_historial(
+                    _entrada_historial(ahora, usuario, "en_espera", datos.comentario)
+                )
+            },
         },
     )
     if res.matched_count == 0:
@@ -551,16 +561,20 @@ async def tomar_incidencia(
     actual = await _en_alcance(incidencia_id, usuario, {"estado": 1})
     estado = actual["estado"]
     res = await get_db().incidencias_campus.update_one(
-        {"$and": [
-            {"_id": oid, "estado": estado, "tecnico_asignado": {"$exists": False}},
-            {"estado": {"$in": estados_elegibles}},
-            filtro_alcance(usuario),
-        ]},
+        {
+            "$and": [
+                {"_id": oid, "estado": estado, "tecnico_asignado": {"$exists": False}},
+                {"estado": {"$in": estados_elegibles}},
+                filtro_alcance(usuario),
+            ]
+        },
         {
             "$set": {"tecnico_asignado": tecnico, "fecha_actualizacion": ahora},
-            "$push": {"historial_seguimiento": _push_historial(
-                _entrada_historial(ahora, usuario, estado, f"Incidencia tomada por {usuario['nombre']}")
-            )},
+            "$push": {
+                "historial_seguimiento": _push_historial(
+                    _entrada_historial(ahora, usuario, estado, f"Incidencia tomada por {usuario['nombre']}")
+                )
+            },
         },
     )
     if res.matched_count == 0:

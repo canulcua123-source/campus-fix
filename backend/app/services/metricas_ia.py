@@ -103,9 +103,7 @@ def construir_metricas_ia(
         if d.get("resultado_final") == "enviado" and "duracion_toque_folio_ms" in d
     ]
     compuertas = Counter(
-        compuerta
-        for documento in documentos
-        for compuerta in documento.get("compuertas_fallidas", [])
+        compuerta for documento in documentos for compuerta in documento.get("compuertas_fallidas", [])
     )
 
     con_costo = [d for d in documentos if "costo_estimado_usd" in d]
@@ -193,8 +191,7 @@ def construir_metricas_ia(
         },
         "tiempo_toque_folio": _duraciones(toque_folio),
         "compuertas_fallidas": [
-            {"compuerta": compuerta, "total": total}
-            for compuerta, total in sorted(compuertas.items())
+            {"compuerta": compuerta, "total": total} for compuerta, total in sorted(compuertas.items())
         ],
         "latencia_ia": _duraciones(latencias),
         "errores_ia": sum(d.get("resultado_ia") == "error" for d in documentos),

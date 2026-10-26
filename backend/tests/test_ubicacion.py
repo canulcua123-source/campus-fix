@@ -54,23 +54,25 @@ def test_id_opaco_y_contrato_de_salida():
     ids = {generar_id_aula() for _ in range(100)}
     assert len(ids) == 100
     assert all(id_aula_valido(valor) for valor in ids)
-    AulaResueltaOut.model_validate({
-        "id_publico": ID_VALIDO,
-        "ubicacion": {"edificio": "A", "piso": 2, "aula": "A-201"},
-    })
-    with pytest.raises(ValidationError):
-        AulaResueltaOut.model_validate({
-            "id_publico": "A-201",
+    AulaResueltaOut.model_validate(
+        {
+            "id_publico": ID_VALIDO,
             "ubicacion": {"edificio": "A", "piso": 2, "aula": "A-201"},
-        })
+        }
+    )
+    with pytest.raises(ValidationError):
+        AulaResueltaOut.model_validate(
+            {
+                "id_publico": "A-201",
+                "ubicacion": {"edificio": "A", "piso": 2, "aula": "A-201"},
+            }
+        )
 
 
 def test_validador_mongodb_es_estricto():
     json_schema = esquema_aulas()["$jsonSchema"]
     assert json_schema["additionalProperties"] is False
-    assert set(json_schema["required"]) == {
-        "id_publico", "edificio", "piso", "aula", "activa", "fecha_creacion"
-    }
+    assert set(json_schema["required"]) == {"id_publico", "edificio", "piso", "aula", "activa", "fecha_creacion"}
 
 
 def _csv(ruta: Path, filas: list[dict[str, str]]) -> None:
@@ -84,9 +86,7 @@ def test_generador_lee_csv_controlado_y_codifica_url(tmp_path):
     ruta = tmp_path / "aulas.csv"
     _csv(ruta, [{"id_publico": ID_VALIDO, "edificio": "A", "piso": "2", "aula": "A-201"}])
     assert leer_aulas_csv(ruta)[0].aula == "A-201"
-    assert construir_url("https://campus.example", ID_VALIDO) == (
-        f"https://campus.example/reportar?aula={ID_VALIDO}"
-    )
+    assert construir_url("https://campus.example", ID_VALIDO) == (f"https://campus.example/reportar?aula={ID_VALIDO}")
 
 
 def test_generador_rechaza_ids_y_ubicaciones_duplicadas(tmp_path):
@@ -114,7 +114,9 @@ def test_generador_codifica_url_correcta_y_no_sobrescribe(tmp_path, monkeypatch)
         generar_qr([aula], "https://campus.example", tmp_path)
 
 
-@pytest.mark.parametrize("base_url", ["http://campus.example", "https://user:secret@campus.example", "javascript:alert(1)"])
+@pytest.mark.parametrize(
+    "base_url", ["http://campus.example", "https://user:secret@campus.example", "javascript:alert(1)"]
+)
 def test_generador_rechaza_urls_inseguras(base_url):
     with pytest.raises(ValueError):
         construir_url(base_url, ID_VALIDO)

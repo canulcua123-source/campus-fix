@@ -24,6 +24,7 @@ async def test_fechas_terminan_en_z(api):
     assert fechas
     assert all(isinstance(fecha, str) and fecha.endswith("Z") for fecha in fechas)
 
+
 RE_OID = re.compile(r"^[0-9a-f]{24}$")
 
 
@@ -102,7 +103,7 @@ async def test_listado_filtros(api):
     "params",
     [
         {"estado": "borrado"},
-        {"categoria": "otra"},
+        {"categoria": "Otra-Categoria"},
         {"prioridad": "maxima"},
         {"estado": '{"$ne": null}'},
     ],
@@ -110,6 +111,13 @@ async def test_listado_filtros(api):
 async def test_listado_filtro_invalido(api, params):
     r = await api.c.get("/incidencias", params=params, headers=api.h("admin"))
     assert r.status_code == 400, r.text
+
+
+async def test_listado_categoria_inexistente_devuelve_lista_vacia(api):
+    # Con categorías dinámicas, una clave bien formada que no existe no es un error: no hay coincidencias.
+    r = await api.c.get("/incidencias", params={"categoria": "otra"}, headers=api.h("admin"))
+    assert r.status_code == 200, r.text
+    assert r.json() == []
 
 
 async def test_listado_inyeccion_en_query(api):

@@ -147,7 +147,11 @@ Los scripts de `scripts/` sí pueden usar `delete_many`/`insert_many`, siempre f
 
 **BD-17 · Migraciones de datos** en un script en `scripts/` (p. ej. `scripts/migrar_v2.py`): idempotente, filtra por `schema_version` (`{"schema_version": 1}` → actualiza y pone `2`), imprime cuántos documentos cambió, y tiene modo simulación por defecto (como `limpiar_huerfanos.py` con `--borrar`).
 
-Para T-008, un administrador antiguo puede tener `fecha_creacion` y no tener `schema_version`. Antes de instalar el validador estricto, ejecuta `python scripts/migrar_admin_t008.py` para simular y, tras el respaldo y revisión, `python scripts/migrar_admin_t008.py --aplicar`. La migración actúa solo sobre `admin@utm.local`, copia la fecha BSON existente a `fecha_alta`, asigna la versión `1` y elimina el nombre de campo antiguo en la misma actualización. No modifica el hash, rol, permisos ni estado y no se ejecuta automáticamente.
+Para T-008, los usuarios antiguos (empezando por `admin@utm.local`) pueden tener `fecha_creacion` y no tener `schema_version`. Antes de instalar el validador estricto, ejecuta `python scripts/migrar_admin_t008.py` para simular y, tras el respaldo y revisión, `python scripts/migrar_admin_t008.py --aplicar`. La migración recorre **todos** los usuarios pendientes, copia la fecha BSON existente a `fecha_alta`, asigna la versión `1` y elimina el nombre de campo antiguo en la misma actualización; es idempotente y lo que no puede migrar con seguridad lo deja sin tocar y lo reporta para revisión manual. No modifica el hash, rol, permisos ni estado y no se ejecuta automáticamente.
+
+Como red de seguridad, `scripts/init_db.py` cuenta antes de cada `collMod` los documentos que no cumplirían el nuevo esquema (`{"$nor": [validador]}`) y, si hay alguno, se detiene sin aplicar el validador.
+
+**En Atlas, la migración y `init_db.py` solo los ejecuta el líder**, en este orden: respaldo (`docs/bd/respaldo.md`) → `migrar_admin_t008.py` (simulación) → `--aplicar` → `init_db.py`. Nadie más los corre contra Atlas.
 
 **BD-18 · Probar en Docker antes que nada:**
 
@@ -173,7 +177,7 @@ pytest tests/e2e -q                       # la suite recrea utm_desk_test con el
 | `python scripts/init_db.py --seed-demo` | Además 24 incidencias con `demo: true` (≥ 8 resueltas, 18 con evidencia, fechas de los últimos 5–30 días, folios `…-9000` a `…-9023`). Si ya existen, no hace nada |
 | `python scripts/init_db.py --reset-demo` | Borra **solo** `{"demo": true}` y las vuelve a crear |
 
-Reglas: todo dato sintético lleva `demo: true` (así se borra sin tocar datos reales); nunca marques datos reales como demo; los datos demo son deterministas (`random.Random(42)`). Fuera de `localhost`, el script exige `SEED_ADMIN_PASSWORD` para crear el admin. También conviene definirla explícitamente en local: si se genera una contraseña aleatoria, el script no la imprime ni expone hashes o secretos en los logs.
+Reglas: todo dato sintético lleva `demo: true` (así se borra sin tocar datos reales); nunca marques datos reales como demo; los datos demo son deterministas (`random.Random(42)`). Fuera de `localhost`, el script exige `SEED_ADMIN_PASSWORD` para crear el admin. También conviene definirla explícitamente en local. Si no la defines, el script genera una clave aleatoria, **no la muestra en consola** y la guarda en `backend/.admin-local` (permisos 600, ignorado por git): léela con `cat backend/.admin-local`, inicia sesión, cámbiala y borra el archivo.
 
 ## 6. Acceso a Atlas
 

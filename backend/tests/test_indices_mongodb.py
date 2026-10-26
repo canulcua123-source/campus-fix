@@ -53,6 +53,8 @@ class BaseEsquemaFalsa:
         self.existentes: set[str] = set()
         self.creaciones: list[tuple[str, dict[str, Any]]] = []
         self.comandos: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.conteos: list[dict[str, Any]] = []
+        self.invalidos = 0
 
     async def list_collection_names(self) -> list[str]:
         return sorted(self.existentes)
@@ -63,6 +65,13 @@ class BaseEsquemaFalsa:
 
     async def command(self, *args: Any, **opciones: Any) -> None:
         self.comandos.append((args, opciones))
+
+    def __getitem__(self, nombre: str) -> "BaseEsquemaFalsa":
+        return self
+
+    async def count_documents(self, filtro: dict[str, Any], **_: Any) -> int:
+        self.conteos.append(filtro)
+        return self.invalidos
 
 
 class BaseIndicesT038Falsa(BaseIndicesFalsa):
@@ -113,7 +122,14 @@ def test_validadores_t038_son_estrictos_y_no_guardan_pii():
     for esquema in esquemas.values():
         assert esquema["additionalProperties"] is False
     assert esquemas["huellas"]["required"] == [
-        "aula_id", "categoria", "sha256", "dhash", "incidencia_id", "codigo", "fecha", "elegible",
+        "aula_id",
+        "categoria",
+        "sha256",
+        "dhash",
+        "incidencia_id",
+        "codigo",
+        "fecha",
+        "elegible",
     ]
     serializado = str(esquemas).lower()
     for campo in ("nombre", "correo", "usuario_id", "reportante", "descripcion", "fotografia", "token"):
@@ -124,7 +140,12 @@ def test_validador_t035_es_estricto_y_sin_datos_personales():
     esquema = esquema_ia_eventos()["$jsonSchema"]
     assert esquema["additionalProperties"] is False
     assert esquema["properties"]["evento"]["enum"] == [
-        "ofrecido", "deshecho", "editado", "enviado", "duplicado_sumado", "fallback",
+        "ofrecido",
+        "deshecho",
+        "editado",
+        "enviado",
+        "duplicado_sumado",
+        "fallback",
     ]
     serializado = str(esquema["properties"]).lower()
     for campo in ("nombre", "correo", "telefono", "password", "refresh", "foto", "imagen", "prompt_contenido"):
@@ -193,7 +214,7 @@ async def test_indices_t007_y_existentes_conservan_configuracion():
     assert db.categorias.llamadas == [("clave", {"unique": True})]
     assert db.aulas.llamadas == [
         ("id_publico", {"unique": True, "name": "aulas_id_publico_unico"}),
-        ([('edificio', 1), ('piso', 1), ('aula', 1)], {"unique": True, "name": "aulas_ubicacion_unica"}),
+        ([("edificio", 1), ("piso", 1), ("aula", 1)], {"unique": True, "name": "aulas_ubicacion_unica"}),
     ]
 
 
@@ -249,10 +270,24 @@ async def test_indices_t035_incluyen_ttl_180_dias_y_unicidad():
     assert db.ia_eventos.llamadas == [
         ("analisis_id", {"unique": True, "name": "ia_eventos_analisis_unico"}),
         ("fecha", {"expireAfterSeconds": 15_552_000, "name": "ia_eventos_ttl_180d"}),
-        ([('evento', 1), ('fecha', -1)], {"name": "ia_eventos_evento_fecha"}),
-        ([('categoria', 1), ('fecha', -1)], {"name": "ia_eventos_categoria_fecha", "sparse": True}),
+        ([("evento", 1), ("fecha", -1)], {"name": "ia_eventos_evento_fecha"}),
+        ([("categoria", 1), ("fecha", -1)], {"name": "ia_eventos_categoria_fecha", "sparse": True}),
         (
-            [('proveedor', 1), ('modelo', 1), ('fecha', -1)],
+            [("proveedor", 1), ("modelo", 1), ("fecha", -1)],
             {"name": "ia_eventos_proveedor_modelo_fecha", "sparse": True},
         ),
     ]
+
+
+@pytest.mark.asyncio
+async def test_asegurar_coleccion_no_endurece_validador_si_hay_documentos_invalidos():
+    db = BaseEsquemaFalsa()
+    db.existentes.add("usuarios")
+    db.invalidos = 1
+    validador = esquema_usuarios()
+
+    with pytest.raises(SystemExit):
+        await asegurar_coleccion(db, "usuarios", validador)
+
+    assert db.conteos == [{"$nor": [validador]}]
+    assert db.comandos == []

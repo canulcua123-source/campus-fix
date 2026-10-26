@@ -1,4 +1,5 @@
 """Conversión segura de documentos de MongoDB a valores JSON."""
+
 from datetime import datetime, timezone
 from typing import Any
 

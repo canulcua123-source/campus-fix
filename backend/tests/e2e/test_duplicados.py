@@ -3,11 +3,12 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
 import pytest
+import pytest_asyncio
 from bson import ObjectId
 from PIL import Image
 
 from app.core.config import settings
-from app.services.vision.duplicados import (
+from app.services.duplicados import (
     CoincidenciaNoElegible,
     buscar_por_huellas,
     calcular_huellas,
@@ -17,7 +18,7 @@ from app.services.vision.duplicados import (
     registrar_huella,
 )
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 AULA_A = "A" * 22
 AULA_B = "B" * 22
@@ -36,7 +37,7 @@ def _imagen(*, inversa: bool = False, cambio_leve: bool = False) -> bytes:
     return salida.getvalue()
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True, loop_scope="session")
 async def _limpiar_colecciones(api):
     for nombre in ("huellas_reportes", "coincidencias_duplicados", "adhesiones_reportes"):
         await api.db[nombre].delete_many({})
@@ -81,7 +82,15 @@ async def _registrar_reporte(api, datos: bytes | None = None) -> tuple[dict, dic
     return incidencia, huella
 
 
-async def _detectar(api, datos: bytes | None = None, *, aula_id: str = AULA_A, categoria: str = "infraestructura", quien: str = "reportante_b", ahora: datetime | None = None):
+async def _detectar(
+    api,
+    datos: bytes | None = None,
+    *,
+    aula_id: str = AULA_A,
+    categoria: str = "infraestructura",
+    quien: str = "reportante_b",
+    ahora: datetime | None = None,
+):
     return await detectar_duplicado(
         api.db,
         datos_imagen=datos or _imagen(),
@@ -168,22 +177,28 @@ async def test_categoria_distinta_y_dhash_11_no_coinciden(api):
             "elegible": True,
         }
     )
-    assert await buscar_por_huellas(
-        api.db,
-        aula_id=AULA_A,
-        categoria="academico",
-        sha256="b" * 64,
-        dhash="0000000000000000",
-        ahora=ahora,
-    ) is None
-    assert await buscar_por_huellas(
-        api.db,
-        aula_id=AULA_A,
-        categoria="infraestructura",
-        sha256="b" * 64,
-        dhash="00000000000007ff",
-        ahora=ahora,
-    ) is None
+    assert (
+        await buscar_por_huellas(
+            api.db,
+            aula_id=AULA_A,
+            categoria="academico",
+            sha256="b" * 64,
+            dhash="0000000000000000",
+            ahora=ahora,
+        )
+        is None
+    )
+    assert (
+        await buscar_por_huellas(
+            api.db,
+            aula_id=AULA_A,
+            categoria="infraestructura",
+            sha256="b" * 64,
+            dhash="00000000000007ff",
+            ahora=ahora,
+        )
+        is None
+    )
 
 
 async def test_dhash_10_y_exactamente_24h_si_coinciden(api):
@@ -337,10 +352,7 @@ async def test_colecciones_t038_tienen_validadores_e_indices(api):
     cursor = await api.db.list_collections(
         filter={"name": {"$in": ["huellas_reportes", "coincidencias_duplicados", "adhesiones_reportes"]}}
     )
-    opciones = {
-        doc["name"]: doc["options"]
-        async for doc in cursor
-    }
+    opciones = {doc["name"]: doc["options"] async for doc in cursor}
     assert set(opciones) == {"huellas_reportes", "coincidencias_duplicados", "adhesiones_reportes"}
     for configuracion in opciones.values():
         assert configuracion["validationLevel"] == "strict"
@@ -348,7 +360,7 @@ async def test_colecciones_t038_tienen_validadores_e_indices(api):
         assert configuracion["validator"]["$jsonSchema"]["additionalProperties"] is False
 
     huellas = await api.db.huellas_reportes.index_information()
-    ttl = next(indice for indice in huellas.values() if indice.get("name") == "huellas_ttl_24h")
+    ttl = huellas["huellas_ttl_24h"]  # index_information() usa el nombre como clave
     assert ttl["expireAfterSeconds"] == 86400
     compuesto = huellas["huellas_aula_categoria_fecha"]["key"]
     assert compuesto == [("aula_id", 1), ("categoria", 1), ("fecha", -1)]

@@ -120,9 +120,11 @@ def test_salida_acepta_los_tipos_historicos_de_sistema():
     for indice, categoria in enumerate(categorias_sistema(), start=1):
         salida = CategoriaOut.model_validate({"_id": str(indice) * 24, **categoria})
         assert salida.clave == categoria["clave"]
-    tipos = {campo.tipo for categoria in categorias_sistema() for campo in CategoriaOut.model_validate(
-        {"_id": "1" * 24, **categoria}
-    ).campos}
+    tipos = {
+        campo.tipo
+        for categoria in categorias_sistema()
+        for campo in CategoriaOut.model_validate({"_id": "1" * 24, **categoria}).campos
+    }
     assert {"enum", "lista_texto"} <= tipos
 
 

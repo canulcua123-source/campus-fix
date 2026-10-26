@@ -34,6 +34,8 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200 |
 | `GET /categorias` | autenticado | 200 |
 
+El filtro `categoria` de `GET /incidencias` acepta cualquier clave con formato válido (`^[a-z][a-z0-9_]*$`, 3-30 caracteres) porque las categorías son dinámicas (T-019): una clave bien formada que no existe responde **200 `[]`**, no 400. Un formato inválido (mayúsculas, guiones, operadores) sigue respondiendo 400 `validacion`.
+
 La documentación interactiva vive en **`/docs`** (OpenAPI de FastAPI). Es la fuente de verdad del contrato: si no aparece bien ahí, el endpoint no está terminado.
 
 Los seis endpoints de `/analitica` aceptan `desde`, `hasta` y `categoria`. Las fechas son días calendario ISO `AAAA-MM-DD` en UTC y ambos extremos son inclusivos. El periodo filtra por `fecha_creacion` en abiertas, en proceso, críticas, etiquetas, aulas crónicas, carga de técnicos y tendencia; filtra por `fecha_resolucion` en resueltas y edificios. Una categoría incompatible con el alcance autorizado produce resultados vacíos o ceros, nunca amplía el alcance. Los resultados se guardan como JSON en Redis durante 300 segundos con claves separadas por endpoint, alcance y filtros; si Redis falla, la consulta autorizada se calcula en MongoDB sin caché.

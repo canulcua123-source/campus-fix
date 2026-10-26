@@ -23,4 +23,3 @@ def normalizar_tag(texto: str) -> str:
 def normalizar_tags(tags: Iterable[str]) -> list[str]:
     """Normaliza, elimina duplicados y ordena una colección de etiquetas."""
     return sorted({normalizar_tag(tag) for tag in tags})
-

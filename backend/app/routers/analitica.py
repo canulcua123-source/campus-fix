@@ -101,42 +101,50 @@ def _pipeline_aulas_cronicas(
     """Construye la ventana UTC cerrada de 30 días, intersectada con los filtros."""
     ventana = {"$gte": ahora - timedelta(days=30), "$lte": ahora}
     return [
-        {"$match": _filtro_efectivo(
-            alcance,
-            filtros,
-            "fecha_creacion",
-            {"fecha_creacion": {"$type": "date"}},
-            {"fecha_creacion": ventana},
-        )},
-        {"$project": {
-            "_id": 0,
-            "edificio": "$ubicacion.edificio",
-            "piso": "$ubicacion.piso",
-            "aula": "$ubicacion.aula",
-        }},
-        {"$group": {
-            "_id": {
-                "edificio": "$edificio",
-                "piso": "$piso",
-                "aula": "$aula",
-            },
-            "total": {"$sum": 1},
-        }},
+        {
+            "$match": _filtro_efectivo(
+                alcance,
+                filtros,
+                "fecha_creacion",
+                {"fecha_creacion": {"$type": "date"}},
+                {"fecha_creacion": ventana},
+            )
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "edificio": "$ubicacion.edificio",
+                "piso": "$ubicacion.piso",
+                "aula": "$ubicacion.aula",
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "edificio": "$edificio",
+                    "piso": "$piso",
+                    "aula": "$aula",
+                },
+                "total": {"$sum": 1},
+            }
+        },
         {"$match": {"total": {"$gte": 3}}},
         {"$sort": {"total": -1, "_id.edificio": 1, "_id.piso": 1, "_id.aula": 1}},
-        {"$project": {
-            "_id": 0,
-            "edificio": "$_id.edificio",
-            "piso": {
-                "$cond": [
-                    {"$ne": ["$_id.piso", None]},
-                    "$_id.piso",
-                    "$$REMOVE",
-                ],
-            },
-            "aula": "$_id.aula",
-            "total": 1,
-        }},
+        {
+            "$project": {
+                "_id": 0,
+                "edificio": "$_id.edificio",
+                "piso": {
+                    "$cond": [
+                        {"$ne": ["$_id.piso", None]},
+                        "$_id.piso",
+                        "$$REMOVE",
+                    ],
+                },
+                "aula": "$_id.aula",
+                "total": 1,
+            }
+        },
     ]
 
 
@@ -145,25 +153,31 @@ def _pipeline_carga_tecnicos(
     filtros: FiltrosAnalitica,
 ) -> list[dict[str, Any]]:
     return [
-        {"$match": _filtro_efectivo(
-            alcance,
-            filtros,
-            "fecha_creacion",
-            {"estado": {"$in": _ESTADOS_ACTIVOS}},
-            {"tecnico_asignado.usuario_id": {"$type": "objectId"}},
-        )},
-        {"$group": {
-            "_id": "$tecnico_asignado.usuario_id",
-            "incidencias_activas": {"$sum": 1},
-            "horas_acumuladas": {"$sum": "$horas_invertidas"},
-        }},
+        {
+            "$match": _filtro_efectivo(
+                alcance,
+                filtros,
+                "fecha_creacion",
+                {"estado": {"$in": _ESTADOS_ACTIVOS}},
+                {"tecnico_asignado.usuario_id": {"$type": "objectId"}},
+            )
+        },
+        {
+            "$group": {
+                "_id": "$tecnico_asignado.usuario_id",
+                "incidencias_activas": {"$sum": 1},
+                "horas_acumuladas": {"$sum": "$horas_invertidas"},
+            }
+        },
         {"$sort": {"incidencias_activas": -1, "horas_acumuladas": -1, "_id": 1}},
-        {"$project": {
-            "_id": 0,
-            "tecnico_id": {"$toString": "$_id"},
-            "incidencias_activas": 1,
-            "horas_acumuladas": 1,
-        }},
+        {
+            "$project": {
+                "_id": 0,
+                "tecnico_id": {"$toString": "$_id"},
+                "incidencias_activas": 1,
+                "horas_acumuladas": 1,
+            }
+        },
     ]
 
 
@@ -172,49 +186,55 @@ def _pipeline_tendencia(
     filtros: FiltrosAnalitica,
 ) -> list[dict[str, Any]]:
     return [
-        {"$match": _filtro_efectivo(
-            alcance,
-            filtros,
-            "fecha_creacion",
-            {"fecha_creacion": {"$type": "date"}},
-        )},
-        {"$group": {
-            "_id": {
-                "anio": {
-                    "$year": {
-                        "date": "$fecha_creacion",
-                        "timezone": "UTC",
+        {
+            "$match": _filtro_efectivo(
+                alcance,
+                filtros,
+                "fecha_creacion",
+                {"fecha_creacion": {"$type": "date"}},
+            )
+        },
+        {
+            "$group": {
+                "_id": {
+                    "anio": {
+                        "$year": {
+                            "date": "$fecha_creacion",
+                            "timezone": "UTC",
+                        },
                     },
-                },
-                "mes": {
-                    "$month": {
-                        "date": "$fecha_creacion",
-                        "timezone": "UTC",
+                    "mes": {
+                        "$month": {
+                            "date": "$fecha_creacion",
+                            "timezone": "UTC",
+                        },
                     },
+                    "categoria": "$categoria",
                 },
-                "categoria": "$categoria",
-            },
-            "total": {"$sum": 1},
-        }},
+                "total": {"$sum": 1},
+            }
+        },
         {"$sort": {"_id.anio": 1, "_id.mes": 1, "_id.categoria": 1}},
-        {"$project": {
-            "_id": 0,
-            "periodo": {
-                "$concat": [
-                    {"$toString": "$_id.anio"},
-                    "-",
-                    {
-                        "$cond": [
-                            {"$lt": ["$_id.mes", 10]},
-                            {"$concat": ["0", {"$toString": "$_id.mes"}]},
-                            {"$toString": "$_id.mes"},
-                        ],
-                    },
-                ],
-            },
-            "categoria": "$_id.categoria",
-            "total": 1,
-        }},
+        {
+            "$project": {
+                "_id": 0,
+                "periodo": {
+                    "$concat": [
+                        {"$toString": "$_id.anio"},
+                        "-",
+                        {
+                            "$cond": [
+                                {"$lt": ["$_id.mes", 10]},
+                                {"$concat": ["0", {"$toString": "$_id.mes"}]},
+                                {"$toString": "$_id.mes"},
+                            ],
+                        },
+                    ],
+                },
+                "categoria": "$_id.categoria",
+                "total": 1,
+            }
+        },
     ]
 
 
@@ -228,33 +248,41 @@ async def por_edificio(
     alcance = filtro_alcance(usuario)
     # El periodo de este reporte se refiere a la fecha real de resolución.
     pipeline = [
-        {"$match": _filtro_efectivo(
-            alcance,
-            filtros,
-            "fecha_resolucion",
-            {"estado": {"$in": ["resuelta", "cerrada"]}},
-            {"fecha_resolucion": {"$type": "date"}},
-        )},
-        {"$project": {
-            "edificio": "$ubicacion.edificio",
-            "horas_invertidas": 1,
-            # milisegundos → horas con decimales ($dateDiff solo cuenta cambios de hora completos)
-            "horas_resolucion": {"$divide": [{"$subtract": ["$fecha_resolucion", "$fecha_creacion"]}, 3600000]},
-        }},
-        {"$group": {
-            "_id": "$edificio",
-            "total": {"$sum": 1},
-            "horas_invertidas": {"$sum": "$horas_invertidas"},
-            "horas_resolucion_prom": {"$avg": "$horas_resolucion"},
-        }},
+        {
+            "$match": _filtro_efectivo(
+                alcance,
+                filtros,
+                "fecha_resolucion",
+                {"estado": {"$in": ["resuelta", "cerrada"]}},
+                {"fecha_resolucion": {"$type": "date"}},
+            )
+        },
+        {
+            "$project": {
+                "edificio": "$ubicacion.edificio",
+                "horas_invertidas": 1,
+                # milisegundos → horas con decimales ($dateDiff solo cuenta cambios de hora completos)
+                "horas_resolucion": {"$divide": [{"$subtract": ["$fecha_resolucion", "$fecha_creacion"]}, 3600000]},
+            }
+        },
+        {
+            "$group": {
+                "_id": "$edificio",
+                "total": {"$sum": 1},
+                "horas_invertidas": {"$sum": "$horas_invertidas"},
+                "horas_resolucion_prom": {"$avg": "$horas_resolucion"},
+            }
+        },
         {"$sort": {"horas_resolucion_prom": -1}},
-        {"$project": {
-            "_id": 0,
-            "edificio": "$_id",
-            "total": 1,
-            "horas_invertidas": 1,
-            "horas_resolucion_prom": {"$round": ["$horas_resolucion_prom", 1]},
-        }},
+        {
+            "$project": {
+                "_id": 0,
+                "edificio": "$_id",
+                "total": 1,
+                "horas_invertidas": 1,
+                "horas_resolucion_prom": {"$round": ["$horas_resolucion_prom", 1]},
+            }
+        },
     ]
 
     async def calcular():
@@ -322,39 +350,49 @@ async def resumen(
         if critica:
             resultado.append({"prioridad": "critica"})
         if resolucion:
-            resultado.extend([
-                {"estado": {"$in": ["resuelta", "cerrada"]}},
-                {"fecha_resolucion": {"$type": "date"}},
-            ])
+            resultado.extend(
+                [
+                    {"estado": {"$in": ["resuelta", "cerrada"]}},
+                    {"fecha_resolucion": {"$type": "date"}},
+                ]
+            )
         if rango:
             resultado.append({"fecha_resolucion" if resolucion else "fecha_creacion": rango})
         return [{"$match": {"$and": resultado}}, {"$count": "total"}]
 
     pipeline = [
         {"$match": {"$and": partes_iniciales}},
-        {"$facet": {
-            "abiertas": condiciones("abierta"),
-            "en_proceso": condiciones("en_proceso"),
-            "criticas": condiciones(critica=True),
-            "resueltas_periodo": condiciones(resolucion=True),
-        }},
-        {"$project": {
-            "_id": 0,
-            "abiertas": {"$ifNull": [{"$arrayElemAt": ["$abiertas.total", 0]}, 0]},
-            "en_proceso": {"$ifNull": [{"$arrayElemAt": ["$en_proceso.total", 0]}, 0]},
-            "criticas": {"$ifNull": [{"$arrayElemAt": ["$criticas.total", 0]}, 0]},
-            "resueltas_periodo": {"$ifNull": [{"$arrayElemAt": ["$resueltas_periodo.total", 0]}, 0]},
-        }},
+        {
+            "$facet": {
+                "abiertas": condiciones("abierta"),
+                "en_proceso": condiciones("en_proceso"),
+                "criticas": condiciones(critica=True),
+                "resueltas_periodo": condiciones(resolucion=True),
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "abiertas": {"$ifNull": [{"$arrayElemAt": ["$abiertas.total", 0]}, 0]},
+                "en_proceso": {"$ifNull": [{"$arrayElemAt": ["$en_proceso.total", 0]}, 0]},
+                "criticas": {"$ifNull": [{"$arrayElemAt": ["$criticas.total", 0]}, 0]},
+                "resueltas_periodo": {"$ifNull": [{"$arrayElemAt": ["$resueltas_periodo.total", 0]}, 0]},
+            }
+        },
     ]
 
     async def calcular() -> dict[str, Any]:
         resultados = await _agregar(pipeline)
-        return resultados[0] if resultados else ResumenAnalitica(
-            abiertas=0,
-            en_proceso=0,
-            criticas=0,
-            resueltas_periodo=0,
-        ).model_dump()
+        return (
+            resultados[0]
+            if resultados
+            else ResumenAnalitica(
+                abiertas=0,
+                en_proceso=0,
+                criticas=0,
+                resueltas_periodo=0,
+            ).model_dump()
+        )
 
     return await cache_analitica(
         "resumen",

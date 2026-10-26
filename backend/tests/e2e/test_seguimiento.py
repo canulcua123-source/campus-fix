@@ -241,6 +241,7 @@ async def test_reabrir_dentro_7_dias(api):
 async def test_reabrir_fuera_plazo_409(api):
     inc = await api.crear_en("resuelta", "reportante_a", "infraestructura")
     vencida = datetime.now(timezone.utc) - timedelta(days=7, seconds=1)
+    vencida = vencida.replace(microsecond=vencida.microsecond // 1000 * 1000)  # Mongo guarda milisegundos
     await api.db.incidencias_campus.update_one(
         {"_id": ObjectId(inc["_id"])},
         {"$set": {"fecha_resolucion": vencida}},

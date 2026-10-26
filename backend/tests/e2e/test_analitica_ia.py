@@ -124,19 +124,13 @@ async def test_resumen_filtra_periodo(api):
         "categoria": "infraestructura",
     }
     await _limpiar_cache_analitica()
-    antes_hoy = (
-        await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))
-    ).json()
-    antes_manana = (
-        await api.c.get("/analitica/resumen", params=parametros_manana, headers=api.h("directivo"))
-    ).json()
+    antes_hoy = (await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))).json()
+    antes_manana = (await api.c.get("/analitica/resumen", params=parametros_manana, headers=api.h("directivo"))).json()
 
     await api.crear_en("resuelta")
     await _limpiar_cache_analitica()
 
-    despues_hoy = (
-        await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))
-    ).json()
+    despues_hoy = (await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))).json()
     despues_manana = (
         await api.c.get("/analitica/resumen", params=parametros_manana, headers=api.h("directivo"))
     ).json()
@@ -269,16 +263,11 @@ async def test_aulas_cronicas_detecta_3_en_30_dias(api):
     assert respuesta.status_code == 200, respuesta.text
     filas = respuesta.json()
     cronica = next(
-        fila
-        for fila in filas
-        if (fila["edificio"], fila.get("piso"), fila["aula"]) == ("T011 Crónico", 1, "101")
+        fila for fila in filas if (fila["edificio"], fila.get("piso"), fila["aula"]) == ("T011 Crónico", 1, "101")
     )
     assert cronica["total"] == 3
     assert not any(fila["edificio"] == "T011 Solo Dos" for fila in filas)
-    assert not any(
-        fila["edificio"] == "T011 Crónico" and fila.get("piso") == 2
-        for fila in filas
-    )
+    assert not any(fila["edificio"] == "T011 Crónico" and fila.get("piso") == 2 for fila in filas)
 
     coordinador = await api.c.get(
         "/analitica/aulas-cronicas",

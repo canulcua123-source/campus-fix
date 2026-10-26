@@ -88,12 +88,20 @@ def test_alerta_solo_si_costo_supera_umbral():
         "costo_estimado_usd": 1.0,
     }
     igual = construir_metricas_ia(
-        [documento], desde=INICIO, hasta=INICIO + timedelta(days=1),
-        reportes_con_foto=0, reportes_agenticos_con_foto=0, umbral_diario_usd=1.0,
+        [documento],
+        desde=INICIO,
+        hasta=INICIO + timedelta(days=1),
+        reportes_con_foto=0,
+        reportes_agenticos_con_foto=0,
+        umbral_diario_usd=1.0,
     )
     menor = construir_metricas_ia(
-        [documento], desde=INICIO, hasta=INICIO + timedelta(days=1),
-        reportes_con_foto=0, reportes_agenticos_con_foto=0, umbral_diario_usd=0.99,
+        [documento],
+        desde=INICIO,
+        hasta=INICIO + timedelta(days=1),
+        reportes_con_foto=0,
+        reportes_agenticos_con_foto=0,
+        umbral_diario_usd=0.99,
     )
     assert igual["costos"]["alerta"]["activa"] is False
     assert menor["costos"]["alerta"]["activa"] is True

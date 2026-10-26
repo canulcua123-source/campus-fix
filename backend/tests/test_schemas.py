@@ -11,7 +11,7 @@ os.environ["JWT_SECRET"] = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796
 os.environ["DOMINIO_CORREO"] = "utm.edu.mx"
 
 # La configuración de prueba debe existir antes de importar módulos que crean `settings`.
-from app.core.config import Settings  # noqa: E402
+from app.core.config import PATRON_CORREO, Settings, settings  # noqa: E402
 from app.core.errores import registrar_manejadores_errores  # noqa: E402
 from app.core.serial import a_json  # noqa: E402
 from app.main import app  # noqa: E402
@@ -33,6 +33,12 @@ BASE = {
     "ubicacion": {"edificio": "A", "piso": 1, "aula": "A-101"},
     "tags": ["red"],
 }
+
+
+@pytest.fixture(autouse=True)
+def _dominio_institucional(monkeypatch):
+    # `settings` es único por proceso: si las e2e se importaron antes, su dominio sería e2e.local.
+    monkeypatch.setattr(settings, "dominio_correo", "utm.edu.mx")
 
 
 def test_computo_valido():
@@ -183,7 +189,8 @@ def test_openapi_refleja_contratos_estrictos():
         assert esquemas[nombre]["additionalProperties"] is False
     assert esquemas["SeguimientoIn"]["properties"]["horas"]["multipleOf"] == 0.25
     assert esquemas["SeguimientoIn"]["properties"]["horas"]["maximum"] == 24
-    assert "utm\\.edu\\.mx" in esquemas["UsuarioIn"]["properties"]["correo"]["pattern"]
+    # El dominio se valida en tiempo de ejecución (DOMINIO_CORREO); el esquema publica el formato general.
+    assert esquemas["UsuarioIn"]["properties"]["correo"]["pattern"] == PATRON_CORREO
 
 
 def test_usuario_extra_devuelve_http_400_con_formato_t016():
