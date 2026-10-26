@@ -193,7 +193,7 @@ const ia = useAnalizarImagen(); ia.mutate({ imagen: comprimida, contexto })
 Respuestas: 200 `AnalisisImagen` con `cache: bool` obligatorio (`true` si reutilizó un análisis sin consumir cupo); 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global, Redis no disponible para contabilizar el cupo (falla cerrado) o error del modelo. La respuesta se valida con `respuestaAnalisisImagenSchema`. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
 
 Al crear una incidencia, `ia_sugerencia` es opcional y solo se manda si el usuario aceptó campos sugeridos.
-Su forma es `{modelo, prompt_version, confianza, accion, campos_aceptados}` y está reflejada por
+Su forma es `IASugerencia` (`{modo, modelo, version_prompt, confianza, campos_autollenados, accion?, …}`, sin `null`) y está reflejada por
 `iaSugerenciaSchema`. Consultar `/ia/analizar-imagen` nunca persiste esa estructura por sí mismo. La
 configuración administrable vive en `GET/PATCH /config/ia`; ambas rutas requieren
 `configuracion:gestionar`, por lo que no se consumen desde la pantalla de reporte.
