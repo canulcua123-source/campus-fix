@@ -185,6 +185,8 @@ export const filtrosIncidenciasSchema = z.object({
   edificio: z.string().max(60).optional(),
   /** Solo las reportadas por el usuario en sesión ("Mis reportes"). */
   propias: z.boolean().optional(),
+  /** Id del técnico asignado o `sin_asignar` (tablero del coordinador). */
+  tecnico: z.string().regex(/^([0-9a-f]{24}|sin_asignar)$/).optional(),
   limite: z.number().int().min(1).max(100).optional(),
 })
 export type FiltrosIncidencias = z.infer<typeof filtrosIncidenciasSchema>

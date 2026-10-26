@@ -60,6 +60,8 @@ Los mensajes de la API llegan en `detail` (HTTPException) o en `error`/`detalle`
 
 **Mis reportes.** `MisTickets.tsx` usa `useIncidencias({ propias: true, estado })`; el estado vive en la URL (`?estado=`) y la tarjeta reutilizable es `components/TarjetaIncidencia.tsx`.
 
+**Tablero del coordinador.** `pages/Tablero.tsx` lee `estado`, `prioridad`, `edificio` y `tecnico` de la URL y los manda a `GET /incidencias` (no filtra en cliente). El selector (`SelectorTecnico`) usa `useTecnicos(categoria)` → `GET /usuarios/tecnicos?area=` (clave `['usuarios', 'tecnicos', area]`) y `useAsignar(id)`.
+
 **Filtro por categoría.** Con categorías dinámicas, `GET /incidencias?categoria=<clave inexistente>` responde 200 con lista vacía (estado vacío en la PWA, no error). Solo un formato inválido produce 400. Toma las claves de `useCategorias` en lugar de una lista fija.
 
 **FB-08 · 400 de la API → `setError` en el campo.** `detalle[].loc` trae la ruta (`["body","detalle_especifico","computo_redes","vlan"]`). El cliente ya la convierte en `e.campos` (`{ 'detalle_especifico.vlan': 'El valor excede el máximo' }`: sin `body` ni la etiqueta de la unión, mensaje traducido por `type`; sin ruta → `_general`). Lo ideal es que Zod ya lo haya detectado antes (FB-12).
@@ -78,7 +80,7 @@ catch (e) {
 
 ## 4. TanStack Query
 
-**FB-09 · Lecturas con `useQuery`, escrituras con `useMutation`.** Nada de `useEffect` + `fetch` + `useState` para datos del servidor. Usa los hooks de `api/hooks/` (`useMe`, `useLogin`, `useLogout`, `useIncidencias(filtros)`, `useIncidencia(id)`, `useBuscar(q)`, `useCrearIncidencia`, `useSeguimiento(id)`, `useAsignar(id)`, `useTags(id)`, `useEvidencia(id)`, `useUrlEvidencia`, `useCategorias`, `useAnalitica`, `useAnalizarImagen`, `useUsuarios`, `useCrearUsuario`, `useEditarUsuario`, `useRoles`, `useCrearRol`). Si falta uno, agrégalo ahí con su `queryOptions` en `api/<recurso>.ts`. Claves estándar (centralizadas en `api/keys.ts`, objeto `claves`):
+**FB-09 · Lecturas con `useQuery`, escrituras con `useMutation`.** Nada de `useEffect` + `fetch` + `useState` para datos del servidor. Usa los hooks de `api/hooks/` (`useMe`, `useLogin`, `useLogout`, `useIncidencias(filtros)`, `useIncidencia(id)`, `useBuscar(q)`, `useCrearIncidencia`, `useSeguimiento(id)`, `useAsignar(id)`, `useTags(id)`, `useEvidencia(id)`, `useUrlEvidencia`, `useCategorias`, `useAnalitica`, `useAnalizarImagen`, `useUsuarios`, `useTecnicos`, `useCrearUsuario`, `useEditarUsuario`, `useRoles`, `useCrearRol`). Si falta uno, agrégalo ahí con su `queryOptions` en `api/<recurso>.ts`. Claves estándar (centralizadas en `api/keys.ts`, objeto `claves`):
 
 | Clave | Endpoint |
 |---|---|

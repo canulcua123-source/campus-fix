@@ -17,6 +17,7 @@ import MetricasIA from './pages/MetricasIA'
 import Perfil from './pages/Perfil'
 import Reportar from './pages/Reportar'
 import SeccionNoDisponible from './pages/SeccionNoDisponible'
+import Tablero from './pages/Tablero'
 
 // Guía visual del equipo: solo en desarrollo (Vite elimina este import en producción).
 const Estilos = import.meta.env.DEV ? lazy(() => import('./pages/Estilos')) : null
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="mis-tickets" element={<Navigate to="/mis-reportes" replace />} />
         <Route path="incidencias/:id" element={<RequirePermiso {...A['/incidencias/:id']}><DetalleIncidencia /></RequirePermiso>} />
         <Route path="bandeja" element={<RequirePermiso {...A['/bandeja']}><Bandeja /></RequirePermiso>} />
+        <Route path="tablero" element={<RequirePermiso {...A['/tablero']}><Tablero /></RequirePermiso>} />
         <Route path="buscar" element={<RequirePermiso {...A['/buscar']}><Buscar /></RequirePermiso>} />
         <Route path="dashboard" element={<RequirePermiso {...A['/dashboard']}><Dashboard /></RequirePermiso>} />
         <Route path="admin/usuarios" element={<RequirePermiso {...A['/admin/usuarios']}><AdminUsuarios /></RequirePermiso>} />

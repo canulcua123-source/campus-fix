@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
-  okSchema, rolInSchema, rolPatchSchema, rolSchema, rolesSchema, usuarioInSchema, usuarioPatchSchema, usuarioSchema, usuariosSchema,
+  okSchema, rolInSchema, rolPatchSchema, rolSchema, rolesSchema, tecnicosSchema, usuarioInSchema, usuarioPatchSchema, usuarioSchema, usuariosSchema,
   type AlcanceRol, type Rol, type RolIn, type RolPatch, type UsuarioApi, type UsuarioIn, type UsuarioPatch,
 } from '../schemas/usuario'
 import { api, validarEntrada } from './client'
@@ -21,6 +21,13 @@ export const usuariosQuery = () =>
     queryKey: claves.usuarios,
     queryFn: ({ signal }) => api('/usuarios', { signal, schema: usuariosSchema }),
     refetchOnWindowFocus: true,
+  })
+
+/** Técnicos activos que el coordinador puede asignar; `area` = categoría de la incidencia. */
+export const tecnicosQuery = (area?: string) =>
+  queryOptions({
+    queryKey: claves.tecnicos(area),
+    queryFn: ({ signal }) => api('/usuarios/tecnicos', { signal, params: { area }, schema: tecnicosSchema }),
   })
 
 export function crearUsuario(datos: UsuarioIn) {

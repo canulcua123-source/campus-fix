@@ -586,6 +586,50 @@
           }
         },
         {
+          "name": "Tablero: sin asignar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              }
+            ],
+            "description": "Tablero del coordinador (T-054): `tecnico` acepta el id del técnico asignado o `sin_asignar`; se combina con el alcance.",
+            "url": {
+              "raw": "{{base_url}}/incidencias?tecnico=sin_asignar&prioridad=alta",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "tecnico",
+                  "value": "sin_asignar"
+                },
+                {
+                  "key": "prioridad",
+                  "value": "alta"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Detalle de incidencia",
           "event": [
             {
@@ -2644,6 +2688,48 @@
           }
         },
         {
+          "name": "Técnicos asignables (coordinador)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { pm.expect(pm.response.json()).to.be.an('array'); });",
+                  "pm.test('Sin correo ni password_hash', function () { pm.response.json().forEach(function (t) { pm.expect(t).to.not.have.property('correo'); pm.expect(t).to.not.have.property('password_hash'); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              }
+            ],
+            "description": "Técnicos activos (rol con seguimiento:registrar y sin incidencias:asignar) dentro del alcance del coordinador, opcionalmente de un área. Requiere incidencias:asignar.",
+            "url": {
+              "raw": "{{base_url}}/usuarios/tecnicos?area=infraestructura",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "tecnicos"
+              ],
+              "query": [
+                {
+                  "key": "area",
+                  "value": "infraestructura"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Editar usuario",
           "event": [
             {
@@ -3165,6 +3251,116 @@
                 {
                   "key": "propias",
                   "value": "quizas"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Técnicos asignables - área inválida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/usuarios/tecnicos?area=Infra",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "tecnicos"
+              ],
+              "query": [
+                {
+                  "key": "area",
+                  "value": "Infra"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Técnicos asignables - sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/usuarios/tecnicos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "tecnicos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtro técnico inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidencias?tecnico=malo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "tecnico",
+                  "value": "malo"
                 }
               ]
             }
