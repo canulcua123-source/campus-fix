@@ -99,9 +99,24 @@ async def test_listado_filtros(api):
     assert all(d["ubicacion"]["edificio"] == "Edificio C" for d in lista)
 
 
+async def test_listado_propias(api):
+    propia = await api.crear("tecnico_infra", "infraestructura")
+    ajena = await api.crear("reportante_a", "infraestructura")
+    todas = {d["_id"] for d in await _listar(api, "tecnico_infra")}
+    assert {propia["_id"], ajena["_id"]} <= todas
+    propias = await _listar(api, "tecnico_infra", propias="true")
+    assert propia["_id"] in {d["_id"] for d in propias}
+    assert ajena["_id"] not in {d["_id"] for d in propias}
+    for d in propias:
+        assert (await api.doc(d["_id"]))["reportante"]["usuario_id"] == api.oid("tecnico_infra")
+    # Se suma al alcance: un reportante con propias=false sigue viendo solo lo suyo.
+    assert ajena["_id"] not in {d["_id"] for d in await _listar(api, "reportante_b", propias="false")}
+
+
 @pytest.mark.parametrize(
     "params",
     [
+        {"propias": "quizas"},
         {"estado": "borrado"},
         {"categoria": "Otra-Categoria"},
         {"prioridad": "maxima"},

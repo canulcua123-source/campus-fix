@@ -183,6 +183,8 @@ export const filtrosIncidenciasSchema = z.object({
   categoria: z.enum(CATEGORIAS).optional(),
   prioridad: z.enum(PRIORIDADES).optional(),
   edificio: z.string().max(60).optional(),
+  /** Solo las reportadas por el usuario en sesión ("Mis reportes"). */
+  propias: z.boolean().optional(),
   limite: z.number().int().min(1).max(100).optional(),
 })
 export type FiltrosIncidencias = z.infer<typeof filtrosIncidenciasSchema>
