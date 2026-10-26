@@ -118,7 +118,8 @@ describe('Métricas de IA T-035', () => {
       <Route path="/" element={<p>Inicio autorizado</p>} />
       <Route path="/admin/metricas-ia" element={<RequirePermiso permiso="analitica:ver" rol="admin"><MetricasIA /></RequirePermiso>} />
     </Routes></MemoryRouter></QueryClientProvider>)
-    expect(await screen.findByText('Inicio autorizado')).toBeInTheDocument()
+    // T-071: por URL sin el rol muestra «Sin acceso» en lugar de redirigir.
+    expect(await screen.findByRole('heading', { name: 'Sin acceso' })).toBeInTheDocument()
     expect(llamadas).toBe(0)
   })
 })

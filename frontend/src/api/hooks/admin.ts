@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { RolIn, UsuarioIn, UsuarioPatch } from '../../schemas/usuario'
+import type { RolIn, RolPatch, UsuarioIn, UsuarioPatch } from '../../schemas/usuario'
 import { categoriasQuery } from '../catalogos'
 import { claves } from '../keys'
-import { crearRol, crearUsuario, editarUsuario, rolesQuery, usuariosQuery } from '../usuarios'
+import { crearRol, crearUsuario, editarRol, editarUsuario, eliminarRol, rolesQuery, usuariosQuery } from '../usuarios'
 
 export function useCategorias() {
   return useQuery(categoriasQuery())
@@ -36,6 +36,22 @@ export function useCrearRol() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (datos: RolIn) => crearRol(datos),
+    onSuccess: () => qc.invalidateQueries({ queryKey: claves.roles }),
+  })
+}
+
+export function useEditarRol() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: string; datos: RolPatch }) => editarRol(id, datos),
+    onSuccess: () => qc.invalidateQueries({ queryKey: claves.roles }),
+  })
+}
+
+export function useEliminarRol() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => eliminarRol(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: claves.roles }),
   })
 }

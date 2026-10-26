@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
-  rolInSchema, rolSchema, rolesSchema, usuarioInSchema, usuarioPatchSchema, usuarioSchema, usuariosSchema,
-  type Rol, type RolIn, type UsuarioApi, type UsuarioIn, type UsuarioPatch,
+  okSchema, rolInSchema, rolPatchSchema, rolSchema, rolesSchema, usuarioInSchema, usuarioPatchSchema, usuarioSchema, usuariosSchema,
+  type AlcanceRol, type Rol, type RolIn, type RolPatch, type UsuarioApi, type UsuarioIn, type UsuarioPatch,
 } from '../schemas/usuario'
 import { api, validarEntrada } from './client'
 import { claves } from './keys'
@@ -40,6 +40,24 @@ export const rolesQuery = () =>
 
 export function crearRol(datos: RolIn) {
   return api('/roles', { method: 'POST', json: validarEntrada(rolInSchema, datos), schema: rolSchema })
+}
+
+export function editarRol(id: string, datos: RolPatch) {
+  return api(`/roles/${encodeURIComponent(id)}`, { method: 'PATCH', json: validarEntrada(rolPatchSchema, datos), schema: rolSchema })
+}
+
+export function eliminarRol(id: string) {
+  return api(`/roles/${encodeURIComponent(id)}`, { method: 'DELETE', schema: okSchema })
+}
+
+/**
+ * Espejo de `puede_otorgar` (backend/app/core/security.py) para roles: nadie otorga permisos que no
+ * tiene ni un alcance mayor al suyo. Solo oculta/deshabilita acciones; la API decide (403).
+ */
+export function puedeOtorgar(actor: { permisos: readonly string[]; alcance: AlcanceRol }, permisos: readonly string[], alcance: AlcanceRol): boolean {
+  if (!permisos.every((p) => actor.permisos.includes(p))) return false
+  if (actor.alcance === 'global') return true
+  return alcance === 'propio' || alcance === actor.alcance
 }
 
 /** Selectores de asignación: excluir cuentas desactivadas y roles sin permiso de seguimiento. */
