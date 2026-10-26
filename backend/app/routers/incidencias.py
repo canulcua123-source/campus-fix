@@ -260,9 +260,12 @@ async def listar_incidencias(
     ] = None,
     prioridad: Prioridad | None = None,
     edificio: Annotated[str | None, Query(max_length=60)] = None,
+    propias: Annotated[bool, Query(description="Solo las reportadas por el usuario en sesión")] = False,
     limite: Annotated[int, Query(ge=1, le=100)] = 100,
 ):
     filtro: dict[str, Any] = {}
+    if propias:
+        filtro["reportante.usuario_id"] = usuario["_id"]
     for campo, valor in (
         ("estado", estado),
         ("categoria", categoria),

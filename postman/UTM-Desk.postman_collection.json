@@ -542,6 +542,50 @@
           }
         },
         {
+          "name": "Mis reportes (propias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
+            "description": "Mis reportes (T-045): solo las incidencias reportadas por el usuario en sesión; se combina con el alcance y con los demás filtros.",
+            "url": {
+              "raw": "{{base_url}}/incidencias?propias=true&estado=abierta",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "propias",
+                  "value": "true"
+                },
+                {
+                  "key": "estado",
+                  "value": "abierta"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Detalle de incidencia",
           "event": [
             {
@@ -3084,6 +3128,44 @@
               "path": [
                 "analitica",
                 "edificios"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtro propias inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidencias?propias=quizas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "propias",
+                  "value": "quizas"
+                }
               ]
             }
           }
