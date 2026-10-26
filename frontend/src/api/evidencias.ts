@@ -25,6 +25,13 @@ export interface SubidaEvidencia {
    * actualiza y retoma desde el paso que falló: sin nueva firma si ya existe y sin repetir el PUT si ya subió.
    */
   reanudar?: ReanudarSubida
+  /** Cancela la subida en curso (firma, PUT o registro). */
+  signal?: AbortSignal
+  /**
+   * Si la firma expiró (PUT 403 del bucket o registro 400 "firma expiró"), pide una nueva y repite una sola vez
+   * (FB-14.5). Desactivado por defecto: Reportar reanuda con `reanudar` y botón de reintento.
+   */
+  renovarFirmaExpirada?: boolean
 }
 
 export interface ReanudarSubida {
@@ -63,7 +70,7 @@ async function conReintentos<T>(fn: () => Promise<T>, intentos: number, esperar:
 export async function subirEvidencia(
   incidenciaId: string,
   {
-    archivo, nombre, onProgreso,
+    archivo, nombre, onProgreso, signal, renovarFirmaExpirada = false,
     intentosPut = 3, intentosRegistro = 3, esperar = esperarPorDefecto, reanudar = {},
   }: SubidaEvidencia,
 ) {
@@ -72,26 +79,49 @@ export async function subirEvidencia(
     tipo_mime: archivo.type,
     peso_bytes: archivo.size,
   })
-  if (!reanudar.firma) {
-    const f = await api(`${ruta(incidenciaId)}/firma`, { method: 'POST', json: firma, schema: firmaEvidenciaOutSchema })
-    reanudar.firma = { evidenciaId: f.evidencia_id, uploadUrl: f.upload_url }
-    reanudar.subido = false
-  }
-  const { evidenciaId, uploadUrl } = reanudar.firma
-  if (!reanudar.subido) {
-    try {
-      await conReintentos(() => subirArchivoFirmado(uploadUrl, archivo, firma.tipo_mime, onProgreso), intentosPut, esperar)
-      reanudar.subido = true
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 403) reanudar.firma = undefined // firma vencida: el próximo intento firma de nuevo
-      throw e
+  // Objeto (no `let`) para que TypeScript no estreche la etapa que actualiza `intento()`.
+  const progreso: { etapa: 'firma' | 'put' | 'registro' } = { etapa: 'firma' }
+
+  async function intento() {
+    progreso.etapa = 'firma'
+    if (!reanudar.firma) {
+      const f = await api(`${ruta(incidenciaId)}/firma`, { method: 'POST', json: firma, schema: firmaEvidenciaOutSchema, signal })
+      reanudar.firma = { evidenciaId: f.evidencia_id, uploadUrl: f.upload_url }
+      reanudar.subido = false
     }
+    const { evidenciaId, uploadUrl } = reanudar.firma
+    progreso.etapa = 'put'
+    if (!reanudar.subido) {
+      try {
+        await conReintentos(
+          () => subirArchivoFirmado(uploadUrl, archivo, firma.tipo_mime, onProgreso, undefined, signal),
+          intentosPut,
+          esperar,
+        )
+        reanudar.subido = true
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 403) reanudar.firma = undefined // firma vencida: el próximo intento firma de nuevo
+        throw e
+      }
+    }
+    progreso.etapa = 'registro'
+    return conReintentos(
+      () => api(ruta(incidenciaId), { method: 'POST', json: { evidencia_id: evidenciaId }, schema: evidenciaRegistradaSchema, signal }),
+      intentosRegistro,
+      esperar,
+    )
   }
-  return conReintentos(
-    () => api(ruta(incidenciaId), { method: 'POST', json: { evidencia_id: evidenciaId }, schema: evidenciaRegistradaSchema }),
-    intentosRegistro,
-    esperar,
-  )
+
+  try {
+    return await intento()
+  } catch (e) {
+    const vencida = e instanceof ApiError && ((progreso.etapa === 'put' && e.status === 403) || (progreso.etapa === 'registro' && e.status === 400))
+    if (!renovarFirmaExpirada || !vencida || signal?.aborted) throw e
+    // Firma expirada: se repite una sola vez desde el paso 1.
+    reanudar.firma = undefined
+    reanudar.subido = false
+    return intento()
+  }
 }
 
 /** URL de lectura (caduca en 5 min, FB-15): pedirla al abrir y no cachearla. */

@@ -89,3 +89,29 @@ describe('subirEvidencia: reanudar desde el paso que falló', () => {
     expect(pasos(f)).toEqual({ firmas: 2, puts: 2, registros: 1 })
   })
 })
+
+describe('subirEvidencia: renovación de firma expirada (T-048)', () => {
+  it('con renovarFirmaExpirada pide una nueva firma una sola vez si el bucket responde 403', async () => {
+    const f = simularFetch(firma, put(403), firma, putOk, registro(201))
+    await expect(subirEvidencia('inc1', { archivo: archivo(), esperar: sinEspera, renovarFirmaExpirada: true })).resolves.toEqual(REGISTRADA)
+    expect(pasos(f)).toEqual({ firmas: 2, puts: 2, registros: 1 })
+  })
+
+  it('renueva una sola vez: un segundo 403 se reporta', async () => {
+    const f = simularFetch(firma, put(403), firma, put(403))
+    await expect(subirEvidencia('inc1', { archivo: archivo(), esperar: sinEspera, renovarFirmaExpirada: true })).rejects.toMatchObject({ status: 403 })
+    expect(pasos(f)).toEqual({ firmas: 2, puts: 2, registros: 0 })
+  })
+
+  it('repite desde la firma si el registro responde 400 (firma expirada)', async () => {
+    const f = simularFetch(firma, putOk, registro(400), firma, putOk, registro(201))
+    await expect(subirEvidencia('inc1', { archivo: archivo(), esperar: sinEspera, renovarFirmaExpirada: true })).resolves.toEqual(REGISTRADA)
+    expect(pasos(f)).toEqual({ firmas: 2, puts: 2, registros: 2 })
+  })
+
+  it('no renueva si la firma la niega la API (403 de permisos en el paso 1)', async () => {
+    const f = simularFetch(() => respuesta(403, { error: 'sin_permiso' }))
+    await expect(subirEvidencia('inc1', { archivo: archivo(), esperar: sinEspera, renovarFirmaExpirada: true })).rejects.toMatchObject({ status: 403 })
+    expect(pasos(f).firmas).toBe(1)
+  })
+})

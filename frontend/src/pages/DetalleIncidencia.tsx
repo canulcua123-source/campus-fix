@@ -4,6 +4,7 @@ import { ApiError } from '../api/client'
 import { useIncidencia, useRetirar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { GaleriaEvidencias } from '../components/GaleriaEvidencias'
+import { SubirEvidencia } from '../components/SubirEvidencia'
 import { FormSeguimiento } from '../components/FormSeguimiento'
 import { Timeline } from '../components/Timeline'
 import { EditorTags } from '../components/EditorTags'
@@ -159,6 +160,9 @@ export default function DetalleIncidencia() {
           )}
         </h2>
         <GaleriaEvidencias incidenciaId={detalle._id} evidencias={detalle.evidencias_adjuntas} />
+        {usuario?.permisos.includes('evidencias:subir') && (
+          <SubirEvidencia incidenciaId={detalle._id} cantidad={detalle.evidencias_adjuntas.length} />
+        )}
       </Card>
 
       <Card como="section" className="mt-3">
