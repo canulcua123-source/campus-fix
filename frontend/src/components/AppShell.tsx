@@ -10,8 +10,8 @@ import { OfflineBanner } from './OfflineBanner'
 import { UpdatePrompt } from './UpdatePrompt'
 
 /** Barra inferior (< 1024 px). `estatica` la pinta en el flujo (para /_estilos). */
-export function NavegacionMovil({ permisos, estatica = false }: { permisos: readonly string[]; estatica?: boolean }) {
-  const { movil } = navegacionPara(permisos)
+export function NavegacionMovil({ permisos, rol, estatica = false }: { permisos: readonly string[]; rol?: string; estatica?: boolean }) {
+  const { movil } = navegacionPara(permisos, rol)
   return (
     <nav className={clsx('tabbar nav-chrome', estatica && 'tabbar--estatica')} aria-label="Navegación principal">
       {movil.map((i) =>
@@ -91,16 +91,18 @@ function BuscadorGlobal() {
 /** Menú lateral (≥ 1024 px). */
 export function NavegacionLateral({
   permisos,
+  rol,
   nombre,
   onSalir,
   estatica = false,
 }: {
   permisos: readonly string[]
+  rol?: string
   nombre?: string
   onSalir?: () => void
   estatica?: boolean
 }) {
-  const { lateral, puedeReportar } = navegacionPara(permisos)
+  const { lateral, puedeReportar } = navegacionPara(permisos, rol)
   return (
     <aside className={clsx('sidebar nav-chrome', estatica && 'sidebar--estatica')} aria-label="Menú lateral">
       <div className="sidebar__marca">
@@ -141,7 +143,7 @@ export function AppShell() {
 
   return (
     <div className="lg:flex">
-      <NavegacionLateral permisos={permisos} nombre={usuario?.nombre} onSalir={salir} />
+      <NavegacionLateral permisos={permisos} rol={usuario?.rol} nombre={usuario?.nombre} onSalir={salir} />
       <div className="min-w-0 flex-1">
         <OfflineBanner />
         <header className="topbar nav-chrome flex flex-wrap items-center gap-2">
@@ -153,7 +155,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-      <NavegacionMovil permisos={permisos} />
+      <NavegacionMovil permisos={permisos} rol={usuario?.rol} />
       <UpdatePrompt />
     </div>
   )
