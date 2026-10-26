@@ -10,6 +10,7 @@ import { analizarImagen } from '../api/ia'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import { SugerenciaIA } from '../components/SugerenciaIA'
+import { Button, Card, Skeleton } from '../components/ui'
 import type { RespuestaIA } from '../schemas/ia'
 import {
   CATEGORIAS, PRIORIDADES, incidenciaSchema,
@@ -54,6 +55,9 @@ export default function Reportar() {
   const [analizando, setAnalizando] = useState(false)
   const [ia, setIa] = useState<RespuestaIA | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  const [contexto, setContexto] = useState('')
+  const [criticaPendiente, setCriticaPendiente] = useState(false)
+  const [camposIA, setCamposIA] = useState<string[]>([])
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const [tagsTexto, setTagsTexto] = useState('')
   const [creada, setCreada] = useState<IncidenciaCreada | null>(null)
@@ -116,6 +120,27 @@ export default function Reportar() {
     setPaso('formulario')
   }
 
+  /** Aborta la petición en curso (no gasta más cupo) y deja el formulario manual. */
+  function continuarSinIA() {
+    cancelarAnalisis()
+    setCriticaPendiente(false)
+    setAviso('Continúas sin IA. Completa el formulario manualmente.')
+  }
+
+  function confirmarCritica() {
+    setValue('prioridad', 'critica', { shouldDirty: true })
+    setCriticaPendiente(false)
+  }
+
+  const marcaIA = (campo: Parameters<typeof sinEditar>[0]) =>
+    camposIA.includes(campo) && sinEditar(campo)
+      ? (
+        <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-panel-2 px-2 py-0.5 text-xs font-semibold text-brand">
+          <Sparkles size={12} aria-hidden /> Sugerido por IA
+        </span>
+      )
+      : null
+
   function abrirCamara() {
     entrada.current?.click()
   }
@@ -127,6 +152,8 @@ export default function Reportar() {
     operacionIA.current = control
     setAnalizando(true)
     setAviso(null)
+    setCriticaPendiente(false)
+    setCamposIA([])
     setPaso('formulario')
     try {
       const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
@@ -136,23 +163,36 @@ export default function Reportar() {
       if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
       vistaUrl.current = URL.createObjectURL(comprimida)
       setVista(vistaUrl.current)
-      const sugerencia = await analizarImagen({ imagen: comprimida }, { signal: control.signal })
+      const sugerencia = await analizarImagen({ imagen: comprimida, contexto: contexto.trim() || undefined }, { signal: control.signal })
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setIa(sugerencia)
       // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
       if (sugerencia.accion_asistida === 'autollenar' || sugerencia.accion_asistida === 'sugerir') {
         const analisis = sugerencia.analisis
-        if (sinEditar('titulo')) setValue('titulo', analisis.titulo.slice(0, 120))
-        if (sinEditar('descripcion')) setValue('descripcion', analisis.descripcion)
-        // "critica" nunca se autollena: el usuario debe elegirla explícitamente.
-        if (sinEditar('prioridad')) setValue('prioridad', analisis.prioridad_sugerida === 'critica' ? 'alta' : analisis.prioridad_sugerida)
+        const rellenados: string[] = []
+        if (sinEditar('titulo')) {
+          setValue('titulo', analisis.titulo.slice(0, 120))
+          rellenados.push('titulo')
+        }
+        if (sinEditar('descripcion')) {
+          setValue('descripcion', analisis.descripcion)
+          rellenados.push('descripcion')
+        }
+        // "critica" nunca se autollena: se deja "alta" y se pide confirmación explícita.
+        if (sinEditar('prioridad')) {
+          setValue('prioridad', analisis.prioridad_sugerida === 'critica' ? 'alta' : analisis.prioridad_sugerida)
+          setCriticaPendiente(analisis.prioridad_sugerida === 'critica')
+          rellenados.push('prioridad')
+        }
         if (sinEditar('tags')) {
           const tags = analisis.tags.map(normalizarTag)
           setValue('tags', tags)
           setTagsTexto(tags.join(', '))
+          rellenados.push('tags')
         }
         if (analisis.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) {
           cambiarCategoria(analisis.categoria)
+          rellenados.push('detalle_especifico')
           if (analisis.categoria === 'infraestructura' && analisis.detalle_infra) {
             setValue('detalle_especifico', {
               categoria: 'infraestructura',
@@ -164,6 +204,7 @@ export default function Reportar() {
             })
           }
         }
+        setCamposIA(rellenados)
       }
     } catch {
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
@@ -244,6 +285,16 @@ export default function Reportar() {
         <h1 className="titulo-pagina">Reportar</h1>
         <div className="card flex flex-col items-center gap-4 py-10 text-center">
           <p className="m-0 text-muted">Toma una foto del problema y la IA te ayudará a llenar el reporte.</p>
+          <label className="etiqueta w-full max-w-xs text-left" htmlFor="contexto">Contexto para la IA (opcional)</label>
+          <textarea
+            id="contexto"
+            className="w-full max-w-xs"
+            rows={2}
+            maxLength={500}
+            value={contexto}
+            placeholder="Ej. el proyector no enciende desde ayer"
+            onChange={(e) => setContexto(e.target.value)}
+          />
           <input ref={entrada} type="file" accept="image/*" capture="environment" hidden aria-label="Foto de la incidencia" onChange={(e) => alElegirFoto(e.target.files?.[0])} />
           <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
@@ -258,7 +309,16 @@ export default function Reportar() {
     <>
       <h1 className="titulo-pagina">Nueva incidencia</h1>
       {vista && <img src={vista} alt="Foto de la incidencia" className="mb-3 max-h-56 rounded-card object-cover" />}
-      {analizando && <p role="status" className="card mb-3 text-sm">Analizando la foto… Puedes continuar llenando el formulario.</p>}
+      {analizando && (
+        <Card role="status" className="mb-3 text-sm">
+          <p className="m-0">Analizando la foto… Puedes continuar llenando el formulario.</p>
+          <div aria-hidden className="mt-2 flex flex-col gap-2">
+            <Skeleton ancho="70%" alto={12} />
+            <Skeleton ancho="45%" alto={12} />
+          </div>
+          <Button variante="secundario" className="mt-3" onClick={continuarSinIA}>Continuar sin IA</Button>
+        </Card>
+      )}
       {aviso && <p role="status" className="card mb-3 text-sm">{aviso}</p>}
       {aulaId && aula.isPending && <p role="status" className="card mb-3 text-sm">Comprobando la ubicación del código QR…</p>}
       {aulaId && aula.isError && (
@@ -272,6 +332,18 @@ export default function Reportar() {
         </p>
       )}
       {ia && <SugerenciaIA respuesta={ia} />}
+      {criticaPendiente && (
+        <Card role="alert" className="mb-3 text-sm">
+          <p className="m-0 font-semibold">La IA sugiere prioridad crítica</p>
+          <p className="mb-3 mt-1 text-muted">
+            Crítica se reserva para riesgos de seguridad o servicios caídos. Mientras no la confirmes se usará «alta».
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={confirmarCritica}>Sí, es crítica</Button>
+            <Button variante="secundario" onClick={() => setCriticaPendiente(false)}>No, mantener alta</Button>
+          </div>
+        </Card>
+      )}
       {ia && (ia.accion_asistida === 'autollenar' || ia.accion_asistida === 'sugerir') && (
         <div className="mb-3 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-panel-2 px-3 py-1 text-xs font-semibold text-brand">
@@ -284,14 +356,14 @@ export default function Reportar() {
       )}
 
       <form onSubmit={enviarFormulario} className="card">
-        <label className="etiqueta" htmlFor="titulo">Título</label>
+        <label className="etiqueta" htmlFor="titulo">Título</label>{marcaIA('titulo')}
         <input id="titulo" {...register('titulo')} />
         <Err msg={errors.titulo?.message} />
-        <label className="etiqueta" htmlFor="descripcion">Descripción</label>
+        <label className="etiqueta" htmlFor="descripcion">Descripción</label>{marcaIA('descripcion')}
         <textarea id="descripcion" rows={4} {...register('descripcion')} />
         <Err msg={errors.descripcion?.message} />
-        <label className="etiqueta" htmlFor="prioridad">Prioridad</label>
-        <select id="prioridad" {...register('prioridad')}>
+        <label className="etiqueta" htmlFor="prioridad">Prioridad</label>{marcaIA('prioridad')}
+        <select id="prioridad" {...register('prioridad', { onChange: () => setCriticaPendiente(false) })}>
           {PRIORIDADES.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
 
@@ -305,7 +377,7 @@ export default function Reportar() {
         <input id="aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada} {...register('ubicacion.aula')} />
         <Err msg={errors.ubicacion?.aula?.message} />
 
-        <label className="etiqueta" htmlFor="categoria">Categoría</label>
+        <label className="etiqueta" htmlFor="categoria">Categoría</label>{marcaIA('detalle_especifico')}
         <select id="categoria" value={categoria} onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}>
           {CATEGORIAS.map((c) => <option key={c} value={c}>{NOMBRES_CATEGORIA[c]}</option>)}
         </select>
@@ -364,7 +436,7 @@ export default function Reportar() {
           </>
         )}
 
-        <label className="etiqueta" htmlFor="tags">Tags (separados por coma)</label>
+        <label className="etiqueta" htmlFor="tags">Tags (separados por coma)</label>{marcaIA('tags')}
         <input
           id="tags"
           value={tagsTexto}

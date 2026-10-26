@@ -111,3 +111,106 @@ describe('Reportar', () => {
     expect(screen.getByLabelText('Prioridad')).toHaveValue('alta')
   })
 })
+
+const ID_ANALISIS = '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4'
+
+function respuestaIA(prioridad: 'baja' | 'media' | 'alta' | 'critica' = 'alta') {
+  return {
+    accion: 'formulario', motivos: [], analisis_id: ID_ANALISIS, accion_asistida: 'autollenar', mensaje: 'Revisa los datos', cache: false,
+    analisis: {
+      es_incidencia_valida: true, categoria: 'computo_redes', titulo: 'Proyector no enciende',
+      descripcion: 'El proyector del aula no enciende desde ayer', prioridad_sugerida: prioridad, tags: ['proyector'],
+      campos_detectados: [], confianza: 0.9, advertencias: [],
+    },
+  }
+}
+
+describe('Reportar con IA no bloqueante (T-024)', () => {
+  it('el formulario es editable mientras la IA analiza y se puede continuar sin IA', async () => {
+    let signal: AbortSignal | undefined
+    dobles.analizarImagen.mockImplementation((_datos, opciones) => {
+      signal = opciones.signal
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      })
+    })
+    renderReportar()
+
+    seleccionarFoto()
+    await screen.findByText(/Analizando la foto/)
+    const titulo = screen.getByLabelText('Título')
+    expect(titulo).toBeEnabled()
+    await userEvent.type(titulo, 'Escrito mientras analiza')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar sin IA' }))
+
+    expect(signal?.aborted).toBe(true)
+    expect(screen.queryByText(/Analizando la foto/)).not.toBeInTheDocument()
+    expect(await screen.findByText(/Continúas sin IA/)).toBeInTheDocument()
+    expect(titulo).toHaveValue('Escrito mientras analiza')
+    expect(screen.getByRole('button', { name: 'Enviar reporte' })).toBeEnabled()
+  })
+
+  it('una prioridad crítica sugerida pide confirmación y mientras tanto queda en alta', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA('critica'))
+    renderReportar()
+
+    seleccionarFoto()
+
+    expect(await screen.findByText('La IA sugiere prioridad crítica')).toBeInTheDocument()
+    expect(screen.getByLabelText('Prioridad')).toHaveValue('alta')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sí, es crítica' }))
+
+    expect(screen.getByLabelText('Prioridad')).toHaveValue('critica')
+    expect(screen.queryByText('La IA sugiere prioridad crítica')).not.toBeInTheDocument()
+  })
+
+  it('puede rechazar la prioridad crítica o descartarla al editar la prioridad', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA('critica'))
+    renderReportar()
+
+    seleccionarFoto()
+    await screen.findByText('La IA sugiere prioridad crítica')
+    await userEvent.click(screen.getByRole('button', { name: 'No, mantener alta' }))
+    expect(screen.queryByText('La IA sugiere prioridad crítica')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Prioridad')).toHaveValue('alta')
+  })
+
+  it('editar la prioridad a mano descarta la confirmación pendiente', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA('critica'))
+    renderReportar()
+
+    seleccionarFoto()
+    await screen.findByText('La IA sugiere prioridad crítica')
+    await userEvent.selectOptions(screen.getByLabelText('Prioridad'), 'media')
+
+    expect(screen.queryByText('La IA sugiere prioridad crítica')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Prioridad')).toHaveValue('media')
+  })
+
+  it('envía el contexto opcional del usuario al análisis', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+
+    await userEvent.type(screen.getByLabelText('Contexto para la IA (opcional)'), 'El proyector se apaga solo')
+    seleccionarFoto()
+
+    await waitFor(() => expect(dobles.analizarImagen).toHaveBeenCalled())
+    expect(dobles.analizarImagen.mock.calls[0][0]).toMatchObject({ contexto: 'El proyector se apaga solo' })
+  })
+
+  it('marca los campos sugeridos por la IA y retira la marca al editarlos', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+    const antes = screen.getAllByText('Sugerido por IA').length
+    expect(antes).toBeGreaterThan(0)
+
+    await userEvent.type(screen.getByLabelText('Título'), ' corregido')
+
+    expect(screen.getAllByText('Sugerido por IA')).toHaveLength(antes - 1)
+  })
+})
