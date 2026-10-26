@@ -4,6 +4,7 @@ import { ApiError } from '../client'
 import { subirEvidencia, urlEvidenciaQuery, type SubidaEvidencia } from '../evidencias'
 import {
   agregarTags, asignar, buscarQuery, crearIncidencia, incidenciaQuery, incidenciasQuery, quitarTags, registrarSeguimiento,
+  retirarIncidencia,
 } from '../incidencias'
 import { claves } from '../keys'
 
@@ -57,6 +58,22 @@ export function useAsignar(id: string) {
   return useMutation({
     mutationFn: (datos: AsignacionIn) => asignar(id, datos),
     onSuccess: invalidar,
+    onError: (e) => esConflicto(e) && invalidar(),
+  })
+}
+
+export function useRetirar(id: string) {
+  const qc = useQueryClient()
+  const invalidar = useInvalidarIncidencia(id)
+  return useMutation({
+    mutationFn: () => retirarIncidencia(id),
+    onSuccess: () => {
+      qc.setQueryData(claves.incidencia(id), (actual: unknown) => {
+        if (!actual || typeof actual !== 'object') return actual
+        return { ...actual, estado: 'retirada', puede_retirar: false }
+      })
+      invalidar()
+    },
     onError: (e) => esConflicto(e) && invalidar(),
   })
 }

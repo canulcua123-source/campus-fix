@@ -6,7 +6,8 @@ import { z } from 'zod'
  */
 
 export const PRIORIDADES = ['baja', 'media', 'alta', 'critica'] as const
-export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
+export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada', 'retirada'] as const
+export const ESTADOS_SEGUIMIENTO = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
 export const CATEGORIAS = ['computo_redes', 'infraestructura', 'academico'] as const
 export const TIPOS_DANO = ['filtracion', 'electrico', 'climatizacion', 'cerrajeria', 'luminaria', 'otro'] as const
 export const RIESGOS = ['bajo', 'medio', 'alto'] as const
@@ -15,6 +16,7 @@ export const TIPOS_MIME_EVIDENCIA = ['image/jpeg', 'image/png', 'image/webp', 'a
 
 export type Categoria = (typeof CATEGORIAS)[number]
 export type Estado = (typeof ESTADOS)[number]
+export type EstadoSeguimiento = (typeof ESTADOS_SEGUIMIENTO)[number]
 export type Prioridad = (typeof PRIORIDADES)[number]
 export type TipoMimeEvidencia = (typeof TIPOS_MIME_EVIDENCIA)[number]
 
@@ -25,6 +27,7 @@ export const TRANSICIONES: Record<Estado, readonly Estado[]> = {
   en_espera: ['en_proceso'],
   resuelta: ['cerrada', 'en_proceso'],
   cerrada: [],
+  retirada: [],
 }
 
 export const LIMITES = {
@@ -113,9 +116,10 @@ export type IncidenciaIn = IncidenciaForm
 
 /** SeguimientoIn (PATCH /incidencias/{id}/seguimiento). */
 export const seguimientoSchema = z.object({
-  estado_nuevo: z.enum(ESTADOS, 'Selecciona el nuevo estado'),
+  estado_nuevo: z.enum(ESTADOS_SEGUIMIENTO, 'Selecciona el nuevo estado'),
   comentario: z.string('Requerido').min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres'),
-  horas: z.number('Indica las horas').min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas'),
+  horas: z.number('Indica las horas').finite().min(0, 'No puede ser negativo').max(24, 'Máximo 24 horas')
+    .multipleOf(0.25, 'Usa incrementos de 0.25 horas'),
 })
 export type SeguimientoIn = z.infer<typeof seguimientoSchema>
 
@@ -229,6 +233,7 @@ export const incidenciaDetalleSchema = incidenciaListaItemSchema.omit({ score: t
   fecha_actualizacion: fecha.optional(),
   fecha_resolucion: fecha.optional(),
   schema_version: z.number().optional(),
+  puede_retirar: z.boolean().default(false),
 })
 export type IncidenciaDetalle = z.infer<typeof incidenciaDetalleSchema>
 
@@ -250,4 +255,6 @@ export const evidenciaRegistradaSchema = okSchema.extend({ evidencia_id: z.strin
 export const urlEvidenciaSchema = z.object({ url: z.string(), expira_en: z.number() })
 
 // Compatibilidad: el análisis de imagen vive en schemas/ia.ts.
-export { analisisImagenSchema, type AnalisisImagen } from './ia'
+export {
+  analisisImagenSchema, respuestaAnalisisImagenSchema, type AnalisisImagen, type RespuestaAnalisisImagen,
+} from './ia'

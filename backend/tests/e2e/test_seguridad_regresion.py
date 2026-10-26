@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.main import app
 from app.routers import ia as ia_router
 
-from .test_analitica_ia import ANALISIS
+from .test_analitica_ia import ANALISIS, _imagen_png
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
@@ -32,6 +32,7 @@ async def _gestor_area(api) -> dict:
                 {
                     "clave": "gestor_area",
                     "nombre": "Gestor de área",
+                    "descripcion": "Rol e2e",
                     "permisos": PERMISOS_GESTOR,
                     "alcance": "area",
                     "sistema": False,
@@ -39,6 +40,7 @@ async def _gestor_area(api) -> dict:
                 {
                     "clave": "lector_area",
                     "nombre": "Lector de área",
+                    "descripcion": "Rol e2e",
                     "permisos": ["incidencias:ver"],
                     "alcance": "area",
                     "sistema": False,
@@ -206,9 +208,9 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
     monkeypatch.setattr(settings, "ia_limite_diario", 2)
     u = await api.usuario_temporal()
 
+    # Imágenes distintas: con caché por imagen, repetir la misma no consumiría cupo.
     def archivos(numero: int):
-        datos = b"\xff\xd8\xff" + bytes([numero]) + b"0" * 100
-        return {"imagen": ("f.jpg", io.BytesIO(datos), "image/jpeg")}
+        return {"imagen": ("f.png", io.BytesIO(_imagen_png(200 + numero, 200)), "image/png")}
 
     for numero in range(2):
         assert (await api.c.post("/ia/analizar-imagen", files=archivos(numero), headers=_h(u))).status_code == 200

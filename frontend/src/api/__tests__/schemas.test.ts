@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { analisisImagenSchema } from '../../schemas/ia'
+import {
+  adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema, respuestaAnalisisImagenSchema,
+} from '../../schemas/ia'
 import {
   evidenciaFirmaSchema, evidenciaSchema, incidenciaSchema, normalizarTag, seguimientoSchema, tagsSchema,
 } from '../../schemas/incidencia'
-import { rolInSchema, usuarioInSchema, usuarioPatchSchema } from '../../schemas/usuario'
+import { loginSchema, rolInSchema, usuarioInSchema, usuarioPatchSchema } from '../../schemas/usuario'
 
 const base = {
   titulo: 'Sin red en lab',
@@ -101,7 +103,10 @@ describe('limites iguales a pydantic (IncidenciaIn)', () => {
 describe('otras entradas espejo de pydantic', () => {
   it('SeguimientoIn: horas 0..24, comentario 5..1000', () => {
     const s = (c: Obj) => seguimientoSchema.safeParse({ estado_nuevo: 'en_proceso', comentario: 'Revisado', horas: 1, ...c }).success
-    expect([s({ horas: 0 }), s({ horas: 24 }), s({ horas: 24.5 }), s({ horas: -0.5 }), s({ horas: 1.5 })]).toEqual([true, true, false, false, true])
+    expect([s({ horas: 0 }), s({ horas: 0.25 }), s({ horas: 1.75 }), s({ horas: 24 }), s({ horas: 24.25 })])
+      .toEqual([true, true, true, true, false])
+    expect([s({ horas: -0.25 }), s({ horas: 0.1 }), s({ horas: 1.1 }), s({ horas: 2.3 }), s({ horas: Number.POSITIVE_INFINITY })])
+      .toEqual([false, false, false, false, false])
     expect([s({ comentario: 'x'.repeat(5) }), s({ comentario: 'x'.repeat(4) }), s({ comentario: 'x'.repeat(1001) })]).toEqual([true, false, false])
     expect(s({ estado_nuevo: 'reabierta' })).toBe(false)
   })
@@ -127,24 +132,57 @@ describe('otras entradas espejo de pydantic', () => {
     expect(rolInSchema.safeParse({ ...rol, clave: 'Jefe' }).success).toBe(false)
     expect(rolInSchema.safeParse({ ...rol, permisos: ['incidencias:ver', 'incidencias:ver'] }).success).toBe(false)
     expect(rolInSchema.safeParse({ ...rol, permisos: [] }).success).toBe(false)
-    const u = { nombre: 'Ana', correo: 'Ana@UTM.mx', password: 'x'.repeat(10), rol: 'tecnico' }
-    expect(usuarioInSchema.parse(u).correo).toBe('ana@utm.mx')
-    // Pydantic valida el patrón antes del strip: con espacios alrededor también falla allá
-    expect(usuarioInSchema.safeParse({ ...u, correo: ' ana@utm.mx' }).success).toBe(false)
+    const u = { nombre: 'Ana', correo: 'Ana@UTM.EDU.MX', password: 'x'.repeat(10), rol: 'tecnico' }
+    expect(usuarioInSchema.parse(u).correo).toBe('ana@utm.edu.mx')
+    expect(usuarioInSchema.parse({ ...u, correo: ' ANA@UTM.EDU.MX ' }).correo).toBe('ana@utm.edu.mx')
+    expect(usuarioInSchema.safeParse({ ...u, correo: 'ana@externo.edu.mx' }).success).toBe(false)
+    expect(usuarioInSchema.safeParse({ ...u, correo: 'ana@evilutm.edu.mx' }).success).toBe(false)
     expect(usuarioInSchema.safeParse({ ...u, password: 'x'.repeat(9) }).success).toBe(false)
     expect(usuarioPatchSchema.safeParse({ areas: ['computo_redes', 'academico', 'infraestructura', 'computo_redes'] }).success).toBe(false)
+    expect(usuarioInSchema.safeParse({ ...u, extra: true }).success).toBe(false)
+    expect(usuarioPatchSchema.safeParse({ nombre: 'Ana', extra: true }).success).toBe(false)
+    expect(rolInSchema.safeParse({ ...rol, extra: true }).success).toBe(false)
+    expect(loginSchema.parse({ correo: ' ANA@UTM.EDU.MX ', password: 'secreto' }).correo).toBe('ana@utm.edu.mx')
+    expect(loginSchema.safeParse({ correo: 'ana@externo.edu.mx', password: 'secreto' }).success).toBe(false)
+    expect(loginSchema.safeParse({ correo: 'ana@utm.edu.mx', password: 'secreto', extra: true }).success).toBe(false)
   })
 })
 
 describe('respuesta de IA (AnalisisImagen, extra=forbid)', () => {
   const ia = {
     es_incidencia_valida: true, categoria: 'no_determinada', titulo: 't', descripcion: 'd', prioridad_sugerida: 'baja',
-    tags: [], campos_detectados: [{ nombre: 'ip', valor: '10.0.0.1' }], confianza: 0.8, advertencias: [], cache: false,
+    tags: [], campos_detectados: [{ nombre: 'ip', valor: '10.0.0.1' }], confianza: 0.8, advertencias: [],
   }
   it('acepta válida y rechaza confianza fuera de 0..1 o campos extra', () => {
     expect(analisisImagenSchema.safeParse(ia).success).toBe(true)
-    expect(analisisImagenSchema.safeParse({ ...ia, cache: undefined }).success).toBe(false)
+    expect(analisisImagenSchema.safeParse({ ...ia, cache: false }).success).toBe(false)
+    expect(respuestaAnalisisImagenSchema.safeParse({ ...ia, cache: true }).success).toBe(true)
+    expect(respuestaAnalisisImagenSchema.safeParse(ia).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, confianza: 1.1 }).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, extra: 1 }).success).toBe(false)
+  })
+})
+
+describe('contratos T-038 sin datos personales', () => {
+  const coincidencia = {
+    accion: 'duplicado',
+    coincidencia_id: 'A'.repeat(43),
+    codigo: 'INC-2026-INF-0001',
+    categoria: 'infraestructura',
+    reportado_hace_minutos: 10,
+    adhesiones: 0,
+  }
+
+  it('acepta solo la respuesta publica de coincidencia', () => {
+    expect(posibleDuplicadoSchema.safeParse(coincidencia).success).toBe(true)
+    expect(posibleDuplicadoSchema.safeParse({ ...coincidencia, reportante: 'Ana' }).success).toBe(false)
+    expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'A'.repeat(43) }).success).toBe(true)
+    expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'corta' }).success).toBe(false)
+  })
+
+  it('valida la respuesta idempotente de adhesion', () => {
+    const adhesion = { ok: true, codigo: coincidencia.codigo, categoria: coincidencia.categoria, adhesiones: 1, registrada: true }
+    expect(adhesionSchema.safeParse(adhesion).success).toBe(true)
+    expect(adhesionSchema.safeParse({ ...adhesion, usuario_id: 'interno' }).success).toBe(false)
   })
 })

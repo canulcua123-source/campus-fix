@@ -11,7 +11,11 @@ _ENV = {
     "MONGODB_ADMIN_URI": "",
     "MONGODB_DB": "utm_desk_test",
     "REDIS_URL": "redis://localhost:6379/15",
+    "DOMINIO_CORREO": "e2e.local",
     "JWT_SECRET": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "REFRESH_COOKIE_SECURE": "false",
+    "REFRESH_COOKIE_SAMESITE": "lax",
+    "LIMITE_REFRESH": "100000/minute",
     "R2_ACCOUNT_ID": "test",
     "R2_ACCESS_KEY_ID": "test",
     "R2_SECRET_ACCESS_KEY": "test",
@@ -62,14 +66,36 @@ async def entorno():
 
     from app.core import db as core_db
     from app.main import app
-    from scripts.init_db import asegurar_coleccion, crear_indices, esquema_incidencias, sembrar_base
+    from scripts.init_db import (
+        asegurar_coleccion,
+        crear_indices,
+        esquema_adhesiones_reportes,
+        esquema_aulas,
+        esquema_categorias,
+        esquema_coincidencias_duplicados,
+        esquema_huellas_reportes,
+        esquema_ia_eventos,
+        esquema_incidencias,
+        esquema_roles,
+        esquema_usuarios,
+        sembrar_base,
+    )
 
     cliente = AsyncMongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=3000)
     await cliente.drop_database(settings.mongodb_db)
     tdb = cliente[settings.mongodb_db]
     await asegurar_coleccion(tdb, "incidencias_campus", esquema_incidencias())
-    for nombre in ("usuarios", "roles", "categorias"):
-        await asegurar_coleccion(tdb, nombre)
+    for nombre, validador in (
+        ("usuarios", esquema_usuarios()),
+        ("roles", esquema_roles()),
+        ("categorias", esquema_categorias()),
+        ("aulas", esquema_aulas()),
+        ("huellas_reportes", esquema_huellas_reportes()),
+        ("coincidencias_duplicados", esquema_coincidencias_duplicados()),
+        ("adhesiones_reportes", esquema_adhesiones_reportes()),
+        ("ia_eventos", esquema_ia_eventos()),
+    ):
+        await asegurar_coleccion(tdb, nombre, validador)
     await crear_indices(tdb)
     admin = await sembrar_base(tdb)
     usuarios = await sembrar_usuarios(tdb, admin)
