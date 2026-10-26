@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { configIaPatchSchema, configIaSchema } from '../../schemas/config'
 import {
   adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema, respuestaIaSchema,
 } from '../../schemas/ia'
@@ -207,5 +208,20 @@ describe('ia_sugerencia (IASugerencia, extra=forbid, sin null)', () => {
     expect(iaSugerenciaSchema.safeParse({ ...ok, correo: 'x@utm.edu.mx' }).success).toBe(false)
     expect(iaSugerenciaSchema.safeParse({ ...ok, campos_autollenados: ['titulo', 'titulo'] }).success).toBe(false)
     expect(iaSugerenciaSchema.safeParse({ ...ok, confianza: 1.2 }).success).toBe(false)
+  })
+})
+
+describe('configuración de IA (ConfigIA, extra=forbid)', () => {
+  const config = {
+    habilitada: true, limite_diario_usuario: 20, limite_diario_global: 300, modo_agentico_habilitado: false,
+    categorias_agenticas: ['infraestructura'], cupo_agentico_usuario_diario: 10, cupo_agentico_aula_hora: 3,
+  }
+  it('acepta la configuración y rechaza extras, repetidos y cupos fuera de rango', () => {
+    expect(configIaSchema.safeParse(config).success).toBe(true)
+    expect(configIaSchema.safeParse({ ...config, extra: 1 }).success).toBe(false)
+    expect(configIaSchema.safeParse({ ...config, categorias_agenticas: ['academico', 'academico'] }).success).toBe(false)
+    expect(configIaSchema.safeParse({ ...config, cupo_agentico_aula_hora: 0 }).success).toBe(false)
+    expect(configIaPatchSchema.safeParse({}).success).toBe(false)
+    expect(configIaPatchSchema.safeParse({ modo_agentico_habilitado: true }).success).toBe(true)
   })
 })

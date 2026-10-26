@@ -708,6 +708,15 @@ def esquema_incidencias() -> dict:
     }
 
 
+# Kill switch apagado por defecto hasta que existan G5/G7/G8 (T17/T18/T22).
+CONFIG_AGENTICA_INICIAL = {
+    "modo_agentico_habilitado": False,
+    "categorias_agenticas": ["infraestructura"],
+    "cupo_agentico_usuario_diario": 10,
+    "cupo_agentico_aula_hora": 3,
+}
+
+
 def esquema_configuracion_ia() -> dict:
     return {
         "$jsonSchema": {
@@ -718,6 +727,10 @@ def esquema_configuracion_ia() -> dict:
                 "habilitada",
                 "limite_diario_usuario",
                 "limite_diario_global",
+                "modo_agentico_habilitado",
+                "categorias_agenticas",
+                "cupo_agentico_usuario_diario",
+                "cupo_agentico_aula_hora",
                 "fecha_actualizacion",
             ],
             "additionalProperties": False,
@@ -727,6 +740,15 @@ def esquema_configuracion_ia() -> dict:
                 "habilitada": {"bsonType": "bool"},
                 "limite_diario_usuario": {"bsonType": "int", "minimum": 1, "maximum": 1000},
                 "limite_diario_global": {"bsonType": "int", "minimum": 1, "maximum": 100000},
+                "modo_agentico_habilitado": {"bsonType": "bool"},
+                "categorias_agenticas": {
+                    "bsonType": "array",
+                    "maxItems": 3,
+                    "uniqueItems": True,
+                    "items": {"enum": ["computo_redes", "infraestructura", "academico"]},
+                },
+                "cupo_agentico_usuario_diario": {"bsonType": "int", "minimum": 1, "maximum": 100},
+                "cupo_agentico_aula_hora": {"bsonType": "int", "minimum": 1, "maximum": 100},
                 "fecha_actualizacion": {"bsonType": "date"},
             },
         }
@@ -955,10 +977,24 @@ async def sembrar_base(db) -> dict:
                 "habilitada": settings.ia_habilitada,
                 "limite_diario_usuario": settings.ia_limite_diario,
                 "limite_diario_global": settings.ia_limite_global_diario,
+                **CONFIG_AGENTICA_INICIAL,
                 "fecha_actualizacion": datetime.now(timezone.utc),
             }
         },
         upsert=True,
+    )
+    # Documentos creados antes de T-034: agrega los campos agénticos que falten en una sola actualización
+    # (el validador exige todos a la vez) sin tocar los valores ya configurados.
+    await db.configuracion_ia.update_one(
+        {"_id": "ia", "modo_agentico_habilitado": {"$exists": False}},
+        [
+            {
+                "$set": {
+                    campo: {"$ifNull": [f"${campo}", {"$literal": valor}]}
+                    for campo, valor in CONFIG_AGENTICA_INICIAL.items()
+                }
+            }
+        ],
     )
     admin = await db.usuarios.find_one({"correo": "admin@utm.local"})
     if admin is None:

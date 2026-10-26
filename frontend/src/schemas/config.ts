@@ -1,10 +1,18 @@
 import { z } from 'zod'
 
+export const CATEGORIAS_AGENTICAS = ['computo_redes', 'infraestructura', 'academico'] as const
+
 /** Espejo de backend/app/schemas/config.py para GET/PATCH /config/ia. */
 export const configIaSchema = z.strictObject({
   habilitada: z.boolean(),
   limite_diario_usuario: z.number().int().min(1).max(1000),
   limite_diario_global: z.number().int().min(1).max(100000),
+  /** Kill switch del modo agéntico (apagado por defecto). */
+  modo_agentico_habilitado: z.boolean(),
+  categorias_agenticas: z.array(z.enum(CATEGORIAS_AGENTICAS)).max(3)
+    .refine((v) => new Set(v).size === v.length, 'No repitas categorías'),
+  cupo_agentico_usuario_diario: z.number().int().min(1).max(100),
+  cupo_agentico_aula_hora: z.number().int().min(1).max(100),
 })
 export type ConfigIA = z.infer<typeof configIaSchema>
 
