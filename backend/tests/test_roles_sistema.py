@@ -1,32 +1,67 @@
-from app.schemas.rol import CATALOGO_PERMISOS
-from scripts.init_db import roles_sistema
+import os
 
+os.environ.setdefault(
+    "JWT_SECRET",
+    "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+)
 
-# Expectativa independiente tomada de la tabla 3.3 del catálogo de permisos.
-PERMISOS_TABLA_3_3 = {
-    "reportante": {"incidencias:crear", "incidencias:ver", "evidencias:subir", "ia:usar"},
+from app.routers.roles import router as roles_router  # noqa: E402
+from app.schemas.rol import CATALOGO_PERMISOS, RolIn  # noqa: E402
+from scripts.init_db import esquema_roles, roles_sistema  # noqa: E402
+
+PERMISOS_ESPERADOS = {
+    "reportante": {
+        "incidencias:crear",
+        "incidencias:ver",
+        "evidencias:subir",
+        "ia:usar",
+    },
     "tecnico": {
         "incidencias:crear",
         "incidencias:ver",
-        "incidencias:buscar",
         "evidencias:subir",
+        "ia:usar",
         "seguimiento:registrar",
         "tags:gestionar",
-        "ia:usar",
+        "incidencias:buscar",
     },
     "coordinador": {
         "incidencias:crear",
         "incidencias:ver",
-        "incidencias:asignar",
-        "incidencias:buscar",
         "evidencias:subir",
+        "ia:usar",
         "seguimiento:registrar",
         "tags:gestionar",
+        "incidencias:buscar",
+        "incidencias:asignar",
         "analitica:ver",
-        "ia:usar",
     },
-    "directivo": {"incidencias:ver", "incidencias:buscar", "analitica:ver"},
+    "directivo": {
+        "incidencias:ver",
+        "incidencias:buscar",
+        "analitica:ver",
+    },
     "admin": set(CATALOGO_PERMISOS),
+}
+
+ALCANCES_ESPERADOS = {
+    "reportante": "propio",
+    "tecnico": "area",
+    "coordinador": "area",
+    "directivo": "global",
+    "admin": "global",
+}
+
+PERMISOS_ESCRITURA = {
+    "incidencias:crear",
+    "incidencias:asignar",
+    "evidencias:subir",
+    "seguimiento:registrar",
+    "tags:gestionar",
+    "usuarios:gestionar",
+    "roles:gestionar",
+    "categorias:gestionar",
+    "ia:usar",
 }
 
 
@@ -35,52 +70,50 @@ def _por_clave() -> dict[str, dict]:
 
 
 def test_permisos_igual_tabla_3_3():
-    reales = {clave: set(rol["permisos"]) for clave, rol in _por_clave().items()}
-    diferencias = {}
-    for clave in PERMISOS_TABLA_3_3.keys() | reales.keys():
-        esperados = PERMISOS_TABLA_3_3.get(clave, set())
-        actuales = reales.get(clave, set())
-        if esperados != actuales:
-            diferencias[clave] = {
-                "faltan": sorted(esperados - actuales),
-                "sobran": sorted(actuales - esperados),
-            }
-    assert diferencias == {}
+    roles = roles_sistema()
+    por_clave = _por_clave()
+
+    assert len(roles) == 5
+    assert set(por_clave) == set(PERMISOS_ESPERADOS)
+
+    catalogo = set(CATALOGO_PERMISOS)
+    for clave, esperados in PERMISOS_ESPERADOS.items():
+        permisos = por_clave[clave]["permisos"]
+        assert len(permisos) == len(set(permisos)), clave
+        assert set(permisos) <= catalogo, clave
+        assert set(permisos) == esperados, clave
 
 
 def test_alcance_por_rol():
+    assert {clave: rol["alcance"] for clave, rol in _por_clave().items()} == ALCANCES_ESPERADOS
+
+
+def test_roles_base_son_sistema_y_cumplen_contrato_t008():
+    esquema = esquema_roles()["$jsonSchema"]
+    campos_permitidos = set(esquema["properties"])
+    campos_requeridos = set(esquema["required"])
+
+    assert esquema["additionalProperties"] is False
+    for rol in roles_sistema():
+        assert rol["sistema"] is True
+        assert campos_requeridos <= set(rol)
+        assert set(rol) <= campos_permitidos
+        RolIn.model_validate({campo: rol[campo] for campo in campos_requeridos})
+
+
+def test_directivo_es_solo_lectura_y_coordinador_puede_cerrar():
     roles = _por_clave()
-    assert roles["reportante"]["alcance"] == "propio"
-    assert "incidencias:crear" in roles["reportante"]["permisos"]
-    assert "analitica:ver" not in roles["reportante"]["permisos"]
 
-    assert roles["tecnico"]["alcance"] == "area"
-    assert {"seguimiento:registrar", "tags:gestionar", "incidencias:buscar"} <= set(roles["tecnico"]["permisos"])
-    assert not {"incidencias:asignar", "usuarios:gestionar", "roles:gestionar"} & set(roles["tecnico"]["permisos"])
-
-    assert roles["coordinador"]["alcance"] == "area"
-    assert {"seguimiento:registrar", "incidencias:asignar", "analitica:ver"} <= set(roles["coordinador"]["permisos"])
-
-    assert roles["directivo"]["alcance"] == "global"
-    assert set(roles["directivo"]["permisos"]) == {
-        "incidencias:ver",
-        "incidencias:buscar",
-        "analitica:ver",
-    }
-
-    assert roles["admin"]["alcance"] == "global"
-    assert set(roles["admin"]["permisos"]) == set(CATALOGO_PERMISOS)
+    assert set(roles["directivo"]["permisos"]).isdisjoint(PERMISOS_ESCRITURA)
+    assert {"incidencias:ver", "incidencias:buscar", "analitica:ver"} == set(roles["directivo"]["permisos"])
+    assert {"seguimiento:registrar", "incidencias:asignar"} <= set(roles["coordinador"]["permisos"])
 
 
-def test_roles_sistema_tienen_identidad_unica_y_marca_inmutable():
-    primera = roles_sistema()
-    segunda = roles_sistema()
-    assert primera == segunda
-    assert len({rol["clave"] for rol in primera}) == len(primera) == 5
-    assert all(rol["sistema"] is True for rol in primera)
-    assert all(len(rol["permisos"]) == len(set(rol["permisos"])) for rol in primera)
+def test_api_roles_expone_edicion_y_eliminacion_pero_no_put():
+    metodos = set()
+    for ruta in roles_router.routes:
+        if ruta.path.startswith("/roles"):
+            metodos |= set(ruta.methods or set())
 
-
-def test_roles_sistema_no_contienen_permisos_desconocidos():
-    conocidos = set(CATALOGO_PERMISOS)
-    assert all(set(rol["permisos"]) <= conocidos for rol in roles_sistema())
+    assert {"GET", "POST", "PATCH", "DELETE"} <= metodos
+    assert "PUT" not in metodos

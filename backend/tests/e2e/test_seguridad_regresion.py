@@ -32,6 +32,7 @@ async def _gestor_area(api) -> dict:
                 {
                     "clave": "gestor_area",
                     "nombre": "Gestor de área",
+                    "descripcion": "Rol e2e",
                     "permisos": PERMISOS_GESTOR,
                     "alcance": "area",
                     "sistema": False,
@@ -39,6 +40,7 @@ async def _gestor_area(api) -> dict:
                 {
                     "clave": "lector_area",
                     "nombre": "Lector de área",
+                    "descripcion": "Rol e2e",
                     "permisos": ["incidencias:ver"],
                     "alcance": "area",
                     "sistema": False,
