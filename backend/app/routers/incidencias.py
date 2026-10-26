@@ -225,7 +225,7 @@ async def crear_incidencia(
     }
     if datos.ia_sugerencia is not None:
         doc["ia_sugerencia"] = datos.ia_sugerencia.model_dump(exclude_none=True)
-    for intento in range(3):
+    for _intento in range(3):
         vigente = await get_db().categorias.find_one(
             {
                 "clave": categoria,

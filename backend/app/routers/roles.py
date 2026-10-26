@@ -28,7 +28,7 @@ async def crear_rol(datos: RolIn, usuario: Annotated[dict, Depends(require_permi
     try:
         res = await get_db().roles.insert_one(doc)
     except DuplicateKeyError:
-        raise HTTPException(409, "Ya existe un rol con esa clave")
+        raise HTTPException(409, "Ya existe un rol con esa clave") from None
     doc["_id"] = res.inserted_id
     await registrar_auditoria(
         actor=usuario,
@@ -85,7 +85,7 @@ async def editar_rol(
     try:
         resultado = await get_db().roles.update_one({"_id": oid, "sistema": {"$ne": True}}, {"$set": cambios})
     except DuplicateKeyError:
-        raise HTTPException(409, "Ya existe un rol con esa clave")
+        raise HTTPException(409, "Ya existe un rol con esa clave") from None
     if resultado.matched_count == 0:
         raise await _fallo_sin_coincidencia(oid)
     actualizado = await get_db().roles.find_one({"_id": oid})

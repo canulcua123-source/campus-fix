@@ -110,7 +110,7 @@ async def get_usuario_actual(
         payload = decodificar_token(cred.credentials)
         oid = ObjectId(payload["sub"])
     except Exception:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido o expirado")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido o expirado") from None
     usuario = await get_db().usuarios.find_one({"_id": oid, "activo": True})
     if usuario is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no encontrado")

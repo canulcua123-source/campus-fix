@@ -134,7 +134,7 @@ async def crear(datos: UsuarioIn, usuario: Annotated[dict, Depends(require_permi
     try:
         res = await get_db().usuarios.insert_one(doc)
     except DuplicateKeyError:
-        raise HTTPException(409, "Ya existe un usuario con ese correo")
+        raise HTTPException(409, "Ya existe un usuario con ese correo") from None
     doc["_id"] = res.inserted_id
     await registrar_auditoria(
         actor=usuario,

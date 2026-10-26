@@ -33,8 +33,3 @@ ignore = [
 "app/schemas/rol.py" = ["S101"]
 # Datos demo con semilla fija (random.Random(42)): no es criptografía.
 "scripts/init_db.py" = ["S311"]
-# Deuda: `raise HTTPException` dentro de except sin `from` (B904) y variable de reintento sin usar (B007).
-"app/core/security.py" = ["B904"]
-"app/routers/roles.py" = ["B904"]
-"app/routers/usuarios.py" = ["B904"]
-"app/routers/incidencias.py" = ["B007"]
