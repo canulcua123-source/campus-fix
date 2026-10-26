@@ -29,6 +29,10 @@ export const analisisImagenSchema = z.strictObject({
 })
 export type AnalisisImagen = z.infer<typeof analisisImagenSchema>
 
+/** RespuestaAnalisisImagen: respuesta de POST /ia/analizar-imagen (`cache` = reutilizó un análisis sin consumir cupo). */
+export const respuestaAnalisisImagenSchema = analisisImagenSchema.extend({ cache: z.boolean() })
+export type RespuestaAnalisisImagen = z.infer<typeof respuestaAnalisisImagenSchema>
+
 const categoriaSchema = z.string().regex(/^[a-z][a-z0-9_]{2,29}$/)
 const coincidenciaIdSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

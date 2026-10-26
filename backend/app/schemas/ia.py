@@ -37,6 +37,12 @@ class AnalisisImagen(BaseModel):
     advertencias: list[str]
 
 
+class RespuestaAnalisisImagen(AnalisisImagen):
+    """Respuesta del endpoint, incluyendo el origen del análisis."""
+
+    cache: bool
+
+
 class IASugerencia(BaseModel):
     """Metadatos no personales que T-029/T-036 deben guardar de una sugerencia validada."""
 

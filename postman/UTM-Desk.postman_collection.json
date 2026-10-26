@@ -1624,7 +1624,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Estructura de análisis', function () { const j = pm.response.json(); pm.expect(j.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.titulo).to.be.a('string'); pm.expect(j.prioridad_sugerida).to.be.a('string'); pm.expect(j.tags).to.be.an('array'); pm.expect(j.confianza).to.be.within(0,1); });"
+                  "pm.test('Estructura de análisis', function () { const j = pm.response.json(); pm.expect(j.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.titulo).to.be.a('string'); pm.expect(j.prioridad_sugerida).to.be.a('string'); pm.expect(j.tags).to.be.an('array'); pm.expect(j.confianza).to.be.within(0,1); pm.expect(j.cache).to.be.a('boolean'); });"
                 ]
               }
             }
@@ -1638,7 +1638,7 @@
                 "description": "Token JWT"
               }
             ],
-            "description": "Multipart: campo imagen (archivo) y contexto (opcional). Adjunta un archivo antes de enviar.",
+            "description": "Multipart: campo imagen (archivo) y contexto (opcional). Adjunta un archivo antes de enviar. La respuesta indica con cache si el análisis se reutilizó.",
             "url": {
               "raw": "{{base_url}}/ia/analizar-imagen",
               "host": [

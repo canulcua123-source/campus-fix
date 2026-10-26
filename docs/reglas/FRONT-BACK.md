@@ -190,7 +190,7 @@ const ia = useAnalizarImagen(); ia.mutate({ imagen: comprimida, contexto })
 // ❌ headers: { 'Content-Type': 'multipart/form-data' }   → falta el boundary, 400
 ```
 
-Respuestas: 200 `AnalisisImagen`; 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global o error del modelo. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
+Respuestas: 200 `AnalisisImagen` con `cache: bool` obligatorio (`true` si reutilizó un análisis sin consumir cupo); 400 formato/tamaño; 429 límite diario; 503 IA apagada, sin cupo global, Redis no disponible para contabilizar el cupo (falla cerrado) o error del modelo. La respuesta se valida con `respuestaAnalisisImagenSchema`. En 429 y 503 se sigue con el formulario manual (RF-IA-05). La PWA nunca llama a la API de Anthropic directamente.
 
 ## 8. CORS, service worker y fechas
 

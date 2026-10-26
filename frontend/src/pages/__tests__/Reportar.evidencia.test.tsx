@@ -27,6 +27,7 @@ const SUGERENCIA = {
   campos_detectados: [],
   confianza: 0.9,
   advertencias: [],
+  cache: false,
 }
 
 function renderReportar() {

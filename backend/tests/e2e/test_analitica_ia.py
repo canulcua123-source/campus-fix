@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
 import pytest
+import pytest_asyncio
 from bson import ObjectId
 from PIL import Image
 from redis.exceptions import RedisError
@@ -11,7 +12,7 @@ import app.routers.ia as ia_router
 from app.core import cache as cache_core
 from app.core.config import settings
 from app.core.db import get_redis
-from app.schemas.ia import AnalisisImagen
+from app.schemas.ia import AnalisisImagen, RespuestaAnalisisImagen
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
@@ -427,6 +428,14 @@ def _imagen_png(ancho=200, alto=200):
 PNG = _imagen_png()
 
 
+@pytest_asyncio.fixture(autouse=True, loop_scope="session")
+async def limpiar_estado_ia(api):
+    redis = get_redis()
+    claves = [clave async for clave in redis.scan_iter(match="ia:*")]
+    if claves:
+        await redis.delete(*claves)
+
+
 @pytest.fixture
 def ia_falsa(monkeypatch):
     llamadas = []
@@ -450,8 +459,54 @@ async def test_ia_ok(api, ia_falsa):
     r = await _post(api, contexto="pasillo del edificio A")
     assert r.status_code == 200, r.text
     assert r.json()["categoria"] == "infraestructura"
-    AnalisisImagen.model_validate(r.json())
+    assert r.json()["cache"] is False
+    RespuestaAnalisisImagen.model_validate(r.json())
     assert ia_falsa == [(len(PNG), "image/png", "pasillo del edificio A")]
+
+
+async def test_ia_cache_hit_no_consume_cupo(api, ia_falsa):
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+
+    primera = await _post(api, contexto="  pasillo   del edificio A ")
+    cupos_tras_miss = await redis.mget(*claves_cupo)
+    segunda = await _post(api, contexto="pasillo del edificio A")
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json()["cache"] is False
+    assert segunda.json()["cache"] is True
+    assert ia_falsa == [(len(PNG), "image/png", "pasillo del edificio A")]
+    assert cupos_tras_miss == await redis.mget(*claves_cupo) == ["1", "1"]
+    claves_cache = [clave async for clave in redis.scan_iter(match="ia:cache:*")]
+    assert len(claves_cache) == 1
+    assert 0 < await redis.ttl(claves_cache[0]) <= ia_router.CACHE_TTL
+
+
+async def test_ia_cache_distinta_por_pistas(api, ia_falsa):
+    primera = await _post(api, contexto="pasillo norte")
+    segunda = await _post(api, contexto="laboratorio de redes")
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json()["cache"] is segunda.json()["cache"] is False
+    assert len(ia_falsa) == 2
+
+
+async def test_ia_clave_cache_varia_con_prompt_y_proveedor():
+    def clave(**cambios):
+        valores = {"usuario_id": "u1", "prompt_version": "v1", "proveedor": "anthropic", "modelo": "modelo"} | cambios
+        return ia_router._clave_cache(PNG, "pasillo", **valores)
+
+    claves = {clave(), clave(prompt_version="v2"), clave(proveedor="otro"), clave(usuario_id="u2")}
+    assert len(claves) == 4
+
+
+async def test_ia_cache_no_se_comparte_entre_usuarios(api, ia_falsa):
+    primera = await _post(api, quien="reportante_a")
+    segunda = await _post(api, quien="tecnico_infra")
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json()["cache"] is segunda.json()["cache"] is False
+    assert len(ia_falsa) == 2
 
 
 async def test_ia_rechaza_falso_jpeg_415(api, ia_falsa):
@@ -511,11 +566,28 @@ async def test_ia_deshabilitada(api, ia_falsa, monkeypatch):
     assert ia_falsa == []
 
 
-async def test_ia_error_proveedor(api, monkeypatch):
+async def test_ia_fallo_devuelve_cupo(api, monkeypatch):
     async def falla(*a, **k):
         raise RuntimeError("anthropic caído")
 
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+    await redis.mset({claves_cupo[0]: 4, claves_cupo[1]: 7})
     monkeypatch.setattr(ia_router, "analizar_imagen", falla)
     r = await _post(api)
+
     assert r.status_code == 503
     assert "anthropic" not in r.text.lower()
+    assert await redis.mget(*claves_cupo) == ["4", "7"]
+
+
+async def test_ia_sin_redis_falla_cerrado(api, ia_falsa, monkeypatch):
+    def redis_caido():
+        raise RuntimeError("redis caído")
+
+    monkeypatch.setattr(ia_router, "get_redis", redis_caido)
+    r = await _post(api, contexto="pasillo")
+
+    # Sin Redis no se puede contabilizar el cupo: no se llama al proveedor (costo acotado).
+    assert r.status_code == 503, r.text
+    assert ia_falsa == []

@@ -10,7 +10,7 @@ import { api } from '../api/client'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import {
-  CATEGORIAS, PRIORIDADES, analisisImagenSchema, incidenciaSchema,
+  CATEGORIAS, PRIORIDADES, respuestaAnalisisImagenSchema, incidenciaSchema,
   type AnalisisImagen, type Categoria, type IncidenciaCreada, type IncidenciaForm,
 } from '../schemas/incidencia'
 
@@ -96,7 +96,7 @@ export default function Reportar() {
       setVista(URL.createObjectURL(comprimida))
       const fd = new FormData()
       fd.append('imagen', comprimida, 'incidencia.jpg')
-      const sugerencia = analisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
+      const sugerencia = respuestaAnalisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
       setIa(sugerencia)
       if (!sugerencia.es_incidencia_valida) {
         setAviso('La IA no reconoció una incidencia en la foto. Completa el formulario manualmente.')

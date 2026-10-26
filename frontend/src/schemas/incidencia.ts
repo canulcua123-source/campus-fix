@@ -255,4 +255,6 @@ export const evidenciaRegistradaSchema = okSchema.extend({ evidencia_id: z.strin
 export const urlEvidenciaSchema = z.object({ url: z.string(), expira_en: z.number() })
 
 // Compatibilidad: el análisis de imagen vive en schemas/ia.ts.
-export { analisisImagenSchema, type AnalisisImagen } from './ia'
+export {
+  analisisImagenSchema, respuestaAnalisisImagenSchema, type AnalisisImagen, type RespuestaAnalisisImagen,
+} from './ia'

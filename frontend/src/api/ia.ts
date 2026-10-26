@@ -1,6 +1,6 @@
 import {
   adhesionSchema,
-  analisisImagenSchema,
+  respuestaAnalisisImagenSchema,
   analizarImagenSchema,
   confirmarAdhesionSchema,
   type AnalizarImagenIn,
@@ -14,7 +14,7 @@ export function analizarImagen(datos: AnalizarImagenIn, nombre = 'incidencia.jpg
   const fd = new FormData()
   fd.append('imagen', imagen, nombre)
   if (contexto) fd.append('contexto', contexto)
-  return api('/ia/analizar-imagen', { method: 'POST', body: fd, timeoutMs: TIMEOUT_IA_MS, schema: analisisImagenSchema })
+  return api('/ia/analizar-imagen', { method: 'POST', body: fd, timeoutMs: TIMEOUT_IA_MS, schema: respuestaAnalisisImagenSchema })
 }
 
 /** Confirma una coincidencia ya emitida por G8; no crea una incidencia nueva. */

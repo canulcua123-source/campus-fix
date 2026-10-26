@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema } from '../../schemas/ia'
+import {
+  adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema, respuestaAnalisisImagenSchema,
+} from '../../schemas/ia'
 import {
   evidenciaFirmaSchema, evidenciaSchema, incidenciaSchema, normalizarTag, seguimientoSchema, tagsSchema,
 } from '../../schemas/incidencia'
@@ -153,6 +155,9 @@ describe('respuesta de IA (AnalisisImagen, extra=forbid)', () => {
   }
   it('acepta válida y rechaza confianza fuera de 0..1 o campos extra', () => {
     expect(analisisImagenSchema.safeParse(ia).success).toBe(true)
+    expect(analisisImagenSchema.safeParse({ ...ia, cache: false }).success).toBe(false)
+    expect(respuestaAnalisisImagenSchema.safeParse({ ...ia, cache: true }).success).toBe(true)
+    expect(respuestaAnalisisImagenSchema.safeParse(ia).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, confianza: 1.1 }).success).toBe(false)
     expect(analisisImagenSchema.safeParse({ ...ia, extra: 1 }).success).toBe(false)
   })

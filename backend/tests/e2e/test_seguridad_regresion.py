@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.main import app
 from app.routers import ia as ia_router
 
-from .test_analitica_ia import ANALISIS, PNG
+from .test_analitica_ia import ANALISIS, _imagen_png
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
@@ -207,10 +207,14 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
     monkeypatch.setattr(ia_router, "analizar_imagen", fake)
     monkeypatch.setattr(settings, "ia_limite_diario", 2)
     u = await api.usuario_temporal()
-    archivos = lambda: {"imagen": ("f.png", io.BytesIO(PNG), "image/png")}  # noqa: E731
-    for _ in range(2):
-        assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 200
-    assert (await api.c.post("/ia/analizar-imagen", files=archivos(), headers=_h(u))).status_code == 429
+
+    # Imágenes distintas: con caché por imagen, repetir la misma no consumiría cupo.
+    def archivos(numero: int):
+        return {"imagen": ("f.png", io.BytesIO(_imagen_png(200 + numero, 200)), "image/png")}
+
+    for numero in range(2):
+        assert (await api.c.post("/ia/analizar-imagen", files=archivos(numero), headers=_h(u))).status_code == 200
+    assert (await api.c.post("/ia/analizar-imagen", files=archivos(2), headers=_h(u))).status_code == 429
 
 
 async def test_cuerpo_demasiado_grande_413(api):
