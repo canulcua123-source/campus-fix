@@ -2,7 +2,7 @@ import { CircleHelp, CircleX, Sparkles, TriangleAlert } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { RespuestaIA } from '../schemas/ia'
 
-const PRESENTACION: Record<RespuestaIA['accion'], { etiqueta: string; Icono: ComponentType<{ 'aria-hidden': true }> }> = {
+const PRESENTACION: Record<RespuestaIA['accion_asistida'], { etiqueta: string; Icono: ComponentType<{ 'aria-hidden': true }> }> = {
   autollenar: { etiqueta: 'Formulario completado por IA', Icono: Sparkles },
   sugerir: { etiqueta: 'Sugerencia de IA', Icono: TriangleAlert },
   preguntar: { etiqueta: 'Necesitamos tu ayuda', Icono: CircleHelp },
@@ -10,7 +10,7 @@ const PRESENTACION: Record<RespuestaIA['accion'], { etiqueta: string; Icono: Com
 }
 
 export function SugerenciaIA({ respuesta }: { respuesta: RespuestaIA }) {
-  const { etiqueta, Icono } = PRESENTACION[respuesta.accion]
+  const { etiqueta, Icono } = PRESENTACION[respuesta.accion_asistida]
 
   return (
     <section className="card mb-3 text-sm" role="status" aria-label={etiqueta}>

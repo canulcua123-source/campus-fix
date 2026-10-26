@@ -5,6 +5,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 from typing import Annotated
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 
@@ -19,7 +20,7 @@ from app.core.imagen import (
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
-from app.schemas.ia import AnalisisImagen, EventoIAIn, EventoIAOut, RespuestaIA
+from app.schemas.ia import AnalisisImagen, DecisionAsistida, EventoIAIn, EventoIAOut, RespuestaIA
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
     CoincidenciaNoElegible,
@@ -28,6 +29,8 @@ from app.services.duplicados import (
 )
 from app.services import ia as ia_service
 from app.services.ia import PROMPT_VERSION, IAError, analizar_imagen, identidad_proveedor
+from app.services.vision.analisis_temporal import RegistroAnalisis, cargar_analisis, guardar_analisis
+from app.services.vision.compuertas import EntradaCompuertas, evaluar_compuertas, mapeo_valido
 from app.services.vision.decision import decidir
 from app.services.ia_eventos import (
     EventoIAConflictivo,
@@ -116,6 +119,64 @@ async def _consumir_cupo(redis, claves: tuple[str, str], *, limite_usuario: int,
         raise HTTPException(503, "El análisis con IA no está disponible por hoy")
 
 
+def _entrada_compuertas(analisis: AnalisisImagen, usuario: dict, ahora: datetime) -> EntradaCompuertas:
+    """Adapta el estado disponible hoy sin simular dependencias pendientes.
+
+    T17/T18 proveerán la ubicación verificada (y con ella G7, que valida el mapeo de T-032); T20, cupos y kill
+    switch; T22, duplicados. Hasta entonces esos estados no son verificables, así que el modo agéntico es
+    inalcanzable a propósito y la salida segura es ``formulario``.
+    """
+    ubicacion = None
+    return EntradaCompuertas(
+        analisis=analisis,
+        ahora=ahora,
+        ubicacion=ubicacion,
+        esquema_valido=mapeo_valido(analisis, ubicacion),
+        duplicado="no_verificable",
+        permisos=frozenset(usuario.get("_permisos", ())),
+        cupo_agentico_disponible=False,
+        modo_agentico_habilitado=False,
+    )
+
+
+def _mensaje(accion: str, asistida: DecisionAsistida) -> str:
+    if accion == "agentico":
+        return "El reporte cumple las condiciones para continuar en modo agéntico."
+    if accion == "duplicado":
+        return "Encontramos un posible reporte duplicado; confirma cómo deseas continuar."
+    return asistida.mensaje
+
+
+async def _responder(redis, usuario: dict, datos: bytes, analisis: AnalisisImagen, *, cache: bool) -> RespuestaIA:
+    """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
+    ahora = datetime.now(timezone.utc)
+    asistida = decidir(analisis, cache=cache)
+    decision = evaluar_compuertas(_entrada_compuertas(analisis, usuario, ahora))
+    respuesta = RespuestaIA(
+        accion=decision.accion,
+        motivos=list(decision.motivos),
+        analisis_id=uuid4(),
+        analisis=asistida.analisis,
+        accion_asistida=asistida.accion,
+        mensaje=_mensaje(decision.accion, asistida),
+        cache=cache,
+    )
+    registro = RegistroAnalisis(
+        usuario_id=str(usuario["_id"]),
+        imagen_sha256=hashlib.sha256(datos).hexdigest(),
+        respuesta=respuesta,
+        compuertas=decision.compuertas,
+        prompt_version=PROMPT_VERSION,
+        creado_en=ahora,
+    )
+    try:
+        await guardar_analisis(redis, registro)
+    except Exception as error:
+        # El análisis ya quedó en caché: reintentar no vuelve a costar cupo.
+        raise HTTPException(503, "El análisis temporal no está disponible") from error
+    return respuesta
+
+
 @router.post(
     "/analizar-imagen",
     response_model=RespuestaIA,
@@ -174,16 +235,19 @@ async def analizar(
         modelo=modelo,
     )
     redis = None
+    analisis_cache = None
     try:
         redis = get_redis()
         guardado = await redis.get(clave_cache)
         if guardado is not None:
             try:
-                return decidir(AnalisisImagen.model_validate_json(guardado), cache=True)
+                analisis_cache = AnalisisImagen.model_validate_json(guardado)
             except ValueError:
                 logger.warning("Entrada inválida en la caché de IA; se regenerará", exc_info=True)
     except Exception:
         logger.warning("Redis no disponible al consultar la caché de IA", exc_info=True)
+    if analisis_cache is not None:
+        return await _responder(redis, usuario, validada.datos, analisis_cache, cache=True)
 
     # Falla cerrado: si no se puede contabilizar el cupo no se llama al proveedor (el costo queda acotado).
     claves_cupo = _claves_cupo(usuario["_id"], datetime.now(timezone.utc))
@@ -218,7 +282,7 @@ async def analizar(
         await redis.set(clave_cache, analisis.model_dump_json(), ex=CACHE_TTL)
     except Exception:
         logger.warning("Redis no disponible al guardar la caché de IA", exc_info=True)
-    return decidir(analisis, cache=False)
+    return await _responder(redis, usuario, validada.datos, analisis, cache=False)
 
 
 @router.post(
@@ -293,6 +357,31 @@ async def adherirse_a_duplicado(
         raise HTTPException(404, "Coincidencia no encontrada") from exc
     except CoincidenciaNoElegible as exc:
         raise HTTPException(409, "El reporte ya no admite adhesiones") from exc
+
+
+@router.get(
+    "/analisis/{analisis_id}",
+    response_model=RespuestaIA,
+    response_model_exclude_none=True,
+    summary="Consultar un análisis temporal propio",
+    responses={
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso ia:usar"},
+        404: {"description": "Análisis inexistente, expirado o de otro usuario"},
+        503: {"description": "Redis no disponible"},
+    },
+)
+async def consultar_analisis(
+    analisis_id: UUID,
+    usuario: Annotated[dict, Depends(require_permiso("ia:usar"))],
+):
+    try:
+        registro = await cargar_analisis(get_redis(), analisis_id, str(usuario["_id"]))
+    except Exception as error:
+        raise HTTPException(503, "El análisis temporal no está disponible") from error
+    if registro is None:
+        raise HTTPException(404, "Análisis no encontrado")
+    return registro.respuesta
 
 
 __all__ = ["router", "IAError"]

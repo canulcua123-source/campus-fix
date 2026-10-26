@@ -1,6 +1,6 @@
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import UUID4, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.infraestructura import RiesgoSeguridad, TipoDano
 
@@ -55,14 +55,32 @@ class AnalisisImagen(BaseModel):
         return self
 
 
-class RespuestaIA(BaseModel):
-    """Respuesta del servidor después de aplicar las reglas de confianza."""
+AccionCompuertas = Literal["agentico", "formulario", "duplicado"]
+AccionAsistida = Literal["autollenar", "sugerir", "preguntar", "rechazar"]
+
+
+class DecisionAsistida(BaseModel):
+    """Decisión de confianza de T-030 (uso interno; se expone como accion_asistida y mensaje)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    accion: Literal["autollenar", "sugerir", "preguntar", "rechazar"]
+    accion: AccionAsistida
     mensaje: str
     analisis: AnalisisImagen
+    cache: bool
+
+
+class RespuestaIA(BaseModel):
+    """Respuesta de POST /ia/analizar-imagen: compuertas G1–G9 (accion) y decisión asistida (T-030)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accion: AccionCompuertas
+    motivos: list[str]
+    analisis_id: UUID4
+    analisis: AnalisisImagen
+    accion_asistida: AccionAsistida
+    mensaje: str
     cache: bool
 
 

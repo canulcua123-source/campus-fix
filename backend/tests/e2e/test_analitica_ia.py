@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import uuid
 import json
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
@@ -20,6 +22,7 @@ from app.core import cache as cache_core
 from app.core.db import get_redis
 from app.core.config import settings
 from app.schemas.ia import AnalisisImagen, RespuestaIA
+from app.services.vision.analisis_temporal import ANALISIS_TTL, clave_analisis
 from app.services.vision.claude import ProveedorClaude
 from app.services.vision.puerto import ErrorProveedor, error_http
 
@@ -478,8 +481,16 @@ def _error_http(status):
     return error_http(status)
 
 
-async def _post(api, quien="reportante_a", nombre="foto.png", datos=PNG, mime="image/png", contexto=None):
-    data = {"contexto": contexto} if contexto else None
+async def _post(
+    api,
+    quien="reportante_a",
+    nombre="foto.png",
+    datos=PNG,
+    mime="image/png",
+    contexto=None,
+    extra=None,
+):
+    data = {**({"contexto": contexto} if contexto else {}), **(extra or {})} or None
     return await api.c.post(
         "/ia/analizar-imagen", files={"imagen": (nombre, datos, mime)}, data=data, headers=api.h(quien)
     )
@@ -488,7 +499,9 @@ async def _post(api, quien="reportante_a", nombre="foto.png", datos=PNG, mime="i
 async def test_ia_ok(api, ia_falsa):
     r = await _post(api, contexto="pasillo del edificio A")
     assert r.status_code == 200, r.text
-    assert r.json()["accion"] == "autollenar"
+    assert r.json()["accion"] == "formulario"
+    assert r.json()["accion_asistida"] == "autollenar"
+    assert r.json()["motivos"]
     assert r.json()["mensaje"]
     assert r.json()["analisis"]["categoria"] == "infraestructura"
     assert r.json()["cache"] is False
@@ -502,7 +515,8 @@ async def test_ia_cache_conserva_decision(api, ia_falsa):
 
     assert primera.json()["cache"] is False
     assert segunda.json()["cache"] is True
-    assert segunda.json()["accion"] == primera.json()["accion"] == "autollenar"
+    assert segunda.json()["accion_asistida"] == primera.json()["accion_asistida"] == "autollenar"
+    assert segunda.json()["analisis_id"] != primera.json()["analisis_id"]
     assert len(ia_falsa) == 1
 
 
@@ -899,3 +913,85 @@ async def test_ia_capa_gratuita_bloqueada_devuelve_503_y_cupo(api, monkeypatch):
     assert r.status_code == 503
     assert await redis.mget(*claves_cupo) == ["0", "0"]
     assert isinstance(ErrorProveedor("x"), ia_service.IAError)
+
+
+# ---------- Compuertas G1–G9 y analisis_id (T-033) ----------
+
+
+async def test_cliente_no_puede_forzar_agentico(api, ia_falsa):
+    r = await _post(api, extra={"accion": "agentico", "accion_asistida": "autollenar"})
+    assert r.status_code == 200, r.text
+    assert r.json()["accion"] == "formulario"
+
+
+async def test_analisis_id_otro_usuario_404(api, ia_falsa):
+    creado = await _post(api)
+    assert creado.status_code == 200, creado.text
+    analisis_id = creado.json()["analisis_id"]
+    ruta = f"/ia/analisis/{analisis_id}"
+
+    propio = await api.c.get(ruta, headers=api.h("reportante_a"))
+    assert propio.status_code == 200
+    assert propio.json() == creado.json()
+    assert (await api.c.get(ruta)).status_code == 401
+    assert (await api.c.get(ruta, headers=api.h("directivo"))).status_code == 403
+    assert (await api.c.get("/ia/analisis/no-es-uuid", headers=api.h("reportante_a"))).status_code == 400
+
+    ajeno = await api.c.get(ruta, headers=api.h("reportante_b"))
+    inexistente = await api.c.get(f"/ia/analisis/{uuid.uuid4()}", headers=api.h("reportante_b"))
+    assert (ajeno.status_code, ajeno.json()) == (404, inexistente.json())
+
+    await get_redis().expire(clave_analisis(analisis_id), 0)
+    expirado = await api.c.get(ruta, headers=api.h("reportante_a"))
+    assert (expirado.status_code, expirado.json()) == (404, inexistente.json())
+
+
+async def test_analisis_redis_ttl_propietario_hash_y_lectura_sin_renovar(api, ia_falsa):
+    r = await _post(api)
+    analisis_id = r.json()["analisis_id"]
+    clave = clave_analisis(analisis_id)
+    redis = get_redis()
+    ttl_antes = await redis.ttl(clave)
+    crudo = await redis.get(clave)
+    registro = json.loads(crudo)
+
+    assert 0 < ttl_antes <= ANALISIS_TTL
+    assert registro["usuario_id"] == str(api.oid("reportante_a"))
+    assert registro["imagen_sha256"] == hashlib.sha256(PNG).hexdigest()
+    assert registro["prompt_version"] == ia_service.PROMPT_VERSION
+    assert len(registro["compuertas"]) == 9
+    assert registro["imagen_sha256"] not in analisis_id
+    assert PNG.hex() not in crudo
+
+    consultado = await api.c.get(f"/ia/analisis/{analisis_id}", headers=api.h("reportante_a"))
+    assert consultado.status_code == 200
+    assert 0 < await redis.ttl(clave) <= ttl_antes
+
+
+async def test_cache_hit_emite_analisis_id_nuevo(api, ia_falsa):
+    primero = (await _post(api)).json()
+    segundo = (await _post(api)).json()
+
+    assert segundo["cache"] is True
+    assert primero["analisis_id"] != segundo["analisis_id"]
+    assert len(ia_falsa) == 1
+
+
+async def test_analisis_temporal_sin_redis_503(api, ia_falsa, monkeypatch):
+    async def guardar_falla(*_a, **_k):
+        raise RedisError("sin conexión")
+
+    monkeypatch.setattr(ia_router, "guardar_analisis", guardar_falla)
+    assert (await _post(api)).status_code == 503
+
+    def redis_caido():
+        raise RuntimeError("redis caído")
+
+    monkeypatch.setattr(ia_router, "get_redis", redis_caido)
+    consulta = await api.c.get(f"/ia/analisis/{uuid.uuid4()}", headers=api.h("reportante_a"))
+    assert consulta.status_code == 503
+
+
+async def test_openapi_expone_solo_las_tres_acciones(api):
+    esquema = (await api.c.get("/openapi.json")).json()["components"]["schemas"]["RespuestaIA"]
+    assert esquema["properties"]["accion"]["enum"] == ["agentico", "formulario", "duplicado"]

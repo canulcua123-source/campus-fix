@@ -140,7 +140,7 @@ export default function Reportar() {
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setIa(sugerencia)
       // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
-      if (sugerencia.accion === 'autollenar' || sugerencia.accion === 'sugerir') {
+      if (sugerencia.accion_asistida === 'autollenar' || sugerencia.accion_asistida === 'sugerir') {
         const analisis = sugerencia.analisis
         if (sinEditar('titulo')) setValue('titulo', analisis.titulo.slice(0, 120))
         if (sinEditar('descripcion')) setValue('descripcion', analisis.descripcion)
@@ -151,7 +151,19 @@ export default function Reportar() {
           setValue('tags', tags)
           setTagsTexto(tags.join(', '))
         }
-        if (analisis.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) cambiarCategoria(analisis.categoria)
+        if (analisis.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) {
+          cambiarCategoria(analisis.categoria)
+          if (analisis.categoria === 'infraestructura' && analisis.detalle_infra) {
+            setValue('detalle_especifico', {
+              categoria: 'infraestructura',
+              tipo_dano: analisis.detalle_infra.tipo_dano,
+              // Igual que el mapeo del servidor: riesgo "alto" nunca se autollena, lo confirma la persona.
+              riesgo_seguridad: analisis.detalle_infra.riesgo_seguridad === 'alto' ? 'medio' : analisis.detalle_infra.riesgo_seguridad,
+              requiere_insumos: false,
+              requiere_contratista: false,
+            })
+          }
+        }
       }
     } catch {
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
@@ -260,7 +272,7 @@ export default function Reportar() {
         </p>
       )}
       {ia && <SugerenciaIA respuesta={ia} />}
-      {ia && (ia.accion === 'autollenar' || ia.accion === 'sugerir') && (
+      {ia && (ia.accion_asistida === 'autollenar' || ia.accion_asistida === 'sugerir') && (
         <div className="mb-3 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-panel-2 px-3 py-1 text-xs font-semibold text-brand">
             <Sparkles size={14} aria-hidden /> Sugerido por IA · confianza {Math.round(ia.analisis.confianza * 100)}%

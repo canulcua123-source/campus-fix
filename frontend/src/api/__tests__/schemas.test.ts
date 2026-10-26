@@ -161,9 +161,14 @@ describe('respuesta de IA (AnalisisImagen, extra=forbid)', () => {
   })
 
   it('valida la respuesta con acción, mensaje, análisis y caché', () => {
-    const respuesta = { accion: 'autollenar', mensaje: 'Revisa los datos', analisis: ia, cache: false }
+    const respuesta = {
+      accion: 'formulario', motivos: ['Confirma la ubicación.'], analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4',
+      analisis: ia, accion_asistida: 'autollenar', mensaje: 'Revisa los datos', cache: false,
+    }
     expect(respuestaIaSchema.safeParse(respuesta).success).toBe(true)
-    expect(respuestaIaSchema.safeParse({ ...respuesta, accion: 'ignorar' }).success).toBe(false)
+    expect(respuestaIaSchema.safeParse({ ...respuesta, accion: 'autollenar' }).success).toBe(false)
+    expect(respuestaIaSchema.safeParse({ ...respuesta, accion_asistida: 'ignorar' }).success).toBe(false)
+    expect(respuestaIaSchema.safeParse({ ...respuesta, analisis_id: 'no-opaco' }).success).toBe(false)
     expect(respuestaIaSchema.safeParse({ ...respuesta, extra: true }).success).toBe(false)
     expect(respuestaIaSchema.safeParse({ ...respuesta, cache: undefined }).success).toBe(false)
   })

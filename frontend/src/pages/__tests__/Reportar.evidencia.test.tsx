@@ -18,7 +18,7 @@ beforeAll(() => {
 vi.mock('browser-image-compression', () => ({ default: vi.fn(async (archivo: File) => archivo) }))
 
 const SUGERENCIA = {
-  accion: 'autollenar',
+  accion: 'formulario', motivos: ['Confirma la ubicación.'], analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4', accion_asistida: 'autollenar',
   mensaje: 'Completamos el formulario con la sugerencia de la IA.',
   cache: false,
   analisis: {

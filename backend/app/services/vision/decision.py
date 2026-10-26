@@ -1,7 +1,7 @@
 import unicodedata
 from collections.abc import Sequence
 
-from app.schemas.ia import AnalisisImagen, RespuestaIA
+from app.schemas.ia import AnalisisImagen, DecisionAsistida
 
 ADVERTENCIAS_DUDOSAS = ("borros", "oscur", "instruccion")
 
@@ -17,10 +17,10 @@ def decidir(
     calidad: str | Sequence[str] | None = None,
     *,
     cache: bool = False,
-) -> RespuestaIA:
+) -> DecisionAsistida:
     """Convierte un análisis validado en una acción determinista para la interfaz."""
     if not analisis.es_incidencia_valida:
-        return RespuestaIA(
+        return DecisionAsistida(
             accion="rechazar",
             mensaje="No reconocimos una incidencia en la foto. Toma otra foto del problema o llena el formulario.",
             analisis=analisis,
@@ -36,20 +36,20 @@ def decidir(
         analisis = analisis.model_copy(update={"confianza": confianza})
 
     if analisis.categoria == "no_determinada" or confianza < 0.5:
-        return RespuestaIA(
+        return DecisionAsistida(
             accion="preguntar",
             mensaje="No pudimos determinar el tipo de problema. Selecciona una categoría para continuar.",
             analisis=analisis,
             cache=cache,
         )
     if confianza < 0.8 or analisis.prioridad_sugerida == "critica":
-        return RespuestaIA(
+        return DecisionAsistida(
             accion="sugerir",
             mensaje="La IA encontró una posible incidencia. Revisa la categoría y los datos antes de enviar.",
             analisis=analisis,
             cache=cache,
         )
-    return RespuestaIA(
+    return DecisionAsistida(
         accion="autollenar",
         mensaje="Completamos el formulario con la sugerencia de la IA. Revísalo antes de enviarlo.",
         analisis=analisis,
