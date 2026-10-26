@@ -5,7 +5,7 @@ import { NavegacionLateral, NavegacionMovil } from '../components/AppShell'
 import { perfilDe } from '../components/navegacion'
 import {
   Badge, BottomSheet, Button, Card, claseCardInteractiva, EmptyState, ErrorState, ETIQUETAS, Input, PageHeader, Select,
-  Skeleton, SkeletonLista, Spinner, Textarea,
+  Segmentado, Skeleton, SkeletonLista, Spinner, Textarea,
 } from '../components/ui'
 
 /*
@@ -59,30 +59,6 @@ function Fila({ etiqueta, children }: { etiqueta: string; children: ReactNode })
     <div className="mb-4">
       <p className="mb-2 text-sm font-semibold text-muted">{etiqueta}</p>
       <div className="flex flex-wrap items-center gap-3">{children}</div>
-    </div>
-  )
-}
-
-function Segmentado<T extends string>({ etiqueta, valor, opciones, onCambio }: {
-  etiqueta: string
-  valor: T
-  opciones: { valor: T; texto: string; icono?: ReactNode }[]
-  onCambio: (v: T) => void
-}) {
-  return (
-    <div role="group" aria-label={etiqueta} className="inline-flex gap-1 rounded-input bg-panel-2 p-1">
-      {opciones.map((o) => (
-        <button
-          key={o.valor}
-          type="button"
-          aria-pressed={valor === o.valor}
-          onClick={() => onCambio(o.valor)}
-          className={`inline-flex items-center gap-1.5 rounded-input border-0 px-3 text-sm ${valor === o.valor ? 'bg-panel font-semibold text-ink shadow-sm' : 'bg-transparent text-muted'}`}
-        >
-          {o.icono}
-          {o.texto}
-        </button>
-      ))}
     </div>
   )
 }

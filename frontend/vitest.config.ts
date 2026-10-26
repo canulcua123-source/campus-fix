@@ -7,5 +7,7 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
     unstubGlobals: true,
+    // tokens.test.ts lee tokens.css con ?raw para medir contraste.
+    css: { include: [/tokens\.css/] },
   },
 })
