@@ -2,6 +2,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.infraestructura import RiesgoSeguridad, TipoDano
+
 PatronIdentificadorAnalisis = r"^[A-Za-z0-9_-]{22,64}$"
 PatronCampoIA = r"^(titulo|descripcion|prioridad|tags|detalle_especifico\.[a-z][a-z0-9_]{0,49})$"
 CompuertaIA = Literal["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"]
@@ -21,8 +23,15 @@ class CampoDetectado(BaseModel):
     valor: str
 
 
+class DetalleInfraAnalisis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tipo_dano: TipoDano
+    riesgo_seguridad: RiesgoSeguridad
+
+
 class AnalisisImagen(BaseModel):
-    """Salida estructurada de la IA. Sin defaults: todos los campos son requeridos."""
+    """Salida estructurada de la IA; detalle_infra solo aplica (y es obligatorio) en infraestructura."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -35,6 +44,15 @@ class AnalisisImagen(BaseModel):
     campos_detectados: list[CampoDetectado]
     confianza: float = Field(ge=0, le=1)
     advertencias: list[str]
+    detalle_infra: DetalleInfraAnalisis | None = None
+
+    @model_validator(mode="after")
+    def _detalle_coherente_con_categoria(self) -> Self:
+        if self.categoria == "infraestructura" and self.detalle_infra is None:
+            raise ValueError("detalle_infra es obligatorio para infraestructura")
+        if self.categoria != "infraestructura" and self.detalle_infra is not None:
+            raise ValueError("detalle_infra solo se permite para infraestructura")
+        return self
 
 
 class RespuestaIA(BaseModel):

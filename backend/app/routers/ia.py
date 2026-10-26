@@ -119,6 +119,7 @@ async def _consumir_cupo(redis, claves: tuple[str, str], *, limite_usuario: int,
 @router.post(
     "/analizar-imagen",
     response_model=RespuestaIA,
+    response_model_exclude_none=True,
     responses={
         413: {
             "description": "El archivo supera 5 MB",

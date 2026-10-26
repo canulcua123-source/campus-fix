@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { RIESGOS, TIPOS_DANO } from './infraestructura'
+
 /** Espejo de backend/app/schemas/ia.py y de POST /ia/analizar-imagen (routers/ia.py). */
 
 export const TIPOS_IMAGEN_IA = ['image/jpeg', 'image/png', 'image/webp'] as const
@@ -15,7 +17,13 @@ export const analizarImagenSchema = z.object({
 })
 export type AnalizarImagenIn = z.infer<typeof analizarImagenSchema>
 
-/** AnalisisImagen (extra="forbid": sin campos de más; todos requeridos). */
+/** DetalleInfraAnalisis: espejo de backend/app/schemas/ia.py. */
+const detalleInfraAnalisisSchema = z.strictObject({
+  tipo_dano: z.enum(TIPOS_DANO),
+  riesgo_seguridad: z.enum(RIESGOS),
+})
+
+/** AnalisisImagen (extra="forbid": sin campos de más; todos requeridos salvo detalle_infra). */
 export const analisisImagenSchema = z.strictObject({
   es_incidencia_valida: z.boolean(),
   categoria: z.enum(['computo_redes', 'infraestructura', 'academico', 'no_determinada']),
@@ -26,6 +34,15 @@ export const analisisImagenSchema = z.strictObject({
   campos_detectados: z.array(z.strictObject({ nombre: z.string(), valor: z.string() })),
   confianza: z.number().min(0).max(1),
   advertencias: z.array(z.string()),
+  /** Solo en infraestructura; el backend omite el campo (nunca null) en las demás categorías. */
+  detalle_infra: detalleInfraAnalisisSchema.optional(),
+}).superRefine((analisis, ctx) => {
+  if (analisis.categoria === 'infraestructura' && !analisis.detalle_infra) {
+    ctx.addIssue({ code: 'custom', path: ['detalle_infra'], message: 'Obligatorio para infraestructura' })
+  }
+  if (analisis.categoria !== 'infraestructura' && analisis.detalle_infra) {
+    ctx.addIssue({ code: 'custom', path: ['detalle_infra'], message: 'Solo se permite para infraestructura' })
+  }
 })
 export type AnalisisImagen = z.infer<typeof analisisImagenSchema>
 

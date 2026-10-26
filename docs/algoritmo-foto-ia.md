@@ -23,9 +23,37 @@
 |---|---|---|---|
 | `infraestructura` | `tipo_dano`, `riesgo_seguridad`, `requiere_insumos`, `requiere_contratista` | `tipo_dano`: sí (enum visual). `riesgo_seguridad`: sugerencia (y `alto` nunca solo). `requiere_*`: no; lo decide el técnico ⇒ default `false`. | **Apta para modo agéntico (fase 1).** |
 | `computo_redes` | `ip`, `vlan`, `puerto_uplink`, `equipos_afectados` | **No.** Un alumno no conoce la IP, la VLAN ni el uplink, y la foto casi nunca los muestra. | No apta hasta que (a) el catálogo de aulas traiga los datos de red del aula (se llenan desde el QR) o (b) negocio acepte que esos campos queden "pendientes de triage". **Cualquiera de las dos es un cambio de regla de negocio y requiere aprobación del PO.** |
-| `academico` | `plataforma`, `codigo_curso` (`^[A-Z]{2,4}-\d{3}$`), `periodo`, `estudiantes_impactados`, `horas` | Solo parcialmente: el código del curso podría leerse de una captura, pero ese texto es manipulable (inyección). | Queda en modo asistido. **Bug aparte:** `detalleVacio('academico')` en `Reportar.tsx:24` no incluye `horas`, que el backend exige ⇒ el formulario académico manual probablemente responde 422. |
+| `academico` | `plataforma`, `codigo_curso` (`^[A-Z]{2,4}-\d{3}$`), `periodo`, `estudiantes_impactados` | Solo parcialmente: el código del curso podría leerse de una captura, pero ese texto es manipulable (inyección). | Queda en modo asistido. (`horas` no pertenece a `DetalleAcademico`: es parte de `SeguimientoIn`; el supuesto bug de `detalleVacio('academico')` se descartó en #43.) |
 
 Además, `AnalisisImagen` no trae campos estructurados del detalle (solo `campos_detectados` libres). Para la fase 1 hay que añadir un bloque `detalle_infra: {tipo_dano, riesgo_seguridad}` con enums cerrados, para que el mapeo a `IncidenciaIn` sea determinista y no dependa de texto libre.
+
+#### Contrato v3 y mapeo de infraestructura (T16)
+
+`PROMPT_VERSION = "v3"` identifica el contrato que añade `detalle_infra` sobre las reglas de seguridad de v2 (T-030). El bloque es obligatorio cuando
+`categoria = "infraestructura"` y se omite para las demás categorías; un bloque con una categoría distinta se
+rechaza. En categorías no infraestructura el campo se omite: la respuesta HTTP usa `response_model_exclude_none` y el
+espejo Zod lo declara `.optional()` sin `.nullable()` (nunca `null`). Los enums se serializan como cadenas tanto en OpenAPI como ante el proveedor y se comparten con
+`DetalleInfra`:
+
+- `tipo_dano`: `filtracion`, `electrico`, `climatizacion`, `cerrajeria`, `luminaria`, `otro`.
+- `riesgo_seguridad`: `bajo`, `medio`, `alto`.
+
+`construir_incidencia` aplica estas tablas antes de validar un `IncidenciaIn` real:
+
+| Entrada | Salida automática |
+|---|---|
+| Cada `tipo_dano` cerrado | El mismo `tipo_dano` |
+| Riesgo `bajo` | Riesgo `bajo` |
+| Riesgo `medio` | Riesgo `medio` |
+| Riesgo `alto` | Riesgo `medio` (requiere confirmación humana para elevarlo) |
+| Prioridad `baja`, `media` o `alta` | La misma prioridad |
+| Prioridad `critica` | Prioridad `alta` (requiere confirmación humana para elevarla) |
+| Cualquier combinación | `requiere_insumos = false` y `requiere_contratista = false` |
+
+La ubicación se revalida y copia sin inferir datos de la foto. Título y descripción usan respaldos por tipo de
+daño si no alcanzan los mínimos de `IncidenciaIn`; los tags se normalizan, deduplican y acotan. El mapeo no muta
+sus entradas. La clave de la caché de análisis (T-025) incluye `PROMPT_VERSION`, por lo que una entrada `v2` no
+se reutiliza como `v3`; además, una respuesta de infraestructura sin `detalle_infra` falla la validación del contrato.
 
 ### A.1 Flujo de un toque "Reportar con IA"
 
@@ -611,7 +639,7 @@ En producción: registrar `accion` decidida vs categoría final guardada por el 
 
 | ID | Tarea | Criterios de aceptación | Pruebas obligatorias |
 |---|---|---|---|
-| T15 | Corregir `detalleVacio('academico')` (falta `horas`) en `Reportar.tsx`. | El formulario académico manual crea el ticket sin 422. | Test e2e/integración del formulario académico. |
+| T15 | ~~Corregir `detalleVacio('academico')` (falta `horas`)~~ Descartada (#43 cerrado): `horas` pertenece a `SeguimientoIn`, no a `DetalleAcademico`. | — | — |
 | T16 | Extender `AnalisisImagen` con `detalle_infra {tipo_dano, riesgo_seguridad}` (enums) + `PROMPT_VERSION=v2`; mapeo determinista `construir_incidencia(a, ubic) → IncidenciaIn`. | Para cualquier `AnalisisImagen` válido de infraestructura el mapeo produce un `IncidenciaIn` válido; `requiere_*` = `false`; `critica` y riesgo `alto` jamás salen del mapeo. | Tests de tabla del mapeo; *property test* (hypothesis) con salidas aleatorias válidas del esquema. |
 | T17 ⚑ | Catálogo `aulas` (id opaco, edificio, piso, aula) + generador de QR + ruta `/reportar?aula=` en la PWA. | Escanear el QR abre "Reportar con IA" con la ubicación fijada; id inexistente ⇒ selector; colección creada en `init_db.py`. | Pytest de `resolver_ubicacion`; test de la ruta con id válido/inválido. |
 | T18 | Recordar y confirmar ubicación (localStorage, vigencia de 4 h) + selector de una sola vez. | G5 pasa solo con QR o confirmación ≤ 4 h; el texto de la placa leído por la IA solo precarga. | Tests unitarios de la regla de vigencia; test de que `ubicacion_fuente="ia"` no satisface G5. |
