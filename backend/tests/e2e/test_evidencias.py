@@ -21,7 +21,9 @@ async def _firma(api, inc_id, quien="reportante_a", **kw):
 
 
 async def _registrar(api, inc_id, evidencia_id: str, quien="reportante_a"):
-    return await api.c.post(f"/incidencias/{inc_id}/evidencias", json={"evidencia_id": evidencia_id}, headers=api.h(quien))
+    return await api.c.post(
+        f"/incidencias/{inc_id}/evidencias", json={"evidencia_id": evidencia_id}, headers=api.h(quien)
+    )
 
 
 @pytest.mark.parametrize("mime", list(EXT))
@@ -39,10 +41,21 @@ async def test_firma_ok(api, mime):
     assert "content-length" in f["upload_url"].lower() and "content-type" in f["upload_url"].lower()
 
 
-@pytest.mark.parametrize("kw", [
-    {"mime": "image/gif"}, {"mime": "text/html"}, {"peso": 0}, {"peso": 10 * 1024 * 1024 + 1},
-    {"nombre": "../../etc/passwd"}, {"nombre": "a/b.jpg"}, {"nombre": "a\\b.jpg"}, {"nombre": "..jpg"}, {"nombre": ""},
-], ids=["gif", "html", "peso0", "peso_grande", "traversal", "slash", "backslash", "dotdot", "vacio"])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"mime": "image/gif"},
+        {"mime": "text/html"},
+        {"peso": 0},
+        {"peso": 10 * 1024 * 1024 + 1},
+        {"nombre": "../../etc/passwd"},
+        {"nombre": "a/b.jpg"},
+        {"nombre": "a\\b.jpg"},
+        {"nombre": "..jpg"},
+        {"nombre": ""},
+    ],
+    ids=["gif", "html", "peso0", "peso_grande", "traversal", "slash", "backslash", "dotdot", "vacio"],
+)
 async def test_firma_invalida_400(api, kw):
     inc = await api.crear()
     r = await _firma(api, inc["_id"], **kw)

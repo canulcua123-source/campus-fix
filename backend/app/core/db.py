@@ -1,4 +1,5 @@
 """Conexiones compartidas a MongoDB (PyMongo Async) y Redis."""
+
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 from redis.asyncio import Redis

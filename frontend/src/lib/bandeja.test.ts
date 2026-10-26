@@ -28,13 +28,34 @@ describe('Bandeja del técnico', () => {
       { ...incidencias[1], _id: 'mia', tecnico_asignado: { usuario_id: 'u1', nombre: 'Ana' } },
       { ...incidencias[2], _id: 'otra', tecnico_asignado: { usuario_id: 'u2', nombre: 'Luis' } },
     ]
-    expect(filtrarBandeja(lista, 'sin_asignar', 'Ana').map((i) => i._id)).toEqual(['sin'])
-    expect(filtrarBandeja(lista, 'mias', 'Ana').map((i) => i._id)).toEqual(['mia'])
+    expect(filtrarBandeja(lista, 'sin_asignar', 'u1').map((i) => i._id)).toEqual(['sin'])
+    expect(filtrarBandeja(lista, 'mias', 'u1').map((i) => i._id)).toEqual(['mia'])
+  })
+
+  it('mías se determina por id de usuario, no por nombre', () => {
+    const lista: IncidenciaListaItem[] = [
+      { ...incidencias[0], _id: 'homonimo', tecnico_asignado: { usuario_id: 'u2', nombre: 'Ana' } },
+      { ...incidencias[1], _id: 'mia', tecnico_asignado: { usuario_id: 'u1', nombre: 'Ana' } },
+    ]
+    expect(filtrarBandeja(lista, 'mias', 'u1').map((i) => i._id)).toEqual(['mia'])
+    expect(filtrarBandeja(lista, 'mias', undefined)).toEqual([])
+  })
+
+  it('excluye resueltas, cerradas y retiradas', () => {
+    const lista: IncidenciaListaItem[] = [
+      { ...incidencias[0], _id: 'abierta', estado: 'abierta' },
+      { ...incidencias[1], _id: 'proceso', estado: 'en_proceso' },
+      { ...incidencias[2], _id: 'espera', estado: 'en_espera' },
+      { ...incidencias[3], _id: 'resuelta', estado: 'resuelta' },
+      { ...incidencias[4], _id: 'cerrada', estado: 'cerrada' },
+      { ...incidencias[0], _id: 'retirada', estado: 'retirada' },
+    ]
+    expect(filtrarBandeja(lista, 'sin_asignar', 'u1').map((i) => i._id)).toEqual(['abierta', 'proceso', 'espera'])
   })
 
   it('estado vacío devuelve una lista vacía', () => {
-    expect(filtrarBandeja([], 'mias', 'Ana')).toEqual([])
-    expect(filtrarBandeja([], 'sin_asignar', 'Ana')).toEqual([])
+    expect(filtrarBandeja([], 'mias', 'u1')).toEqual([])
+    expect(filtrarBandeja([], 'sin_asignar', 'u1')).toEqual([])
   })
 
   it('marca la antigüedad de atención a partir de 8 h y vencida a partir de 24 h', () => {

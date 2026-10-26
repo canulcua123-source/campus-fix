@@ -1,10 +1,9 @@
 import { Inbox } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useMe } from '../api/hooks/auth'
 import { useIncidencias } from '../api/hooks/incidencias'
-import { useAuth } from '../auth/store'
-import { Badge } from '../components/Badge'
-import { EmptyState, ErrorState, Skeleton } from '../components/ui'
+import { Badge, EmptyState, ErrorState, Skeleton } from '../components/ui'
 import { antiguedad, filtrarBandeja, ordenarBandeja, type PestanaBandeja } from '../lib/bandeja'
 
 const PESTANAS: { clave: PestanaBandeja; texto: string }[] = [
@@ -16,10 +15,13 @@ const TONO_SLA = { normal: 'text-muted', atencion: 'text-warn', vencida: 'text-b
 
 export default function Bandeja() {
   const [pestana, setPestana] = useState<PestanaBandeja>('mias')
-  const { usuario } = useAuth()
-  const { data, isPending, isError, refetch, isFetching } = useIncidencias({})
+  const incidencias = useIncidencias({})
+  const me = useMe()
+  const { data, refetch, isFetching } = incidencias
+  const isPending = incidencias.isPending || me.isPending
+  const isError = incidencias.isError || me.isError
 
-  const lista = ordenarBandeja(filtrarBandeja(data ?? [], pestana, usuario?.nombre))
+  const lista = ordenarBandeja(filtrarBandeja(data ?? [], pestana, me.data?._id))
 
   return (
     <>
@@ -61,8 +63,11 @@ export default function Bandeja() {
         <ErrorState
           titulo="No pudimos cargar la bandeja"
           mensaje="Revisa tu conexión e intenta de nuevo."
-          onReintentar={() => void refetch()}
-          reintentando={isFetching}
+          onReintentar={() => {
+            void refetch()
+            void me.refetch()
+          }}
+          reintentando={isFetching || me.isFetching}
         />
       )}
 

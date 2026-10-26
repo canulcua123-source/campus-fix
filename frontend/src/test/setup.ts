@@ -26,3 +26,8 @@ if (!window.matchMedia) {
     dispatchEvent: vi.fn(),
   }))
 }
+
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function showModal() { this.open = true }
+  HTMLDialogElement.prototype.close = function close() { this.open = false }
+}

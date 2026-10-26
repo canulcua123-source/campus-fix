@@ -15,19 +15,22 @@ function instante(fecha: string): number {
   return Number.isNaN(valor) ? 0 : valor
 }
 
-/** Mías = asignadas a la persona en sesión. Sin `nombre` se consideran todas las asignadas. */
-export function esMia(incidencia: IncidenciaListaItem, nombre?: string | null): boolean {
-  const tecnico = incidencia.tecnico_asignado
-  if (!tecnico) return false
-  return !nombre || tecnico.nombre === nombre
+/** Estados que siguen requiriendo trabajo del técnico: resuelta, cerrada y retirada salen de la bandeja. */
+const ESTADOS_ACTIVOS: readonly string[] = ['abierta', 'en_proceso', 'en_espera']
+
+/** Mías = asignadas a la persona en sesión (por id de usuario, no por nombre). Sin id no hay "mías". */
+export function esMia(incidencia: IncidenciaListaItem, usuarioId?: string | null): boolean {
+  return Boolean(usuarioId) && incidencia.tecnico_asignado?.usuario_id === usuarioId
 }
 
 export function filtrarBandeja(
   incidencias: readonly IncidenciaListaItem[],
   pestana: PestanaBandeja,
-  nombre?: string | null,
+  usuarioId?: string | null,
 ): IncidenciaListaItem[] {
-  return incidencias.filter((i) => (pestana === 'mias' ? esMia(i, nombre) : !i.tecnico_asignado))
+  return incidencias
+    .filter((i) => ESTADOS_ACTIVOS.includes(i.estado))
+    .filter((i) => (pestana === 'mias' ? esMia(i, usuarioId) : !i.tecnico_asignado))
 }
 
 /** Crítica > alta > media > baja y, a igual prioridad, la más antigua primero. */
