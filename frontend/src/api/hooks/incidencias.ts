@@ -91,12 +91,24 @@ export function useTags(id: string) {
   return { agregar, quitar }
 }
 
-/** Sube una evidencia (firma → PUT → registro). `mutate({ archivo, onProgreso })`. */
-export function useEvidencia(id: string) {
+/**
+ * Sube una evidencia (firma → PUT → registro) con reintento del PUT y del registro.
+ * `useEvidencia(id).mutate({ archivo })`; si el id aún no existe (p. ej. se acaba de crear la incidencia) se pasa
+ * en la llamada: `useEvidencia().mutateAsync({ incidenciaId, archivo, reanudar })`. Reutiliza el mismo `reanudar`
+ * al reintentar para repetir solo el paso que falló.
+ */
+export function useEvidencia(id?: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (subida: SubidaEvidencia) => subirEvidencia(id, subida),
-    onSettled: () => qc.invalidateQueries({ queryKey: claves.incidencia(id) }),
+    mutationFn: ({ incidenciaId, ...subida }: SubidaEvidencia & { incidenciaId?: string }) => {
+      const destino = incidenciaId ?? id
+      if (!destino) throw new Error('Falta la incidencia a la que se adjunta la evidencia')
+      return subirEvidencia(destino, subida)
+    },
+    onSettled: (_datos, _error, variables) => {
+      const destino = variables.incidenciaId ?? id
+      if (destino) qc.invalidateQueries({ queryKey: claves.incidencia(destino) })
+    },
   })
 }
 
