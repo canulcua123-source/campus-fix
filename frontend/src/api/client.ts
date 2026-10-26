@@ -394,7 +394,11 @@ export async function subirArchivoFirmado(
   tipoMime: string,
   onProgreso?: (fraccion: number) => void,
   timeoutMs = 120_000,
+  /** Cancela la subida (rechaza con DOMException `AbortError`). */
+  signal?: AbortSignal,
 ): Promise<void> {
+  const cancelada = () => new DOMException('Subida cancelada', 'AbortError')
+  if (signal?.aborted) throw cancelada()
   const fallo = (status: number) =>
     new ApiError(
       status,
@@ -416,6 +420,14 @@ export async function subirArchivoFirmado(
       xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(fallo(xhr.status)))
       xhr.onerror = () => reject(fallo(0))
       xhr.ontimeout = () => reject(new ApiError(0, 'timeout', MENSAJE_TIMEOUT))
+      // Se rechaza al momento aunque el XHR no emita `abort` (algunos entornos no lo hacen).
+      const alCancelar = () => {
+        xhr.abort()
+        reject(cancelada())
+      }
+      xhr.onabort = () => reject(cancelada())
+      xhr.onloadend = () => signal?.removeEventListener('abort', alCancelar)
+      signal?.addEventListener('abort', alCancelar, { once: true })
       xhr.send(archivo)
     })
     onProgreso(1)
@@ -423,8 +435,11 @@ export async function subirArchivoFirmado(
   }
   let resp: Response
   try {
-    resp = await fetch(url, { method: 'PUT', headers: { 'Content-Type': tipoMime }, body: archivo, signal: AbortSignal.timeout(timeoutMs) })
+    const limite = AbortSignal.timeout(timeoutMs)
+    const senal = signal && typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, limite]) : limite
+    resp = await fetch(url, { method: 'PUT', headers: { 'Content-Type': tipoMime }, body: archivo, signal: senal })
   } catch (e) {
+    if (signal?.aborted) throw cancelada()
     if (e instanceof DOMException && e.name === 'TimeoutError') throw new ApiError(0, 'timeout', MENSAJE_TIMEOUT)
     throw fallo(0)
   }

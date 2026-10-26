@@ -168,7 +168,7 @@ PWA ──3. POST /incidencias/{id}/evidencias {evidencia_id} ──────
 4. La `upload_url` caduca en 5 min (`EXPIRA_SEGUNDOS = 300`) y la firma pendiente en 10 min (`FIRMA_TTL`); haz los 3 pasos seguidos. Una firma sirve una sola vez.
 5. Si el paso 3 responde 400 ("La evidencia no fue firmada… o la firma expiró" / "El archivo no se subió o no coincide"), se repite desde el paso 1. 409 = límite de 10 evidencias.
 
-Implementado en `subirEvidencia()` (`api/evidencias.ts`) + `subirArchivoFirmado()` (`api/client.ts`); valida con `evidenciaFirmaSchema` antes de pedir la firma.
+Implementado en `subirEvidencia()` (`api/evidencias.ts`) + `subirArchivoFirmado()` (`api/client.ts`); valida con `evidenciaFirmaSchema` antes de pedir la firma. Opciones: `signal` (cancelar la subida), `renovarFirmaExpirada` (PUT 403 o registro 400 ⇒ una sola renovación desde el paso 1) y `reanudar` (reintento manual sin repetir pasos). En el detalle lo usa `components/SubirEvidencia.tsx` (fotos procesadas con `lib/imagen.ts` o PDF; límite 10, progreso real del PUT por XHR).
 
 ```ts
 // ✅ en una pantalla
