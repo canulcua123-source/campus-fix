@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import imageCompression from 'browser-image-compression'
 import { Camera, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
@@ -11,6 +10,8 @@ import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import { SugerenciaIA } from '../components/SugerenciaIA'
 import { Button, Card, Skeleton } from '../components/ui'
+import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
+import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
 import type { RespuestaIA } from '../schemas/ia'
 import {
   CATEGORIAS, PRIORIDADES, incidenciaSchema,
@@ -51,7 +52,7 @@ export default function Reportar() {
   const vistaUrl = useRef<string | null>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
-  const [foto, setFoto] = useState<File | null>(null)
+  const [foto, setFoto] = useState<Blob | null>(null)
   const [analizando, setAnalizando] = useState(false)
   const [ia, setIa] = useState<RespuestaIA | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
@@ -156,14 +157,15 @@ export default function Reportar() {
     setCamposIA([])
     setPaso('formulario')
     try {
-      const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
+      // Orientación EXIF + derivados JPEG sin metadatos (lib/imagen.ts); en un worker si se puede.
+      const derivados = await procesarFotoEnSegundoPlano(archivo)
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
-      setFoto(comprimida)
+      setFoto(derivados.evidencia)
       progresoFoto.current = {}
       if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
-      vistaUrl.current = URL.createObjectURL(comprimida)
+      vistaUrl.current = URL.createObjectURL(derivados.miniatura)
       setVista(vistaUrl.current)
-      const sugerencia = await analizarImagen({ imagen: comprimida, contexto: contexto.trim() || undefined }, { signal: control.signal })
+      const sugerencia = await analizarImagen({ imagen: derivados.ia, contexto: contexto.trim() || undefined }, { signal: control.signal })
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setIa(sugerencia)
       // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
@@ -206,9 +208,11 @@ export default function Reportar() {
         }
         setCamposIA(rellenados)
       }
-    } catch {
+    } catch (e) {
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
-      setAviso('No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
+      setAviso(e instanceof ErrorImagen
+        ? `${e.message} Puedes llenar el formulario sin foto.`
+        : 'No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
     } finally {
       if (montado.current && operacionIA.current === control) {
         operacionIA.current = null
@@ -295,7 +299,7 @@ export default function Reportar() {
             placeholder="Ej. el proyector no enciende desde ayer"
             onChange={(e) => setContexto(e.target.value)}
           />
-          <input ref={entrada} type="file" accept="image/*" capture="environment" hidden aria-label="Foto de la incidencia" onChange={(e) => alElegirFoto(e.target.files?.[0])} />
+          <input ref={entrada} type="file" accept={ACCEPT_FOTO} capture="environment" hidden aria-label="Foto de la incidencia" onChange={(e) => alElegirFoto(e.target.files?.[0])} />
           <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
           </button>

@@ -15,7 +15,9 @@ beforeAll(() => {
   URL.revokeObjectURL = vi.fn()
 })
 
-vi.mock('browser-image-compression', () => ({ default: vi.fn(async (archivo: File) => archivo) }))
+vi.mock('../../lib/fotoEnSegundoPlano', () => ({
+  procesarFotoEnSegundoPlano: vi.fn(async (archivo: File) => ({ evidencia: archivo, ia: archivo, miniatura: archivo, ancho: 1, alto: 1 })),
+}))
 
 const SUGERENCIA = {
   accion: 'formulario', motivos: ['Confirma la ubicación.'], analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4', accion_asistida: 'autollenar',

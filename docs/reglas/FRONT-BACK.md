@@ -181,7 +181,7 @@ evidencia.mutate({ archivo, onProgreso: (f) => setProgreso(f) })   // firma → 
 
 ## 7. IA
 
-**FB-16 · Análisis de foto:** `POST /ia/analizar-imagen` en `multipart/form-data` con el campo **`imagen`** (JPEG/PNG/WebP, ≤ 5 MB) y opcional **`contexto`** (texto ≤ 500 caracteres, p. ej. lo que escribió el usuario). Comprime antes en el celular (`browser-image-compression`, 1568 px, 1.5 MB, JPEG, como hace `Reportar.tsx`). Usa `api()` con `body: FormData` y **sin** `Content-Type` manual (el navegador agrega el `boundary`).
+**FB-16 · Análisis de foto:** `POST /ia/analizar-imagen` en `multipart/form-data` con el campo **`imagen`** (JPEG/PNG/WebP, ≤ 5 MB) y opcional **`contexto`** (texto ≤ 500 caracteres, p. ej. lo que escribió el usuario). Procesa antes en el celular con `procesarFotoEnSegundoPlano()` (`lib/fotoEnSegundoPlano.ts` → `lib/imagen.ts`): manda el derivado `ia` (1280 px, JPEG q 0.80, ≤ 1.5 MB, sin EXIF) y sube como evidencia el derivado `evidencia` (2048 px, q 0.85), como hace `Reportar.tsx`. Usa `api()` con `body: FormData` y **sin** `Content-Type` manual (el navegador agrega el `boundary`).
 
 ```ts
 // ✅

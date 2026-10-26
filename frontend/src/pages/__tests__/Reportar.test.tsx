@@ -6,15 +6,16 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
+import { ErrorImagen } from '../../lib/imagen'
 import Reportar from '../Reportar'
 
 const dobles = vi.hoisted(() => ({
   analizarImagen: vi.fn(),
-  comprimir: vi.fn(),
+  procesarFoto: vi.fn(),
 }))
 
 vi.mock('../../api/ia', () => ({ analizarImagen: dobles.analizarImagen }))
-vi.mock('browser-image-compression', () => ({ default: dobles.comprimir }))
+vi.mock('../../lib/fotoEnSegundoPlano', () => ({ procesarFotoEnSegundoPlano: dobles.procesarFoto }))
 
 function renderReportar() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -29,13 +30,37 @@ function seleccionarFoto() {
 
 beforeEach(() => {
   dobles.analizarImagen.mockReset()
-  dobles.comprimir.mockReset()
-  dobles.comprimir.mockImplementation(async (archivo: File) => archivo)
+  dobles.procesarFoto.mockReset()
+  dobles.procesarFoto.mockImplementation(async (archivo: File) => ({ evidencia: archivo, ia: archivo, miniatura: archivo, ancho: 1, alto: 1 }))
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:foto') })
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
 })
 
 describe('Reportar', () => {
+  it('analiza el derivado ia (1280 px) y no el archivo original (T-047)', async () => {
+    const ia = new File(['ia'], 'ia.jpg', { type: 'image/jpeg' })
+    dobles.procesarFoto.mockImplementation(async (archivo: File) => ({ evidencia: archivo, ia, miniatura: archivo, ancho: 1, alto: 1 }))
+    dobles.analizarImagen.mockReturnValue(new Promise(() => undefined))
+    renderReportar()
+
+    expect(screen.getByLabelText('Foto de la incidencia')).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp')
+    seleccionarFoto()
+
+    await waitFor(() => expect(dobles.analizarImagen).toHaveBeenCalled())
+    expect(dobles.analizarImagen.mock.calls[0][0].imagen).toBe(ia)
+  })
+
+  it('si la foto no se puede procesar avisa y deja el formulario manual', async () => {
+    dobles.procesarFoto.mockRejectedValue(new ErrorImagen('La foto pesa más de 30 MB. Toma otra foto o elige una más ligera.'))
+    renderReportar()
+
+    seleccionarFoto()
+
+    expect(await screen.findByText(/pesa más de 30 MB/)).toBeInTheDocument()
+    expect(dobles.analizarImagen).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Enviar reporte' })).toBeEnabled()
+  })
+
   it('cancela al desmontar', async () => {
     let signal: AbortSignal | undefined
     dobles.analizarImagen.mockImplementation((_datos, opciones) => {
