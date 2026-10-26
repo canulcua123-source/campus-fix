@@ -61,7 +61,6 @@ export default function DetalleIncidencia() {
   }
 
   const soloLectura = esSoloLectura(usuario?.permisos ?? [])
-  const puedeEditarTags = usuario?.permisos.includes('tags:gestionar') ?? false
   const datos = [
     { etiqueta: 'Ubicación', valor: textoUbicacion(detalle.ubicacion) },
     { etiqueta: 'Reportante', valor: detalle.reportante.nombre },
@@ -127,16 +126,7 @@ export default function DetalleIncidencia() {
 
       <Card como="section" className="mt-3">
         <h2 className="mb-3 mt-0 text-base font-semibold text-ink">Etiquetas técnicas</h2>
-        {puedeEditarTags ? (
-          <EditorTags incidenciaId={detalle._id} tags={detalle.tags} />
-        ) : (
-          <div className="flex flex-wrap gap-2" aria-label="Etiquetas actuales">
-            {detalle.tags.length === 0 && <p className="m-0 text-sm text-muted">Esta incidencia todavía no tiene etiquetas.</p>}
-            {detalle.tags.map((tag) => (
-              <span key={tag} className="rounded-full border border-line bg-panel-2 px-3 py-2 text-sm text-ink">#{tag}</span>
-            ))}
-          </div>
-        )}
+        <EditorTags incidenciaId={detalle._id} tags={detalle.tags} />
       </Card>
 
       <Card como="section" className="mt-3">

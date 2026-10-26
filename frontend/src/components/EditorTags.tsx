@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, X } from 'lucide-react'
 import { ApiError } from '../api/client'
@@ -38,6 +38,7 @@ export function EditorTags({ incidenciaId, tags }: EditorTagsProps) {
     const [aviso, setAviso] = useState('')
     const [ocupado, setOcupado] = useState(false)
     const escribiendo = useRef(false)
+    const idSugerencias = useId()
 
     const preview = normalizarTag(texto)
     const evaluacion = validarTag(texto)
@@ -108,8 +109,8 @@ export function EditorTags({ incidenciaId, tags }: EditorTagsProps) {
     }
 
     return (
-        <div className="flex flex-col gap-3" aria-label="Editor de etiquetas técnicas">
-            <div className="flex flex-wrap items-center gap-2" aria-label="Etiquetas actuales">
+        <div role="group" className="flex flex-col gap-3" aria-label="Editor de etiquetas técnicas">
+            <div role="group" className="flex flex-wrap items-center gap-2" aria-label="Etiquetas actuales">
                 {tags.length === 0 && <p className="my-0 text-sm text-muted">Esta incidencia todavía no tiene etiquetas.</p>}
                 {tags.map((tag) => (
                     <span key={tag} className="inline-flex min-h-11 items-center gap-1 rounded-full border border-line bg-panel-2 pl-3 pr-1 text-sm text-ink">
@@ -139,6 +140,7 @@ export function EditorTags({ incidenciaId, tags }: EditorTagsProps) {
                                 name="tag"
                                 type="text"
                                 autoComplete="off"
+                                list={puedeSugerir && sugerencias.length > 0 ? idSugerencias : undefined}
                                 value={texto}
                                 placeholder="Ej. Cableado Dañado"
                                 disabled={ocupado || completo}
@@ -148,6 +150,11 @@ export function EditorTags({ incidenciaId, tags }: EditorTagsProps) {
                                 onBlur={() => setTocado(true)}
                                 onKeyDown={manejarTeclado}
                             />
+                            {puedeSugerir && (
+                                <datalist id={idSugerencias}>
+                                    {sugerencias.map((tag) => <option key={tag} value={tag} />)}
+                                </datalist>
+                            )}
                         </div>
                         <Button type="submit" disabled={ocupado || completo || texto.trim().length === 0} cargando={ocupado} icono={<Plus size={18} />}>
                             Agregar etiqueta

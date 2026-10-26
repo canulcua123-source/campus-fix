@@ -115,6 +115,17 @@ describe('EditorTags (T-053)', () => {
         expect(screen.queryByRole('button', { name: 'Agregar sugerencia wifi' })).not.toBeInTheDocument()
     })
 
+    it('autocompleta en el campo con las sugerencias filtradas por lo escrito', async () => {
+        const usuario = userEvent.setup()
+        iniciar({ permisos: ['incidencias:ver', 'tags:gestionar', 'analitica:ver'] })
+        await screen.findByRole('button', { name: 'Agregar sugerencia wifi' })
+        const campo = screen.getByRole('combobox', { name: 'Nueva etiqueta' })
+        await usuario.type(campo, 'Cable')
+        const lista = document.getElementById(campo.getAttribute('list') ?? '')
+        expect([...(lista?.querySelectorAll('option') ?? [])].map((o) => o.value)).toEqual(['cableado_danado'])
+        expect(screen.getByText(/Vista previa: cable\./)).toBeInTheDocument()
+    })
+
     it('oculta el editor si no tiene tags:gestionar', async () => {
         const estado = iniciar({ permisos: ['incidencias:ver'], tags: ['wifi'] })
         expect(await screen.findByText('#wifi')).toBeInTheDocument()
