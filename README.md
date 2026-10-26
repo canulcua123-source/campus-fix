@@ -79,6 +79,7 @@ Las insignias **siempre** llevan texto (nunca solo color) y usan pares **fondo +
 | | en espera | `#EDE9FE` | `#5B21B6` | `#4C1D95` | `#DDD6FE` |
 | | resuelta | `#DCFCE7` | `#166534` | `#14532D` | `#BBF7D0` |
 | | cerrada | `#E2E8F0` | `#334155` | `#334155` | `#E2E8F0` |
+| | retirada | `#F1F5F9` | `#334155` | `#1E293B` | `#E2E8F0` |
 | Prioridad | baja | `#E2E8F0` | `#334155` | `#334155` | `#E2E8F0` |
 | | media | `#E0F2FE` | `#075985` | `#0C4A6E` | `#BAE6FD` |
 | | alta | `#FFEDD5` | `#9A3412` | `#7C2D12` | `#FED7AA` |
@@ -87,6 +88,10 @@ Las insignias **siempre** llevan texto (nunca solo color) y usan pares **fondo +
 | | infraestructura | `#FEF3C7` | `#92400E` | `#78350F` | `#FDE68A` |
 | | académico | `#FCE7F3` | `#9D174D` | `#831843` | `#FBCFE8` |
 | IA | sugerido por IA | `#CCFBF1` | `#115E59` | `#134E4A` | `#99F6E4` |
+
+Estos pares, los colores base y el anillo de foco (≥ 3:1) se verifican con la fórmula WCAG en `frontend/src/styles/tokens.test.ts` (corre con `npm test`): si cambias un token y baja de 4.5:1, la prueba falla.
+
+Tema: claro, oscuro o automático (sigue `prefers-color-scheme`) desde **Perfil**; se guarda en el navegador (`src/lib/tema.ts`) y un script en `index.html` lo aplica antes de pintar para que no parpadee.
 
 ### Tipografía y medidas
 

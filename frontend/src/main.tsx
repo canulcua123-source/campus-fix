@@ -7,8 +7,10 @@ import { crearQueryClient } from './api/queryClient'
 import App from './App'
 import './index.css'
 import { aplicarPlataforma } from './lib/platform'
+import { iniciarTema } from './lib/tema'
 
 aplicarPlataforma()
+iniciarTema()
 const queryClient = crearQueryClient()
 // Refresh silencioso con la cookie HttpOnly antes del primer render: recargar no cierra la sesión.
 void restaurarSesion()
