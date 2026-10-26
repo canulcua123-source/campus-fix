@@ -796,7 +796,7 @@ async def test_config_ia_lectura_actualizacion_persistencia_y_cache(api):
             headers=api.h("admin"),
         )
         assert r.status_code == 200, r.text
-        esperado = {"habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301}
+        esperado = {**inicial.json(), "habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301}
         assert r.json() == esperado
         doc = await api.db.configuracion_ia.find_one({"_id": "ia"})
         assert {k: doc[k] for k in esperado} == esperado

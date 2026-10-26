@@ -21,6 +21,7 @@ from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
 from app.schemas.ia import AnalisisImagen, DecisionAsistida, EventoIAIn, EventoIAOut, RespuestaIA
+from app.schemas.config import ConfigIA
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
     CoincidenciaNoElegible,
@@ -30,7 +31,8 @@ from app.services.duplicados import (
 from app.services import ia as ia_service
 from app.services.ia import PROMPT_VERSION, IAError, analizar_imagen, identidad_proveedor
 from app.services.vision.analisis_temporal import RegistroAnalisis, cargar_analisis, guardar_analisis
-from app.services.vision.compuertas import EntradaCompuertas, evaluar_compuertas, mapeo_valido
+from app.services.vision.compuertas import EntradaCompuertas, UbicacionCompuertas, evaluar_compuertas, mapeo_valido
+from app.services.vision.cupos import consumir_cupo_agentico, cupo_usuario_disponible
 from app.services.vision.decision import decidir
 from app.services.ia_eventos import (
     EventoIAConflictivo,
@@ -119,24 +121,41 @@ async def _consumir_cupo(redis, claves: tuple[str, str], *, limite_usuario: int,
         raise HTTPException(503, "El análisis con IA no está disponible por hoy")
 
 
-def _entrada_compuertas(analisis: AnalisisImagen, usuario: dict, ahora: datetime) -> EntradaCompuertas:
-    """Adapta el estado disponible hoy sin simular dependencias pendientes.
+def _estado_por_verificar(usuario: dict) -> tuple[UbicacionCompuertas | None, str]:
+    """Ubicación verificada (T17/T18) y evidencia de duplicados (T22) todavía no existen.
 
-    T17/T18 proveerán la ubicación verificada (y con ella G7, que valida el mapeo de T-032); T20, cupos y kill
-    switch; T22, duplicados. Hasta entonces esos estados no son verificables, así que el modo agéntico es
-    inalcanzable a propósito y la salida segura es ``formulario``.
+    Mientras tanto la ubicación es ``None`` y el duplicado ``no_verificable``: G5, G7 y G8 fallan, así que el modo
+    agéntico es inalcanzable a propósito y la salida segura es ``formulario`` (aunque el kill switch esté encendido).
     """
-    ubicacion = None
+    return None, "no_verificable"
+
+
+def _entrada_compuertas(
+    analisis: AnalisisImagen, usuario: dict, ahora: datetime, config: ConfigIA, *, cupo_agentico_disponible: bool
+) -> EntradaCompuertas:
+    ubicacion, duplicado = _estado_por_verificar(usuario)
     return EntradaCompuertas(
         analisis=analisis,
         ahora=ahora,
         ubicacion=ubicacion,
         esquema_valido=mapeo_valido(analisis, ubicacion),
-        duplicado="no_verificable",
+        duplicado=duplicado,
         permisos=frozenset(usuario.get("_permisos", ())),
-        cupo_agentico_disponible=False,
-        modo_agentico_habilitado=False,
+        cupo_agentico_disponible=cupo_agentico_disponible,
+        modo_agentico_habilitado=config.modo_agentico_habilitado,
+        categorias_agenticas=frozenset(config.categorias_agenticas),
     )
+
+
+async def _cupo_agentico_previo(redis, usuario: dict, config: ConfigIA, ahora: datetime) -> bool:
+    """G9 consulta el cupo agéntico ANTES de llamar a la IA; sin Redis se considera agotado (falla cerrado)."""
+    if redis is None:
+        return False
+    try:
+        return await cupo_usuario_disponible(redis, usuario["_id"], ahora, limite=config.cupo_agentico_usuario_diario)
+    except Exception:
+        logger.warning("Redis no disponible al consultar el cupo agéntico", exc_info=True)
+        return False
 
 
 def _mensaje(accion: str, asistida: DecisionAsistida) -> str:
@@ -147,11 +166,36 @@ def _mensaje(accion: str, asistida: DecisionAsistida) -> str:
     return asistida.mensaje
 
 
-async def _responder(redis, usuario: dict, datos: bytes, analisis: AnalisisImagen, *, cache: bool) -> RespuestaIA:
+async def _responder(
+    redis,
+    usuario: dict,
+    datos: bytes,
+    analisis: AnalisisImagen,
+    *,
+    cache: bool,
+    config: ConfigIA,
+    ahora: datetime,
+    cupo_agentico_disponible: bool,
+) -> RespuestaIA:
     """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
-    ahora = datetime.now(timezone.utc)
     asistida = decidir(analisis, cache=cache)
-    decision = evaluar_compuertas(_entrada_compuertas(analisis, usuario, ahora))
+    entrada = _entrada_compuertas(analisis, usuario, ahora, config, cupo_agentico_disponible=cupo_agentico_disponible)
+    decision = evaluar_compuertas(entrada)
+    if decision.accion == "agentico" and entrada.ubicacion is not None:
+        try:
+            await consumir_cupo_agentico(
+                redis,
+                usuario["_id"],
+                entrada.ubicacion.datos,
+                ahora,
+                limite_usuario=config.cupo_agentico_usuario_diario,
+                limite_aula=config.cupo_agentico_aula_hora,
+            )
+        except Exception:
+            # Cupo agotado (carrera) o Redis caído: se degrada a formulario; el análisis ya pagado no se pierde.
+            logger.info("Cupo agéntico no disponible; se ofrece el formulario", exc_info=True)
+            entrada = entrada.model_copy(update={"cupo_agentico_disponible": False})
+            decision = evaluar_compuertas(entrada)
     respuesta = RespuestaIA(
         accion=decision.accion,
         motivos=list(decision.motivos),
@@ -246,8 +290,11 @@ async def analizar(
                 logger.warning("Entrada inválida en la caché de IA; se regenerará", exc_info=True)
     except Exception:
         logger.warning("Redis no disponible al consultar la caché de IA", exc_info=True)
+    ahora = datetime.now(timezone.utc)
+    cupo_agentico = await _cupo_agentico_previo(redis, usuario, config, ahora)
+    contexto_respuesta = {"config": config, "ahora": ahora, "cupo_agentico_disponible": cupo_agentico}
     if analisis_cache is not None:
-        return await _responder(redis, usuario, validada.datos, analisis_cache, cache=True)
+        return await _responder(redis, usuario, validada.datos, analisis_cache, cache=True, **contexto_respuesta)
 
     # Falla cerrado: si no se puede contabilizar el cupo no se llama al proveedor (el costo queda acotado).
     claves_cupo = _claves_cupo(usuario["_id"], datetime.now(timezone.utc))
@@ -282,7 +329,7 @@ async def analizar(
         await redis.set(clave_cache, analisis.model_dump_json(), ex=CACHE_TTL)
     except Exception:
         logger.warning("Redis no disponible al guardar la caché de IA", exc_info=True)
-    return await _responder(redis, usuario, validada.datos, analisis, cache=False)
+    return await _responder(redis, usuario, validada.datos, analisis, cache=False, **contexto_respuesta)
 
 
 @router.post(

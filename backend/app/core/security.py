@@ -128,18 +128,30 @@ async def permisos_del_usuario(usuario: dict[str, Any]) -> dict[str, Any]:
     return {"permisos": rol.get("permisos", []), "alcance": rol.get("alcance", "propio")}
 
 
-def require_permiso(permiso: str):
+def require_permisos(*permisos: str):
+    """Exige TODOS los permisos indicados (AND) y carga permisos y alcance del usuario.
+
+    Para el modo agéntico (T-036, `POST /incidencias/desde-foto`): `ia:usar`, `incidencias:crear` y `evidencias:subir`.
+    """
+    if not permisos:
+        raise ValueError("require_permisos necesita al menos un permiso")
+
     async def dependencia(
         usuario: Annotated[dict[str, Any], Depends(get_usuario_actual)],
     ) -> dict[str, Any]:
         info = await permisos_del_usuario(usuario)
-        if permiso not in info["permisos"]:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Falta el permiso {permiso}")
+        faltantes = [permiso for permiso in permisos if permiso not in info["permisos"]]
+        if faltantes:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Falta el permiso {faltantes[0]}")
         usuario["_permisos"] = info["permisos"]
         usuario["_alcance"] = info["alcance"]
         return usuario
 
     return dependencia
+
+
+def require_permiso(permiso: str):
+    return require_permisos(permiso)
 
 
 def require_admin(permiso: str):

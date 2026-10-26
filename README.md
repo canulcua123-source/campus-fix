@@ -198,6 +198,13 @@ iniciales que `scripts/init_db.py` inserta la primera vez. Después, MongoDB (`c
 solo para el rol administrador. Redis guarda una copia con TTL de 60 segundos; si la caché falla se lee
 MongoDB y una actualización sigue persistiendo.
 
+El modo agéntico (T-034) también se administra ahí, no en `.env`: `modo_agentico_habilitado` (*kill switch*,
+`false` por defecto), `categorias_agenticas` (`["infraestructura"]`), `cupo_agentico_usuario_diario` (10) y
+`cupo_agentico_aula_hora` (3). `init_db.py` completa estos campos en documentos existentes sin tocar los valores ya
+configurados. Si el cupo agéntico está agotado, `/ia/analizar-imagen` responde `formulario` (G9) en lugar de
+gastar el análisis; los tres permisos (`ia:usar`, `incidencias:crear`, `evidencias:subir`) se exigen con
+`require_permisos` en `POST /incidencias/desde-foto` (T-036).
+
 `ia_sugerencia` es opcional en `POST /incidencias` y sigue `IASugerencia` (`modo`, `modelo`, `version_prompt`,
 `confianza`, `campos_autollenados` y opcionales como `accion`). Solo se guarda cuando el cliente la incluye: analizar una imagen nunca crea
 ni modifica incidencias. Con IA deshabilitada o con fallo del proveedor, `/ia/analizar-imagen` devuelve 503
