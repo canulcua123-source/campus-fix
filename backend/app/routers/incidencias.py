@@ -261,11 +261,19 @@ async def listar_incidencias(
     prioridad: Prioridad | None = None,
     edificio: Annotated[str | None, Query(max_length=60)] = None,
     propias: Annotated[bool, Query(description="Solo las reportadas por el usuario en sesión")] = False,
+    tecnico: Annotated[
+        str | None,
+        Query(pattern=r"^([0-9a-f]{24}|sin_asignar)$", description="Id del técnico asignado o `sin_asignar`"),
+    ] = None,
     limite: Annotated[int, Query(ge=1, le=100)] = 100,
 ):
     filtro: dict[str, Any] = {}
     if propias:
         filtro["reportante.usuario_id"] = usuario["_id"]
+    if tecnico == "sin_asignar":
+        filtro["tecnico_asignado"] = {"$exists": False}
+    elif tecnico is not None:
+        filtro["tecnico_asignado.usuario_id"] = ObjectId(tecnico)
     for campo, valor in (
         ("estado", estado),
         ("categoria", categoria),

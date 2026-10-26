@@ -14,7 +14,7 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `GET /auth/me` | autenticado | 200 |
 | `GET /health` | público | 200 `{"status":"ok"}` |
 | `POST /incidencias` | `incidencias:crear` | **201** `{_id, codigo, estado}` |
-| `GET /incidencias?estado&categoria&prioridad&edificio&propias&limite` | `incidencias:ver` | 200 lista |
+| `GET /incidencias?estado&categoria&prioridad&edificio&propias&tecnico&limite` | `incidencias:ver` | 200 lista |
 | `GET /incidencias/buscar?q=` | `incidencias:buscar` | 200 lista (máx. 20, por relevancia) |
 | `GET /incidencias/{id}` | `incidencias:ver` | 200 |
 | `PATCH /incidencias/{id}/seguimiento` | `seguimiento:registrar` | 200 `{ok, estado}` |
@@ -33,10 +33,13 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `GET /analitica/carga-tecnicos` | `analitica:ver` | 200 lista `{tecnico_id, incidencias_activas, horas_acumuladas}` |
 | `GET /analitica/tendencia` | `analitica:ver` | 200 lista `{periodo, categoria, total}` |
 | `GET /roles`, `POST /roles`, `PATCH /roles/{rol_id}`, `DELETE /roles/{rol_id}` | `roles:gestionar` | 200 / **201** / 200 / 200; 409 si el rol es del sistema o está asignado a usuarios |
+| `GET /usuarios/tecnicos?area` | `incidencias:asignar` | 200 lista `{_id, nombre, areas?, edificios?}` (técnicos activos asignables dentro del alcance; sin correo) |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200; `PATCH` a un usuario fuera del alcance gestionable responde **404** idéntico al de un id inexistente (no 403, para no revelar su existencia) |
 | `GET /categorias` | autenticado | 200 |
 
 `propias=true` en `GET /incidencias` limita la lista a las incidencias reportadas por el usuario en sesión ("Mis reportes", T-045); se combina con `$and` con el alcance, así que nunca lo amplía.
+
+`tecnico` en `GET /incidencias` acepta el id (24 hex) del técnico asignado o `sin_asignar`; usa el índice `(tecnico_asignado.usuario_id, estado)`. `GET /usuarios/tecnicos` (T-054) lista a los usuarios activos cuyo rol tiene `seguimiento:registrar` y no `incidencias:asignar`, limitados al alcance del coordinador (sus áreas o edificios; global ve todos) y, con `area`, a esa área. Es solo para el selector y el filtro del tablero: `PATCH .../asignacion` sigue validando la elegibilidad.
 
 El filtro `categoria` de `GET /incidencias` acepta cualquier clave con formato válido (`^[a-z][a-z0-9_]*$`, 3-30 caracteres) porque las categorías son dinámicas (T-019): una clave bien formada que no existe responde **200 `[]`**, no 400. Un formato inválido (mayúsculas, guiones, operadores) sigue respondiendo 400 `validacion`.
 
