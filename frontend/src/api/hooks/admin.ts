@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { RolIn, UsuarioIn, UsuarioPatch } from '../../schemas/usuario'
 import { categoriasQuery } from '../catalogos'
 import { claves } from '../keys'
-import { crearRol, crearUsuario, editarUsuario, rolesQuery, usuariosQuery } from '../usuarios'
+import { crearRol, crearUsuario, editarUsuario, rolesQuery, tecnicosQuery, usuariosQuery } from '../usuarios'
 
 export function useCategorias() {
   return useQuery(categoriasQuery())
@@ -10,6 +10,11 @@ export function useCategorias() {
 
 export function useUsuarios() {
   return useQuery(usuariosQuery())
+}
+
+/** Técnicos asignables (GET /usuarios/tecnicos), opcionalmente de un área. */
+export function useTecnicos(area?: string, enabled = true) {
+  return useQuery({ ...tecnicosQuery(area), enabled })
 }
 
 export function useCrearUsuario() {

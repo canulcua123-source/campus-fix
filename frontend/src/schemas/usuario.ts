@@ -118,6 +118,16 @@ export const usuarioSchema = z.object({
 export type UsuarioApi = z.infer<typeof usuarioSchema>
 export const usuariosSchema = z.array(usuarioSchema)
 
+/** GET /usuarios/tecnicos: técnicos asignables (sin correo). */
+export const tecnicoSchema = z.object({
+  _id: z.string(),
+  nombre: z.string(),
+  areas: z.array(z.string()).optional(),
+  edificios: z.array(z.string()).optional(),
+})
+export type Tecnico = z.infer<typeof tecnicoSchema>
+export const tecnicosSchema = z.array(tecnicoSchema)
+
 // ---------- roles ----------
 
 /** RolIn (POST /roles). */

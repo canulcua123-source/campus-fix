@@ -116,6 +116,52 @@ async def listar(usuario: Annotated[dict, Depends(require_permiso("usuarios:gest
     return [a_json(u) async for u in get_db().usuarios.find(filtro, PROYECCION).sort("nombre", 1)]
 
 
+@router.get("/tecnicos")
+async def listar_tecnicos(
+    usuario: Annotated[dict, Depends(require_permiso("incidencias:asignar"))],
+    area: Categoria | None = None,
+):
+    """Técnicos activos que el coordinador puede asignar dentro de su alcance (selector y filtro del tablero).
+
+    Técnico = rol con `seguimiento:registrar` y sin `incidencias:asignar`. Solo devuelve `_id`, `nombre`,
+    `areas` y `edificios` (nunca el correo). `PATCH /incidencias/{id}/asignacion` sigue validando la elegibilidad.
+    """
+    alcance = usuario["_alcance"]
+    if alcance == "propio":
+        return []
+    areas_actor = list(usuario.get("areas", [])) if alcance == "area" else None
+    if area is not None and areas_actor is not None and area not in areas_actor:
+        return []
+    areas = [area] if area is not None else areas_actor
+    edificios = list(usuario.get("edificios", [])) if alcance == "edificio" else None
+    condiciones: list[dict[str, Any]] = []
+    roles = get_db().roles.find(
+        {"permisos": "seguimiento:registrar", "$nor": [{"permisos": "incidencias:asignar"}]},
+        {"clave": 1, "alcance": 1},
+    )
+    async for rol in roles:
+        alcance_rol = rol.get("alcance", "propio")
+        condicion: dict[str, Any] = {"rol": rol["clave"]}
+        if alcance_rol == "area" and edificios is None:
+            if areas is not None:
+                condicion["areas"] = {"$in": areas}
+        elif alcance_rol == "edificio" and areas_actor is None:
+            if edificios is not None:
+                condicion["edificios"] = {"$in": edificios}
+        elif alcance_rol != "global":
+            continue
+        condiciones.append(condicion)
+    if not condiciones:
+        return []
+    cursor = (
+        get_db()
+        .usuarios.find({"activo": {"$ne": False}, "$or": condiciones}, {"nombre": 1, "areas": 1, "edificios": 1})
+        .sort("nombre", 1)
+        .limit(100)
+    )
+    return [a_json(u) async for u in cursor]
+
+
 @router.post("", status_code=201)
 async def crear(datos: UsuarioIn, usuario: Annotated[dict, Depends(require_permiso("usuarios:gestionar"))]):
     alcance = await _validar_asignacion(datos.rol, datos.areas, datos.edificios, usuario)

@@ -22,6 +22,7 @@ export const claves = {
   categorias: ['categorias'] as const,
   roles: ['roles'] as const,
   usuarios: ['usuarios'] as const,
+  tecnicos: (area?: string) => ['usuarios', 'tecnicos', area ?? 'todas'] as const,
   aula: (id: string) => ['aulas', id] as const,
 }
 
