@@ -70,10 +70,9 @@ asignaciones coinciden exactamente con la tabla 3.3. No se modificó
 3. **RF-COO-03, cambio de prioridad.** La asignación de permisos es coherente con
    la tabla 3.3, pero el endpoint de seguimiento actual no recibe una prioridad.
    Es una brecha funcional preexistente; T-068 no autoriza ampliar ese contrato.
-4. **RF-ADM-02, edición de roles.** `roles:gestionar` protege correctamente
-   `GET /roles` y `POST /roles`, pero actualmente no existe una ruta para editar
-   roles. El permiso está correctamente asignado, aunque el RF no está completo a
-   nivel de funcionalidad. No se creó un endpoint artificial durante esta tarea.
+4. **RF-ADM-02, edición de roles.** `roles:gestionar` protege `GET /roles`,
+   `POST /roles`, `PATCH /roles/{rol_id}` y `DELETE /roles/{rol_id}`. Editar y
+   eliminar solo aplican a roles personalizados (ver la sección siguiente).
 5. **RF-GEN-03.** El backend entrega y aplica permisos por rol. La revisión de las
    guardas y menús del frontend pertenece a T-071, por lo que no se modificó la UI.
 
@@ -93,9 +92,15 @@ Esta comprobación se limita a la configuración base. La auditoría exhaustiva 
 ## Protección de los roles del sistema
 
 - Los cinco documentos semilla llevan `sistema: true`.
-- La API expone únicamente `GET /roles` y `POST /roles`; no existen rutas públicas
-  `PATCH`, `PUT`, `DELETE` ni de desactivación. Por ello, actualmente no hay una
-  vía de API para modificar o eliminar un rol base.
+- `PATCH /roles/{id}` y `DELETE /roles/{id}` rechazan con 409 cualquier rol con
+  `sistema: true` (también para el administrador); la operación atómica repite
+  `sistema != true` en el filtro para evitar carreras.
+- Un rol personalizado solo se puede editar o eliminar si el actor puede otorgar
+  los permisos y el alcance ACTUALES de ese rol (`puede_otorgar`), además de los
+  nuevos; así un gestor con menos acceso no degrada ni borra un rol más poderoso.
+  Si no, responde 403.
+- Un rol asignado a usuarios no se elimina ni cambia de clave (409).
+- Si el rol desaparece entre la comprobación y la escritura, la respuesta es 404.
 - `RolIn` usa `extra="forbid"` y no acepta el campo `sistema`; además, el alta
   siempre guarda `sistema: false`. Un cliente no puede crear un rol personalizado
   que se presente como rol del sistema.
@@ -104,26 +109,20 @@ Esta comprobación se limita a la configuración base. La auditoría exhaustiva 
 - El índice único de `roles.clave` y el manejo de `DuplicateKeyError` rechazan con
   409 la suplantación de una clave ya existente, incluidas las cinco claves base.
 
-La regla V-ROL-08 permanece marcada en el documento como pendiente para futuros
-endpoints de edición o borrado. Si esas rutas se implementan, deberán rechazar
-cualquier documento con `sistema: true` en el backend; ocultar controles en el
-frontend no será suficiente.
+La regla V-ROL-08 queda cubierta en el backend: cualquier documento con
+`sistema: true` se rechaza con 409 en edición y borrado; ocultar controles en el
+frontend no es suficiente.
 
 ## Definición base frente a documentos persistidos
 
-`sembrar_base()` usa `$setOnInsert`. Por tanto:
+`sembrar_base()` sincroniza los cinco roles base por su clave estable con `$set`
+(upsert). Por tanto:
 
-1. `roles_sistema()` define el valor esperado para instalaciones nuevas;
-2. un rol que ya existe en MongoDB no se actualiza al volver a ejecutar
-   `init_db.py`;
-3. esta revisión no consultó ni modificó Atlas, así que no afirma que una base
-   persistida concreta coincida con la definición actual.
+1. `roles_sistema()` es la fuente de verdad de los cinco roles base: volver a
+   ejecutar `init_db.py` repara permisos, alcance o marca `sistema` alterados;
+2. el `_id` y las referencias de los usuarios (por `clave`) se conservan, y los
+   roles personalizados no se tocan;
+3. es idempotente: dos ejecuciones seguidas dejan el mismo resultado.
 
-No hace falta una migración para esta auditoría porque la definición base ya
-coincide con la documentación. Si en el futuro se detecta deriva en una base
-existente, la estrategia segura es un script separado, idempotente y en modo
-simulación por defecto: comparar únicamente las cinco claves conocidas, mostrar
-el antes/después, exigir respaldo y confirmación explícita para aplicar, actualizar
-solo los campos aprobados y no tocar roles personalizados ni usuarios. Nunca debe
-reemplazarse globalmente `$setOnInsert` por `$set`.
-
+Antes de ejecutar `init_db.py` en producción se sigue BD-19 (respaldo previo con
+`mongodump`). Prueba: `test_sembrar_base_repara_rol_base_conservando_id`.

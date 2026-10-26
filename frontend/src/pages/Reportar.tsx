@@ -6,11 +6,12 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { aulaQuery } from '../api/aulas'
-import { api } from '../api/client'
 import { analizarImagen } from '../api/ia'
+import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
+import type { ReanudarSubida } from '../api/evidencias'
 import {
   CATEGORIAS, PRIORIDADES, incidenciaSchema,
-  type AnalisisImagen, type Categoria, type IncidenciaForm,
+  type AnalisisImagen, type Categoria, type IncidenciaCreada, type IncidenciaForm,
 } from '../schemas/incidencia'
 
 const NOMBRES_CATEGORIA: Record<Categoria, string> = {
@@ -47,11 +48,16 @@ export default function Reportar() {
   const vistaUrl = useRef<string | null>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
+  const [foto, setFoto] = useState<File | null>(null)
   const [analizando, setAnalizando] = useState(false)
   const [ia, setIa] = useState<AnalisisImagen | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const [tagsTexto, setTagsTexto] = useState('')
+  const [creada, setCreada] = useState<IncidenciaCreada | null>(null)
+  const [errorFoto, setErrorFoto] = useState<string | null>(null)
+  const [subiendoFoto, setSubiendoFoto] = useState(false)
+  const progresoFoto = useRef<ReanudarSubida>({}) // conserva firma y PUT hechos para reintentar solo el paso fallido
 
   const { register, handleSubmit, setValue, getFieldState, control, formState } = useForm<IncidenciaForm>({
     resolver: zodResolver(incidenciaSchema),
@@ -64,6 +70,8 @@ export default function Reportar() {
   // Leer dirtyFields en el render suscribe el formulario a su seguimiento (lo usa sinEditar).
   const { errors, isSubmitting, dirtyFields: _camposEditados } = formState
   const categoria = useWatch({ control, name: 'detalle_especifico.categoria' })
+  const { mutateAsync: crear } = useCrearIncidencia()
+  const { mutateAsync: subirFoto } = useEvidencia()
   const ubicacionFijada = Boolean(aula.data)
 
   useEffect(() => {
@@ -121,6 +129,8 @@ export default function Reportar() {
     try {
       const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
+      setFoto(comprimida)
+      progresoFoto.current = {}
       if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
       vistaUrl.current = URL.createObjectURL(comprimida)
       setVista(vistaUrl.current)
@@ -151,12 +161,31 @@ export default function Reportar() {
     }
   }
 
+  async function adjuntarFoto(incidenciaId: string) {
+    if (!foto) return
+    setErrorFoto(null)
+    setSubiendoFoto(true)
+    try {
+      await subirFoto({ incidenciaId, archivo: foto, nombre: 'incidencia.jpg', reanudar: progresoFoto.current })
+      navigate('/mis-tickets')
+    } catch (e) {
+      setErrorFoto(e instanceof Error ? e.message : 'No se pudo adjuntar la foto')
+    } finally {
+      setSubiendoFoto(false)
+    }
+  }
+
   async function enviar(datos: IncidenciaForm) {
     cancelarAnalisis()
     setErrorEnvio(null)
     try {
-      await api('/incidencias', { method: 'POST', json: datos })
-      navigate('/mis-tickets')
+      const nueva = await crear(datos)
+      if (!foto) {
+        navigate('/mis-tickets')
+        return
+      }
+      setCreada(nueva)
+      await adjuntarFoto(nueva._id)
     } catch (e) {
       setErrorEnvio(e instanceof Error ? e.message : 'No se pudo crear la incidencia')
     }
@@ -167,6 +196,32 @@ export default function Reportar() {
   }
 
   const errD = errors.detalle_especifico as Record<string, { message?: string }> | undefined
+
+  if (creada) {
+    return (
+      <>
+        <h1 className="titulo-pagina">Incidencia creada</h1>
+        <div className="card">
+          <p className="m-0">Tu reporte <strong>{creada.codigo}</strong> quedó registrado.</p>
+          {subiendoFoto && <p className="mt-2 text-muted" role="status">Subiendo la foto como evidencia…</p>}
+          {errorFoto && (
+            <div className="mt-3" role="alert">
+              <p className="m-0 font-semibold">No se pudo adjuntar la foto, reintentar</p>
+              <p className="mb-0 mt-1 text-sm text-muted">{errorFoto}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="btn" disabled={subiendoFoto} onClick={() => adjuntarFoto(creada._id)}>
+                  Reintentar foto
+                </button>
+                <button type="button" className="btn btn-secundario" onClick={() => navigate('/mis-tickets')}>
+                  Continuar sin foto
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </>
+    )
+  }
 
   if (paso === 'foto') {
     return (

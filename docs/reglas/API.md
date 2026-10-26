@@ -31,8 +31,8 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `GET /analitica/aulas-cronicas` | `analitica:ver` | 200 lista `{edificio, piso?, aula, total}` |
 | `GET /analitica/carga-tecnicos` | `analitica:ver` | 200 lista `{tecnico_id, incidencias_activas, horas_acumuladas}` |
 | `GET /analitica/tendencia` | `analitica:ver` | 200 lista `{periodo, categoria, total}` |
-| `GET /roles`, `POST /roles` | `roles:gestionar` | 200 / **201** |
-| `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200 |
+| `GET /roles`, `POST /roles`, `PATCH /roles/{rol_id}`, `DELETE /roles/{rol_id}` | `roles:gestionar` | 200 / **201** / 200 / 200; 409 si el rol es del sistema o está asignado a usuarios |
+| `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200; `PATCH` a un usuario fuera del alcance gestionable responde **404** idéntico al de un id inexistente (no 403, para no revelar su existencia) |
 | `GET /categorias` | autenticado | 200 |
 
 El filtro `categoria` de `GET /incidencias` acepta cualquier clave con formato válido (`^[a-z][a-z0-9_]*$`, 3-30 caracteres) porque las categorías son dinámicas (T-019): una clave bien formada que no existe responde **200 `[]`**, no 400. Un formato inválido (mayúsculas, guiones, operadores) sigue respondiendo 400 `validacion`.
