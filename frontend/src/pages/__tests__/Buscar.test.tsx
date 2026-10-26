@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { BASE } from '../../api/client'
 import { useAuth } from '../../auth/store'
@@ -31,6 +31,7 @@ beforeAll(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   servidor.resetHandlers()
   useAuth.setState({ token: null, usuario: null, aviso: null })
@@ -67,6 +68,11 @@ function renderBuscar(ruta = '/buscar?q=red') {
   )
 }
 
+function UbicacionActual() {
+  const ubicacion = useLocation()
+  return <output data-testid="ubicacion">{`${ubicacion.pathname}${ubicacion.search}`}</output>
+}
+
 function renderConBarra() {
   prepararUsuario()
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -75,8 +81,8 @@ function renderConBarra() {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<AppShell />}>
-            <Route index element={<p>Inicio</p>} />
-            <Route path="buscar" element={<Buscar />} />
+            <Route index element={<UbicacionActual />} />
+            <Route path="buscar" element={<><UbicacionActual /><Buscar /></>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -93,18 +99,53 @@ function responder(lista: IncidenciaListaItem[], alConsultar?: () => void) {
 }
 
 describe('Buscar (T-055)', () => {
-  it('aplica debounce de 300 ms antes de consultar', async () => {
-    let consultas = 0
-    responder(RESULTADOS, () => { consultas += 1 })
+  it('aplica debounce de 300 ms antes de navegar a la búsqueda', () => {
+    vi.useFakeTimers()
+    responder(RESULTADOS)
+    renderConBarra()
+    const barra = screen.getByLabelText('Buscar incidencias')
+
+    fireEvent.change(barra, { target: { value: 're' } })
+    act(() => { vi.advanceTimersByTime(299) })
+    expect(screen.getByTestId('ubicacion')).toHaveTextContent('/')
+    expect(screen.getByTestId('ubicacion')).not.toHaveTextContent('/buscar')
+
+    act(() => { vi.advanceTimersByTime(1) })
+    expect(screen.getByTestId('ubicacion')).toHaveTextContent('/buscar?q=re')
+  })
+
+  it('no navega con menos de dos caracteres', () => {
+    vi.useFakeTimers()
+    responder(RESULTADOS)
     renderConBarra()
 
-    const usuario = userEvent.setup()
-    await usuario.type(screen.getByLabelText('Buscar incidencias'), 're')
-    await new Promise((resolver) => window.setTimeout(resolver, 250))
-    expect(consultas).toBe(0)
+    fireEvent.change(screen.getByLabelText('Buscar incidencias'), { target: { value: 'r' } })
+    act(() => { vi.advanceTimersByTime(1000) })
+    expect(screen.getByTestId('ubicacion')).not.toHaveTextContent('/buscar')
+  })
 
-    expect(await screen.findByText((_, elemento) => elemento?.tagName === 'H2' && elemento.textContent === 'Red sin conexión')).toBeInTheDocument()
-    expect(consultas).toBe(1)
+  it('conserva el foco y el texto al seguir escribiendo después del debounce', () => {
+    vi.useFakeTimers()
+    responder(RESULTADOS)
+    renderConBarra()
+    const barra = screen.getByLabelText('Buscar incidencias')
+    barra.focus()
+
+    fireEvent.change(barra, { target: { value: 're' } })
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.getByTestId('ubicacion')).toHaveTextContent('/buscar?q=re')
+
+    // El mismo input sigue montado, enfocado y con su texto: se puede seguir escribiendo.
+    expect(barra).toBeInTheDocument()
+    expect(barra).toHaveFocus()
+    expect(barra).toHaveValue('re')
+    fireEvent.change(barra, { target: { value: 'red' } })
+    expect(barra).toHaveValue('red')
+
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.getByTestId('ubicacion')).toHaveTextContent('/buscar?q=red')
+    expect(barra).toHaveFocus()
+    expect(barra).toHaveValue('red')
   })
 
   it('respeta el orden por score que entrega el backend', async () => {
@@ -147,5 +188,48 @@ describe('Buscar (T-055)', () => {
     )
 
     expect(await screen.findByRole('link', { name: /Red sin conexión/i })).toHaveAttribute('href', '/incidencias/mas-relevante')
+  })
+
+  it('muestra el estado de carga mientras busca', async () => {
+    let liberar!: () => void
+    const espera = new Promise<void>((r) => { liberar = r })
+    servidor.use(http.get(`${BASE}/incidencias/buscar`, async () => { await espera; return HttpResponse.json(RESULTADOS) }))
+    renderBuscar()
+
+    expect(await screen.findByRole('status', { name: 'Buscando incidencias' })).toBeInTheDocument()
+    liberar()
+    expect(await screen.findByRole('link', { name: /Red sin conexión/i })).toBeInTheDocument()
+  })
+
+  it('muestra un error con opción de reintentar si la búsqueda falla', async () => {
+    servidor.use(http.get(`${BASE}/incidencias/buscar`, () => HttpResponse.json({ error: 'servidor' }, { status: 500 })))
+    renderBuscar()
+
+    expect(await screen.findByText('No pudimos realizar la búsqueda')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument()
+  })
+
+  it('avisa cuando el backend devuelve el máximo de 20 resultados', async () => {
+    const veinte = Array.from({ length: 20 }, (_, i) => ({ ...RESULTADOS[0], _id: `r${i}`, codigo: `INC-${i}` }))
+    responder(veinte)
+    renderBuscar()
+
+    expect(await screen.findByText(/Mostrando los 20 resultados más relevantes/)).toBeInTheDocument()
+  })
+
+  it('no muestra el aviso de máximo con menos de 20 resultados', async () => {
+    responder(RESULTADOS)
+    renderBuscar()
+
+    await screen.findByRole('link', { name: /Red sin conexión/i })
+    expect(screen.queryByText(/Mostrando los 20/)).not.toBeInTheDocument()
+  })
+
+  it('resalta palabras completas sin distinguir acentos ni mayúsculas', async () => {
+    responder([{ ...RESULTADOS[0], titulo: 'Redes sin conexión en Predeterminado', ubicacion: { edificio: 'A', aula: 'R-2' } }])
+    const { container } = renderBuscar('/buscar?q=RED conexion')
+
+    await screen.findByRole('link')
+    expect(Array.from(container.querySelectorAll('mark')).map((m) => m.textContent)).toEqual(['Redes', 'conexión'])
   })
 })

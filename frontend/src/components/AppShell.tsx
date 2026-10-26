@@ -41,6 +41,16 @@ function BuscadorGlobal() {
   const ubicacion = useLocation()
   const [busqueda, setBusqueda] = useState(() => new URLSearchParams(ubicacion.search).get('q') ?? '')
 
+  // Sincroniza el texto con la URL solo ante navegación externa (menú, atrás/adelante); nunca pisa lo que se está escribiendo.
+  useEffect(() => {
+    if (ubicacion.pathname !== '/buscar') return
+    const q = (new URLSearchParams(ubicacion.search).get('q') ?? '').trim()
+    setBusqueda((previo) => {
+      if (previo.trim() === q) return previo
+      return q === '' && previo.trim().length < 2 ? previo : q
+    })
+  }, [ubicacion.pathname, ubicacion.search])
+
   useEffect(() => {
     const termino = busqueda.trim()
     if (termino.length < 2) return
@@ -120,7 +130,6 @@ export function AppShell() {
   const usuario = useAuth((s) => s.usuario)
   const cerrarSesion = useAuth((s) => s.cerrarSesion)
   const navigate = useNavigate()
-  const ubicacion = useLocation()
   const permisos = usuario?.permisos ?? []
   const puedeBuscar = permisos.includes('incidencias:buscar')
 
@@ -136,7 +145,7 @@ export function AppShell() {
         <OfflineBanner />
         <header className="topbar nav-chrome flex flex-wrap items-center gap-2">
           <span className="font-semibold">UTM Desk</span>
-          {puedeBuscar && <BuscadorGlobal key={`${ubicacion.pathname}${ubicacion.search}`} />}
+          {puedeBuscar && <BuscadorGlobal />}
         </header>
         <main className="app-main">
           <InstallPrompt />

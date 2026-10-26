@@ -5,22 +5,31 @@ import { useBuscar } from '../api/hooks/incidencias'
 import { busquedaSchema } from '../schemas/incidencia'
 import { Badge, Card, EmptyState, ErrorState, Skeleton } from '../components/ui'
 
+/** Minúsculas y sin acentos, conservando la longitud (un carácter por carácter) para poder cortar el texto original. */
+function plegar(texto: string): string {
+  return texto.split('').map((c) => c.normalize('NFD').charAt(0).toLowerCase().charAt(0)).join('')
+}
+
+/** Resalta palabras completas que empiezan con algún término buscado (sin distinguir acentos ni mayúsculas). */
 function TextoResaltado({ texto, termino }: { texto: string; termino: string }) {
-  const buscado = termino.trim().toLocaleLowerCase('es-MX')
-  if (!buscado) return <>{texto}</>
-  const normalizado = texto.toLocaleLowerCase('es-MX')
+  const terminos = plegar(termino).split(/\s+/).filter((t) => t.length >= 2)
+  if (terminos.length === 0) return <>{texto}</>
   const partes: ReactNode[] = []
   let desde = 0
-  let encontrado = normalizado.indexOf(buscado, desde)
-  while (encontrado >= 0) {
-    if (encontrado > desde) partes.push(texto.slice(desde, encontrado))
-    partes.push(<mark key={encontrado} className="rounded bg-warn px-0.5 text-on-warn">{texto.slice(encontrado, encontrado + buscado.length)}</mark>)
-    desde = encontrado + buscado.length
-    encontrado = normalizado.indexOf(buscado, desde)
+  for (const palabra of texto.matchAll(/[\p{L}\p{N}]+/gu)) {
+    const inicio = palabra.index ?? 0
+    const plegada = plegar(palabra[0])
+    if (!terminos.some((t) => plegada.startsWith(t))) continue
+    if (inicio > desde) partes.push(texto.slice(desde, inicio))
+    partes.push(<mark key={inicio} className="rounded bg-warn px-0.5 text-on-warn">{palabra[0]}</mark>)
+    desde = inicio + palabra[0].length
   }
   if (desde < texto.length) partes.push(texto.slice(desde))
   return <>{partes}</>
 }
+
+/** El backend devuelve como máximo este número de resultados. */
+const MAX_RESULTADOS = 20
 
 function Puntaje({ score }: { score?: number }) {
   if (score === undefined) return null
@@ -82,6 +91,11 @@ export default function Buscar() {
     <>
       <h1 className="titulo-pagina">Resultados para “{termino}”</h1>
       <p className="mt-0 text-sm text-muted">{data.length} resultado{data.length === 1 ? '' : 's'}, ordenados por relevancia.</p>
+      {data.length >= MAX_RESULTADOS && (
+        <p className="mt-0 text-sm text-muted" role="note">
+          Mostrando los {MAX_RESULTADOS} resultados más relevantes. Afina tu búsqueda para ver otros.
+        </p>
+      )}
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
         {data.map((incidencia) => (
           <li key={incidencia._id}>
