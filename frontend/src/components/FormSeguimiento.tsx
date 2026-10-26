@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { ApiError } from '../api/client'
 import { useSeguimiento } from '../api/hooks/incidencias'
@@ -32,6 +32,13 @@ export function FormSeguimiento({
     mode: 'onTouched',
     defaultValues: { comentario: '', horas: 0, estado_nuevo: transiciones[0] },
   })
+
+  // Al cambiar el estado de la incidencia (p. ej. tras guardar y refrescar) el formulario vuelve a su valor inicial válido.
+  const primeraTransicion = transiciones[0]
+  const { reset } = form
+  useEffect(() => {
+    reset({ comentario: '', horas: 0, estado_nuevo: primeraTransicion })
+  }, [reset, primeraTransicion])
 
   if (!puedeRegistrar || transiciones.length === 0) return null
 

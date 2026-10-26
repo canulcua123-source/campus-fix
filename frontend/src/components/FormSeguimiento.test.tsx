@@ -98,3 +98,44 @@ it('informa el conflicto cuando el estado cambió durante el registro', async ()
     'El estado cambió mientras registrabas el seguimiento. Actualiza la incidencia e inténtalo de nuevo.',
   )
 })
+
+it('ofrece el cierre solo a quien tiene permiso de cerrar', () => {
+  const { unmount } = render(
+    <FormSeguimiento incidenciaId="inc-1" estadoActual="resuelta" puedeCerrar puedeRegistrar />,
+  )
+  abrirFormulario()
+  expect(screen.getByRole('option', { name: 'Cerrada' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'En proceso' })).toBeInTheDocument()
+  unmount()
+
+  render(<FormSeguimiento incidenciaId="inc-1" estadoActual="resuelta" puedeCerrar={false} puedeRegistrar />)
+  abrirFormulario()
+  expect(screen.queryByRole('option', { name: 'Cerrada' })).not.toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'En proceso' })).toBeInTheDocument()
+})
+
+it('no muestra acciones si la incidencia ya no admite transiciones', () => {
+  render(<FormSeguimiento incidenciaId="inc-1" estadoActual="retirada" puedeCerrar puedeRegistrar />)
+
+  expect(screen.queryByRole('button', { name: 'Registrar seguimiento' })).not.toBeInTheDocument()
+})
+
+it('reinicia el estado inicial cuando cambia el estado actual de la incidencia', async () => {
+  seguimiento.mutateAsync.mockResolvedValue({ ok: true, estado: 'en_espera' })
+  const props = { incidenciaId: 'inc-1', puedeCerrar: false, puedeRegistrar: true }
+  const { rerender } = render(<FormSeguimiento {...props} estadoActual="abierta" />)
+
+  // Tras guardar y refrescar, la incidencia pasó a "en_proceso": el estado inicial anterior ya no es válido.
+  rerender(<FormSeguimiento {...props} estadoActual="en_proceso" />)
+  const { estado, horas, comentario } = abrirFormulario()
+  expect(estado).toHaveValue('en_espera')
+  fireEvent.change(horas, { target: { value: '1' } })
+  fireEvent.change(comentario, { target: { value: 'Se dejó en espera por falta de refacciones.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar seguimiento' }))
+
+  await waitFor(() => expect(seguimiento.mutateAsync).toHaveBeenCalledWith({
+    estado_nuevo: 'en_espera',
+    horas: 1,
+    comentario: 'Se dejó en espera por falta de refacciones.',
+  }))
+})

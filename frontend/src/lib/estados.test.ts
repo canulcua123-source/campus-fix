@@ -9,6 +9,7 @@ describe('transiciones de incidencia', () => {
       en_espera: ['en_proceso'],
       resuelta: ['cerrada', 'en_proceso'],
       cerrada: [],
+      retirada: [],
     })
   })
 

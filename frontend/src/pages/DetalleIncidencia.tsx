@@ -1,11 +1,13 @@
 import { Link, useParams } from 'react-router-dom'
+import { useState } from 'react'
 import { ApiError } from '../api/client'
-import { useIncidencia } from '../api/hooks/incidencias'
+import { useIncidencia, useRetirar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { GaleriaEvidencias } from '../components/GaleriaEvidencias'
 import { FormSeguimiento } from '../components/FormSeguimiento'
 import { Timeline } from '../components/Timeline'
-import { Badge, Card, ErrorState, PageHeader, Skeleton } from '../components/ui'
+import { EditorTags } from '../components/EditorTags'
+import { Badge, BottomSheet, Button, Card, ErrorState, PageHeader, Skeleton } from '../components/ui'
 import {
   datosDetalle, esSoloLectura, formatearFecha, formatearHoras, mensajeErrorDetalle, textoUbicacion,
 } from '../lib/detalle'
@@ -13,7 +15,10 @@ import {
 export default function DetalleIncidencia() {
   const { id = '' } = useParams<{ id: string }>()
   const { data: detalle, isPending, isError, error, isFetching, refetch } = useIncidencia(id)
+  const retirar = useRetirar(id)
   const { usuario } = useAuth()
+  const [confirmandoRetiro, setConfirmandoRetiro] = useState(false)
+  const [retiroExitoso, setRetiroExitoso] = useState(false)
 
   if (isPending) {
     return (
@@ -56,6 +61,7 @@ export default function DetalleIncidencia() {
   }
 
   const soloLectura = esSoloLectura(usuario?.permisos ?? [])
+  const puedeEditarTags = usuario?.permisos.includes('tags:gestionar') ?? false
   const datos = [
     { etiqueta: 'Ubicación', valor: textoUbicacion(detalle.ubicacion) },
     { etiqueta: 'Reportante', valor: detalle.reportante.nombre },
@@ -78,14 +84,59 @@ export default function DetalleIncidencia() {
         <Badge tipo="estado" valor={detalle.estado} />
         <Badge tipo="prioridad" valor={detalle.prioridad} />
         <Badge tipo="categoria" valor={detalle.categoria} />
-        {detalle.tags.map((tag) => (
-          <span key={tag} className="rounded-full border border-line bg-panel px-3 py-1 text-xs text-muted">#{tag}</span>
-        ))}
+
       </div>
+
+      {detalle.puede_retirar && detalle.estado === 'abierta' && !detalle.tecnico_asignado && (
+        <Card como="section" className="mb-3">
+          <h2 className="mb-1 mt-0 text-base font-semibold text-ink">¿Ya no necesitas este reporte?</h2>
+          <p className="mb-3 mt-0 text-sm text-muted">
+            Puedes retirarlo durante los primeros 15 minutos, siempre que aún no tenga técnico asignado.
+          </p>
+          <Button
+            variante="peligro"
+            onClick={() => {
+              retirar.reset()
+              setConfirmandoRetiro(true)
+            }}
+          >
+            Retirar mi reporte
+          </Button>
+        </Card>
+      )}
+
+      {retiroExitoso && (
+        <p role="status" className="mb-3 rounded-input border border-ok p-3 text-sm text-ok">
+          Tu reporte fue retirado correctamente.
+        </p>
+      )}
+      {retirar.isError && (
+        <p role="alert" className="mb-3 rounded-input border border-bad p-3 text-sm text-bad">
+          {retirar.error instanceof ApiError && retirar.error.status === 409
+            ? 'Este reporte ya no puede retirarse porque cambió de estado, fue asignado o venció el plazo.'
+            : retirar.error instanceof ApiError
+              ? retirar.error.mensaje
+              : 'No pudimos retirar el reporte. Intenta de nuevo.'}
+        </p>
+      )}
 
       <Card como="section">
         <p className="m-0 whitespace-pre-line text-ink">{detalle.descripcion}</p>
         <p className="mb-0 mt-3 text-sm text-muted">Reportada el {formatearFecha(detalle.fecha_creacion)}</p>
+      </Card>
+
+      <Card como="section" className="mt-3">
+        <h2 className="mb-3 mt-0 text-base font-semibold text-ink">Etiquetas técnicas</h2>
+        {puedeEditarTags ? (
+          <EditorTags incidenciaId={detalle._id} tags={detalle.tags} />
+        ) : (
+          <div className="flex flex-wrap gap-2" aria-label="Etiquetas actuales">
+            {detalle.tags.length === 0 && <p className="m-0 text-sm text-muted">Esta incidencia todavía no tiene etiquetas.</p>}
+            {detalle.tags.map((tag) => (
+              <span key={tag} className="rounded-full border border-line bg-panel-2 px-3 py-2 text-sm text-ink">#{tag}</span>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card como="section" className="mt-3">
@@ -126,6 +177,39 @@ export default function DetalleIncidencia() {
         puedeCerrar={usuario?.permisos.includes('incidencias:asignar') ?? false}
         onSeguimientoGuardado={() => void refetch()}
       />
+
+      <BottomSheet
+        abierto={confirmandoRetiro}
+        onCerrar={() => {
+          if (!retirar.isPending) setConfirmandoRetiro(false)
+        }}
+        titulo="Confirmar retiro"
+        acciones={(
+          <>
+            <Button variante="secundario" disabled={retirar.isPending} onClick={() => setConfirmandoRetiro(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variante="peligro"
+              cargando={retirar.isPending}
+              textoCargando="Retirando…"
+              onClick={() => retirar.mutate(undefined, {
+                onSuccess: () => {
+                  setRetiroExitoso(true)
+                  setConfirmandoRetiro(false)
+                },
+                onError: () => setConfirmandoRetiro(false),
+              })}
+            >
+              Sí, retirar reporte
+            </Button>
+          </>
+        )}
+      >
+        <p className="m-0 text-sm text-ink">
+          El reporte dejará de ser atendido y permanecerá en el historial con estado Retirada. Esta acción no se puede deshacer.
+        </p>
+      </BottomSheet>
     </>
   )
 }
