@@ -78,10 +78,11 @@ ruleset() {
 JSON
 }
 
-# dev: squash (1 PR = 1 commit), historial lineal, al día con dev.
+# dev: squash (1 PR = 1 commit), historial lineal. Sin "strict": el CI de cada PR es obligatorio,
+#      pero no se exige repetirlo cada vez que dev avanza.
 # main: merge commit desde dev (conserva los SHAs de dev; ver CONTRIBUTING.md). Sin "strict":
 #       main solo contiene merges de dev, así que dev nunca diverge en contenido.
-DEV_JSON="$(ruleset "proteccion-dev" "dev" '["squash"]' true true)"
+DEV_JSON="$(ruleset "proteccion-dev" "dev" '["squash"]' true false)"
 MAIN_JSON="$(ruleset "proteccion-main" "main" '["merge"]' false false)"
 
 REPO_JSON='{

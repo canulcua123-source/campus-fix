@@ -66,7 +66,7 @@ El check `branch-flow` rechaza el PR si el nombre no cumple o si un PR a `main` 
 - **1 PR = 1 issue**, enlazado con `Closes #N` (el issue se cierra solo al mergear en `dev`, que es la rama por defecto).
 - **Tamaño sugerido: ≤ 400 líneas cambiadas** (sin contar `package-lock.json`). Si crece más, divide el issue.
 - Título en Conventional Commits (lo valida `pr-rules`): será el mensaje del commit en `dev`.
-- La rama debe estar al día con `dev` (`pr-rules` avisa; la protección "require branches to be up to date" lo exige al mergear). Usa `git rebase origin/dev` o el botón _Update branch → Update with rebase_.
+- Conviene que la rama esté al día con `dev` (`pr-rules` solo avisa; no bloquea el merge). Si GitHub marca conflictos, usa `git merge origin/dev` o el botón _Update branch_.
 
 ## 4. Commits: Conventional Commits
 
@@ -126,7 +126,7 @@ Consejos: si `package-lock.json` choca, toma la versión de dev (`git checkout -
 | ↳ frontend | `npm run lint` + `npm run build` (incluye `tsc -b`). | `cd frontend && npm ci && npm run lint && npm run build` |
 | ↳ postman | `postman/*.json` es JSON válido. | `python3 -m json.tool postman/<archivo>.json` |
 | `branch-flow` | Nombre de rama y que `main` solo reciba de `dev`. | Revisa el nombre: `git branch --show-current`. |
-| `pr-rules` | Título Conventional Commits, `Closes #N`, rama al día con `dev`. | Edita título/cuerpo del PR; `git rebase origin/dev`. |
+| `pr-rules` | Título Conventional Commits y `Closes #N` (avisa si la rama va atrás de `dev`). | Edita título/cuerpo del PR. |
 | `gitleaks` | Secretos en los commits del PR. | `gitleaks git --config .github/gitleaks.toml --log-opts="origin/dev..HEAD"` |
 | `reglas-bd` | Patrones peligrosos de BD/seguridad en el diff. | `python3 scripts/github/revisar_reglas_bd.py --base origin/dev` |
 
