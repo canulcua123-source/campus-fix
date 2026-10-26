@@ -2,15 +2,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import imageCompression from 'browser-image-compression'
 import { Camera, Sparkles } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { aulaQuery } from '../api/aulas'
-import { api } from '../api/client'
+import { analizarImagen } from '../api/ia'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import {
-  CATEGORIAS, PRIORIDADES, respuestaAnalisisImagenSchema, incidenciaSchema,
+  CATEGORIAS, PRIORIDADES, incidenciaSchema,
   type AnalisisImagen, type Categoria, type IncidenciaCreada, type IncidenciaForm,
 } from '../schemas/incidencia'
 
@@ -43,6 +43,9 @@ export default function Reportar() {
   const aulaId = parametros.get('aula')?.trim() ?? ''
   const aula = useQuery({ ...aulaQuery(aulaId), enabled: Boolean(aulaId) })
   const entrada = useRef<HTMLInputElement>(null)
+  const montado = useRef(false)
+  const operacionIA = useRef<AbortController | null>(null)
+  const vistaUrl = useRef<string | null>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
   const [foto, setFoto] = useState<File | null>(null)
@@ -56,7 +59,7 @@ export default function Reportar() {
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const progresoFoto = useRef<ReanudarSubida>({}) // conserva firma y PUT hechos para reintentar solo el paso fallido
 
-  const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = useForm<IncidenciaForm>({
+  const { register, handleSubmit, setValue, getFieldState, control, formState } = useForm<IncidenciaForm>({
     resolver: zodResolver(incidenciaSchema),
     defaultValues: {
       titulo: '', descripcion: '', prioridad: 'media', tags: [],
@@ -64,6 +67,8 @@ export default function Reportar() {
       detalle_especifico: detalleVacio('computo_redes'),
     },
   })
+  // Leer dirtyFields en el render suscribe el formulario a su seguimiento (lo usa sinEditar).
+  const { errors, isSubmitting, dirtyFields: _camposEditados } = formState
   const categoria = useWatch({ control, name: 'detalle_especifico.categoria' })
   const { mutateAsync: crear } = useCrearIncidencia()
   const { mutateAsync: subirFoto } = useEvidencia()
@@ -76,44 +81,83 @@ export default function Reportar() {
     setValue('ubicacion.aula', aula.data.ubicacion.aula, { shouldValidate: true })
   }, [aula.data, setValue])
 
+  useEffect(() => {
+    montado.current = true
+    return () => {
+      montado.current = false
+      operacionIA.current?.abort()
+      if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
+    }
+  }, [])
+
   // register de campos del detalle (la unión discriminada no se resuelve en tipos de ruta)
   const d = (nombre: string, opts?: RegisterOptions) =>
     register(`detalle_especifico.${nombre}` as 'detalle_especifico.categoria', opts as never)
   const num = { valueAsNumber: true } as RegisterOptions
 
-  function cambiarCategoria(c: Categoria) {
-    setValue('detalle_especifico', detalleVacio(c))
+  function cambiarCategoria(c: Categoria, porUsuario = false) {
+    setValue('detalle_especifico', detalleVacio(c), { shouldDirty: porUsuario })
+  }
+
+  // El análisis llega mientras el formulario ya es editable: nunca pisa lo que el usuario escribió.
+  const sinEditar = (campo: 'titulo' | 'descripcion' | 'prioridad' | 'tags' | 'detalle_especifico') =>
+    !getFieldState(campo).isDirty
+
+  function cancelarAnalisis() {
+    operacionIA.current?.abort()
+    operacionIA.current = null
+    setAnalizando(false)
+  }
+
+  function continuarManual() {
+    cancelarAnalisis()
+    setPaso('formulario')
+  }
+
+  function abrirCamara() {
+    entrada.current?.click()
   }
 
   async function alElegirFoto(archivo: File | undefined) {
     if (!archivo) return
+    cancelarAnalisis()
+    const control = new AbortController()
+    operacionIA.current = control
     setAnalizando(true)
     setAviso(null)
+    setPaso('formulario')
     try {
       const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
+      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setFoto(comprimida)
       progresoFoto.current = {}
-      setVista(URL.createObjectURL(comprimida))
-      const fd = new FormData()
-      fd.append('imagen', comprimida, 'incidencia.jpg')
-      const sugerencia = respuestaAnalisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
+      if (vistaUrl.current) URL.revokeObjectURL(vistaUrl.current)
+      vistaUrl.current = URL.createObjectURL(comprimida)
+      setVista(vistaUrl.current)
+      const sugerencia = await analizarImagen({ imagen: comprimida }, { signal: control.signal })
+      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setIa(sugerencia)
       if (!sugerencia.es_incidencia_valida) {
         setAviso('La IA no reconoció una incidencia en la foto. Completa el formulario manualmente.')
       } else {
-        setValue('titulo', sugerencia.titulo.slice(0, 120))
-        setValue('descripcion', sugerencia.descripcion)
-        setValue('prioridad', sugerencia.prioridad_sugerida)
-        const tags = sugerencia.tags.map(normalizarTag)
-        setValue('tags', tags)
-        setTagsTexto(tags.join(', '))
-        if (sugerencia.categoria !== 'no_determinada') cambiarCategoria(sugerencia.categoria)
+        if (sinEditar('titulo')) setValue('titulo', sugerencia.titulo.slice(0, 120))
+        if (sinEditar('descripcion')) setValue('descripcion', sugerencia.descripcion)
+        if (sinEditar('prioridad')) setValue('prioridad', sugerencia.prioridad_sugerida)
+        if (sinEditar('tags')) {
+          const tags = sugerencia.tags.map(normalizarTag)
+          setValue('tags', tags)
+          setTagsTexto(tags.join(', '))
+        }
+        if (sugerencia.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) cambiarCategoria(sugerencia.categoria)
       }
     } catch {
+      if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setAviso('No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
     } finally {
-      setAnalizando(false)
-      setPaso('formulario')
+      if (montado.current && operacionIA.current === control) {
+        operacionIA.current = null
+        setAnalizando(false)
+      }
     }
   }
 
@@ -132,6 +176,7 @@ export default function Reportar() {
   }
 
   async function enviar(datos: IncidenciaForm) {
+    cancelarAnalisis()
     setErrorEnvio(null)
     try {
       const nueva = await crear(datos)
@@ -144,6 +189,10 @@ export default function Reportar() {
     } catch (e) {
       setErrorEnvio(e instanceof Error ? e.message : 'No se pudo crear la incidencia')
     }
+  }
+
+  function enviarFormulario(evento: FormEvent<HTMLFormElement>) {
+    void handleSubmit(enviar)(evento)
   }
 
   const errD = errors.detalle_especifico as Record<string, { message?: string }> | undefined
@@ -181,10 +230,10 @@ export default function Reportar() {
         <div className="card flex flex-col items-center gap-4 py-10 text-center">
           <p className="m-0 text-muted">Toma una foto del problema y la IA te ayudará a llenar el reporte.</p>
           <input ref={entrada} type="file" accept="image/*" capture="environment" hidden aria-label="Foto de la incidencia" onChange={(e) => alElegirFoto(e.target.files?.[0])} />
-          <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={() => entrada.current?.click()}>
+          <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
           </button>
-          <button className="btn btn-secundario" onClick={() => setPaso('formulario')}>Llenar sin foto</button>
+          <button className="btn btn-secundario" onClick={continuarManual}>Llenar sin foto</button>
         </div>
       </>
     )
@@ -194,6 +243,7 @@ export default function Reportar() {
     <>
       <h1 className="titulo-pagina">Nueva incidencia</h1>
       {vista && <img src={vista} alt="Foto de la incidencia" className="mb-3 max-h-56 rounded-card object-cover" />}
+      {analizando && <p role="status" className="card mb-3 text-sm">Analizando la foto… Puedes continuar llenando el formulario.</p>}
       {aviso && <p role="status" className="card mb-3 text-sm">{aviso}</p>}
       {aulaId && aula.isPending && <p role="status" className="card mb-3 text-sm">Comprobando la ubicación del código QR…</p>}
       {aulaId && aula.isError && (
@@ -217,7 +267,7 @@ export default function Reportar() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(enviar)} className="card">
+      <form onSubmit={enviarFormulario} className="card">
         <label className="etiqueta" htmlFor="titulo">Título</label>
         <input id="titulo" {...register('titulo')} />
         <Err msg={errors.titulo?.message} />
@@ -240,7 +290,7 @@ export default function Reportar() {
         <Err msg={errors.ubicacion?.aula?.message} />
 
         <label className="etiqueta" htmlFor="categoria">Categoría</label>
-        <select id="categoria" value={categoria} onChange={(e) => cambiarCategoria(e.target.value as Categoria)}>
+        <select id="categoria" value={categoria} onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}>
           {CATEGORIAS.map((c) => <option key={c} value={c}>{NOMBRES_CATEGORIA[c]}</option>)}
         </select>
 
@@ -304,7 +354,7 @@ export default function Reportar() {
           value={tagsTexto}
           onChange={(e) => {
             setTagsTexto(e.target.value)
-            setValue('tags', e.target.value.split(',').map(normalizarTag).filter(Boolean))
+            setValue('tags', e.target.value.split(',').map(normalizarTag).filter(Boolean), { shouldDirty: true })
           }}
         />
         <Err msg={errors.tags?.message} />

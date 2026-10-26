@@ -24,6 +24,7 @@ from app.services.duplicados import (
     CoincidenciaNoEncontrada,
     confirmar_adhesion,
 )
+from app.services import ia as ia_service
 from app.services.ia import PROMPT_VERSION, PROVEEDOR_IA, IAError, analizar_imagen
 from app.services.ia_eventos import (
     EventoIAConflictivo,
@@ -186,13 +187,16 @@ async def analizar(
         raise HTTPException(503, "El análisis con IA no está disponible en este momento") from exc
 
     try:
-        analisis = await analizar_imagen(validada.datos, validada.tipo_mime, contexto_normalizado or None)
+        # El reintento queda dentro: si todo falla el cupo se devuelve una sola vez.
+        analisis = await ia_service.con_reintento_transitorio(
+            lambda: analizar_imagen(validada.datos, validada.tipo_mime, contexto_normalizado or None)
+        )
     except Exception as e:  # IAError, errores de red/API, JSON inválido
         try:
             await redis.eval(_DEVOLVER_CUPO, 2, *claves_cupo)
         except Exception:
             logger.error("No se pudo devolver el cupo tras un fallo del proveedor de IA", exc_info=True)
-        raise HTTPException(503, "No fue posible analizar la imagen con IA") from e
+        raise HTTPException(503, "No fue posible analizar la imagen; llena el formulario manualmente") from e
 
     try:
         await redis.set(clave_cache, analisis.model_dump_json(), ex=CACHE_TTL)

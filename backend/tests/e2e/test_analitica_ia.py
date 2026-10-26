@@ -1,6 +1,9 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
+import anthropic
+import httpx
 import pytest
 import pytest_asyncio
 from bson import ObjectId
@@ -9,6 +12,7 @@ from redis.exceptions import RedisError
 
 import app.routers.analitica as analitica_router
 import app.routers.ia as ia_router
+import app.services.ia as ia_service
 from app.core import cache as cache_core
 from app.core.config import settings
 from app.core.db import get_redis
@@ -448,6 +452,25 @@ def ia_falsa(monkeypatch):
     return llamadas
 
 
+@pytest.fixture
+def reintentos_rapidos(monkeypatch):
+    esperas = []
+
+    async def esperar(segundos):
+        esperas.append(segundos)
+
+    monkeypatch.setattr(ia_service, "IA_TIMEOUT_SEGUNDOS", 0.01)
+    monkeypatch.setattr(ia_service, "_esperar", esperar)
+    monkeypatch.setattr(ia_service, "_aleatorio_uniforme", lambda minimo, maximo: maximo)
+    return esperas
+
+
+def _error_http(clase, status):
+    peticion = httpx.Request("POST", "https://proveedor.invalid/v1/messages")
+    respuesta = httpx.Response(status, request=peticion)
+    return clase("detalle interno secreto", response=respuesta, body={"detalle": "credencial-secreta"})
+
+
 async def _post(api, quien="reportante_a", nombre="foto.png", datos=PNG, mime="image/png", contexto=None):
     data = {"contexto": contexto} if contexto else None
     return await api.c.post(
@@ -591,3 +614,96 @@ async def test_ia_sin_redis_falla_cerrado(api, ia_falsa, monkeypatch):
     # Sin Redis no se puede contabilizar el cupo: no se llama al proveedor (costo acotado).
     assert r.status_code == 503, r.text
     assert ia_falsa == []
+
+
+async def test_ia_timeout_reintenta_y_503(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def proveedor_lento(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", proveedor_lento)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert r.json()["detalle"] == "No fue posible analizar la imagen; llena el formulario manualmente"
+    assert intentos == 2
+    assert reintentos_rapidos == [ia_service.BACKOFF_MAX_SEGUNDOS]
+    assert "secreto" not in r.text.lower()
+
+
+async def test_ia_429_reintenta_una_vez(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def limitado(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(anthropic.RateLimitError, 429)
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", limitado)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 2
+    assert len(reintentos_rapidos) == 1
+    assert "credencial-secreta" not in r.text
+
+
+async def test_ia_5xx_reintenta_una_vez(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def no_disponible(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(anthropic.InternalServerError, 500)
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", no_disponible)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 2
+    assert len(reintentos_rapidos) == 1
+
+
+async def test_ia_4xx_sin_reintento(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def solicitud_invalida(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(anthropic.BadRequestError, 400)
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", solicitud_invalida)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 1
+    assert reintentos_rapidos == []
+
+
+async def test_ia_reintento_devuelve_cupo_una_sola_vez(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def limitado(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(anthropic.RateLimitError, 429)
+
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+    await redis.mset({claves_cupo[0]: 4, claves_cupo[1]: 7})
+    monkeypatch.setattr(ia_router, "analizar_imagen", limitado)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 2
+    assert await redis.mget(*claves_cupo) == ["4", "7"]
+
+
+async def test_ia_presupuesto_total_menor_al_timeout_del_cliente():
+    # El cliente (frontend/src/api/client.ts, TIMEOUT_IA_MS) aborta a los 30 s.
+    peor_caso = ia_service.IA_INTENTOS_MAXIMOS * ia_service.IA_TIMEOUT_SEGUNDOS + ia_service.BACKOFF_MAX_SEGUNDOS
+    assert ia_service.IA_DEADLINE_TOTAL_SEGUNDOS <= 28
+    assert peor_caso <= ia_service.IA_DEADLINE_TOTAL_SEGUNDOS

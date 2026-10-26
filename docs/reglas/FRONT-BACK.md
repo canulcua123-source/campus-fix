@@ -185,7 +185,7 @@ const fd = new FormData()
 fd.append('imagen', comprimida, 'incidencia.jpg')
 if (contexto) fd.append('contexto', contexto.slice(0, 500))
 const sugerencia = analisisImagenSchema.parse(await api('/ia/analizar-imagen', { method: 'POST', body: fd }))
-// ✅✅ o con el hook (multipart, timeout 60 s, respuesta validada)
+// ✅✅ o con el hook (multipart, timeout 30 s; el servidor reintenta dentro de un deadline total de 28 s, respuesta validada)
 const ia = useAnalizarImagen(); ia.mutate({ imagen: comprimida, contexto })
 // ❌ headers: { 'Content-Type': 'multipart/form-data' }   → falta el boundary, 400
 ```
