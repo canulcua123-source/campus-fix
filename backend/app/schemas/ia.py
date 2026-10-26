@@ -37,9 +37,14 @@ class AnalisisImagen(BaseModel):
     advertencias: list[str]
 
 
-class RespuestaAnalisisImagen(AnalisisImagen):
-    """Respuesta del endpoint, incluyendo el origen del análisis."""
+class RespuestaIA(BaseModel):
+    """Respuesta del servidor después de aplicar las reglas de confianza."""
 
+    model_config = ConfigDict(extra="forbid")
+
+    accion: Literal["autollenar", "sugerir", "preguntar", "rechazar"]
+    mensaje: str
+    analisis: AnalisisImagen
     cache: bool
 
 

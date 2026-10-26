@@ -80,9 +80,12 @@ describe('Reportar', () => {
     const titulo = screen.getByLabelText('Título')
     await userEvent.type(titulo, 'Escrito por mí')
     resolver({
-      es_incidencia_valida: true, categoria: 'infraestructura', titulo: 'Luminaria fundida',
-      descripcion: 'Se observa una luminaria apagada', prioridad_sugerida: 'alta', tags: ['luminaria'],
-      campos_detectados: [], confianza: 0.9, advertencias: [], cache: false,
+      accion: 'autollenar', mensaje: 'Revisa los datos', cache: false,
+      analisis: {
+        es_incidencia_valida: true, categoria: 'infraestructura', titulo: 'Luminaria fundida',
+        descripcion: 'Se observa una luminaria apagada', prioridad_sugerida: 'alta', tags: ['luminaria'],
+        campos_detectados: [], confianza: 0.9, advertencias: [],
+      },
     })
 
     await waitFor(() => expect(screen.getByLabelText('Descripción')).toHaveValue('Se observa una luminaria apagada'))

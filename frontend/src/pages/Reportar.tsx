@@ -9,9 +9,11 @@ import { aulaQuery } from '../api/aulas'
 import { analizarImagen } from '../api/ia'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
+import { SugerenciaIA } from '../components/SugerenciaIA'
+import type { RespuestaIA } from '../schemas/ia'
 import {
   CATEGORIAS, PRIORIDADES, incidenciaSchema,
-  type AnalisisImagen, type Categoria, type IncidenciaCreada, type IncidenciaForm,
+  type Categoria, type IncidenciaCreada, type IncidenciaForm,
 } from '../schemas/incidencia'
 
 const NOMBRES_CATEGORIA: Record<Categoria, string> = {
@@ -50,7 +52,7 @@ export default function Reportar() {
   const [vista, setVista] = useState<string | null>(null)
   const [foto, setFoto] = useState<File | null>(null)
   const [analizando, setAnalizando] = useState(false)
-  const [ia, setIa] = useState<AnalisisImagen | null>(null)
+  const [ia, setIa] = useState<RespuestaIA | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const [tagsTexto, setTagsTexto] = useState('')
@@ -137,18 +139,19 @@ export default function Reportar() {
       const sugerencia = await analizarImagen({ imagen: comprimida }, { signal: control.signal })
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
       setIa(sugerencia)
-      if (!sugerencia.es_incidencia_valida) {
-        setAviso('La IA no reconoció una incidencia en la foto. Completa el formulario manualmente.')
-      } else {
-        if (sinEditar('titulo')) setValue('titulo', sugerencia.titulo.slice(0, 120))
-        if (sinEditar('descripcion')) setValue('descripcion', sugerencia.descripcion)
-        if (sinEditar('prioridad')) setValue('prioridad', sugerencia.prioridad_sugerida)
+      // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
+      if (sugerencia.accion === 'autollenar' || sugerencia.accion === 'sugerir') {
+        const analisis = sugerencia.analisis
+        if (sinEditar('titulo')) setValue('titulo', analisis.titulo.slice(0, 120))
+        if (sinEditar('descripcion')) setValue('descripcion', analisis.descripcion)
+        // "critica" nunca se autollena: el usuario debe elegirla explícitamente.
+        if (sinEditar('prioridad')) setValue('prioridad', analisis.prioridad_sugerida === 'critica' ? 'alta' : analisis.prioridad_sugerida)
         if (sinEditar('tags')) {
-          const tags = sugerencia.tags.map(normalizarTag)
+          const tags = analisis.tags.map(normalizarTag)
           setValue('tags', tags)
           setTagsTexto(tags.join(', '))
         }
-        if (sugerencia.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) cambiarCategoria(sugerencia.categoria)
+        if (analisis.categoria !== 'no_determinada' && sinEditar('detalle_especifico')) cambiarCategoria(analisis.categoria)
       }
     } catch {
       if (!montado.current || control.signal.aborted || operacionIA.current !== control) return
@@ -256,12 +259,13 @@ export default function Reportar() {
           Ubicación fijada por el código QR: {aula.data.ubicacion.edificio}, piso {aula.data.ubicacion.piso}, aula {aula.data.ubicacion.aula}.
         </p>
       )}
-      {ia?.es_incidencia_valida && (
+      {ia && <SugerenciaIA respuesta={ia} />}
+      {ia && (ia.accion === 'autollenar' || ia.accion === 'sugerir') && (
         <div className="mb-3 flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-panel-2 px-3 py-1 text-xs font-semibold text-brand">
-            <Sparkles size={14} aria-hidden /> Sugerido por IA · confianza {Math.round(ia.confianza * 100)}%
+            <Sparkles size={14} aria-hidden /> Sugerido por IA · confianza {Math.round(ia.analisis.confianza * 100)}%
           </span>
-          {ia.campos_detectados.map((c) => (
+          {ia.analisis.campos_detectados.map((c) => (
             <span key={c.nombre} className="rounded-full border border-line bg-panel px-3 py-1 text-xs">{c.nombre}: {c.valor}</span>
           ))}
         </div>

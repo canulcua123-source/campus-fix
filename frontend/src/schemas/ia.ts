@@ -29,9 +29,15 @@ export const analisisImagenSchema = z.strictObject({
 })
 export type AnalisisImagen = z.infer<typeof analisisImagenSchema>
 
-/** RespuestaAnalisisImagen: respuesta de POST /ia/analizar-imagen (`cache` = reutilizó un análisis sin consumir cupo). */
-export const respuestaAnalisisImagenSchema = analisisImagenSchema.extend({ cache: z.boolean() })
-export type RespuestaAnalisisImagen = z.infer<typeof respuestaAnalisisImagenSchema>
+/** RespuestaIA: decisión determinista del servidor y análisis (con la confianza efectiva). */
+export const respuestaIaSchema = z.strictObject({
+  accion: z.enum(['autollenar', 'sugerir', 'preguntar', 'rechazar']),
+  mensaje: z.string().min(1),
+  analisis: analisisImagenSchema,
+  /** true si reutilizó un análisis sin consumir cupo. */
+  cache: z.boolean(),
+})
+export type RespuestaIA = z.infer<typeof respuestaIaSchema>
 
 const categoriaSchema = z.string().regex(/^[a-z][a-z0-9_]{2,29}$/)
 const coincidenciaIdSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)

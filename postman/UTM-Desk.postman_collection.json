@@ -1624,7 +1624,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Estructura de análisis', function () { const j = pm.response.json(); pm.expect(j.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.titulo).to.be.a('string'); pm.expect(j.prioridad_sugerida).to.be.a('string'); pm.expect(j.tags).to.be.an('array'); pm.expect(j.confianza).to.be.within(0,1); pm.expect(j.cache).to.be.a('boolean'); });"
+                  "pm.test('Estructura de decisión y análisis', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.analisis.categoria).to.be.a('string'); pm.expect(j.analisis.confianza).to.be.within(0,1); });"
                 ]
               }
             }
