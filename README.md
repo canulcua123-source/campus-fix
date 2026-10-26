@@ -1,5 +1,7 @@
 # Campus Fix · UTM Desk
 
+[![CI](https://github.com/canulcua123-source/campus-fix/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/canulcua123-source/campus-fix/actions/workflows/ci.yml)
+
 **Sistema de gestión, resolución y analítica de incidencias del campus.** Docentes, estudiantes y administrativos reportan fallas desde el celular con una foto; la IA llena el reporte, los técnicos le dan seguimiento y la coordinación ve métricas en tiempo real.
 
 > Proyecto de la asignatura **Bases de Datos en la Nube** (Unidad II · NoSQL). Núcleo obligatorio: **MongoDB Atlas**.
@@ -146,6 +148,28 @@ npm run dev                             # http://localhost:5173
 ```
 
 > El `.env` real con llaves de Atlas, Backblaze e IA **solo lo tiene el responsable de despliegue**. Para desarrollar no lo necesitas.
+
+## CI
+
+GitHub Actions ejecuta el pipeline en cada Pull Request hacia `dev` o `main` y en cada push a `dev`. Los jobs se filtran por las rutas modificadas y el check final obligatorio es `ci-ok`.
+
+Para reproducirlo localmente con MongoDB y Redis de Docker:
+
+```bash
+docker compose up -d
+
+cd backend
+pip install -r requirements.txt -r requirements-dev.txt
+ruff check .
+pytest tests -q
+
+cd ../frontend
+npm ci
+npm run lint
+npm run build
+```
+
+`npm run build` ejecuta `tsc -b` antes de `vite build`. La suite backend usa únicamente `mongodb://localhost:27017` y Redis local; no requiere Atlas, Backblaze B2 ni credenciales reales.
 
 ### Variables de entorno (backend)
 
