@@ -13,7 +13,7 @@ from redis.exceptions import RedisError
 from app.core.config import PATRON_CORREO, settings, validar_dominio_correo
 from app.core.db import get_db, get_redis
 from app.core.errores import cabeceras_retry_after
-from app.core.limiter import limiter
+from app.core.limiter import LIMITE_LOGIN, limiter
 from app.core.refresh_tokens import ResultadoRefresh, iniciar_familia, revocar_familia, rotar_token
 from app.core.security import (
     HASH_FICTICIO,
@@ -114,7 +114,7 @@ async def _estado_bloqueo(redis, claves: list[str]) -> tuple[bool, int | None]:
 
 
 @router.post("/login")
-@limiter.limit("10/minute")
+@limiter.limit(LIMITE_LOGIN)
 async def login(request: Request, datos: LoginIn, response: Response = None):
     correo = datos.correo.strip().lower()
     # Además del límite general por IP: intentos fallidos por (cuenta, IP) y por cuenta.
@@ -141,7 +141,7 @@ async def login(request: Request, datos: LoginIn, response: Response = None):
     # argon2 es costoso: corre en un hilo para no bloquear el event loop.
     hash_ = usuario["password_hash"] if usuario else HASH_FICTICIO
     valido = await asyncio.to_thread(verificar_password, datos.password, hash_)
-    if usuario is None or not valido or usuario.get("activo") is False:
+    if usuario is None or not valido or usuario.get("activo") is not True:
         for clave in (clave_ip, clave_cuenta):
             await redis.incr(clave)
             await redis.expire(clave, VENTANA_FALLOS)
@@ -178,7 +178,7 @@ async def login(request: Request, datos: LoginIn, response: Response = None):
 async def renovar_sesion(request: Request, response: Response):
     _validar_origen_csrf(request)
     _, claims = _leer_refresh(request)
-    usuario = await get_db().usuarios.find_one({"_id": ObjectId(claims["sub"]), "activo": {"$ne": False}})
+    usuario = await get_db().usuarios.find_one({"_id": ObjectId(claims["sub"]), "activo": True})
     if usuario is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sesión inválida o expirada")
 
