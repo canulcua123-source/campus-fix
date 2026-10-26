@@ -5,6 +5,7 @@ import { useRef, useState } from 'react'
 import { useForm, useWatch, type RegisterOptions } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import { CONFIG_IMAGEN, ErrorImagen, validarImagenEntrada } from '../lib/imagen'
 import {
   CATEGORIAS, PRIORIDADES, analisisImagenSchema, incidenciaSchema,
   type AnalisisImagen, type Categoria, type IncidenciaForm,
@@ -65,10 +66,22 @@ export default function Reportar() {
 
   async function alElegirFoto(archivo: File | undefined) {
     if (!archivo) return
-    setAnalizando(true)
     setAviso(null)
     try {
-      const comprimida = await imageCompression(archivo, { maxWidthOrHeight: 1568, maxSizeMB: 1.5, fileType: 'image/jpeg', useWebWorker: true })
+      validarImagenEntrada(archivo)
+    } catch (error) {
+      setAviso(error instanceof ErrorImagen ? error.message : 'No se pudo procesar la foto.')
+      return
+    }
+    setAnalizando(true)
+    try {
+      const comprimida = await imageCompression(archivo, {
+        maxWidthOrHeight: 1568,
+        maxSizeMB: 1.5,
+        fileType: 'image/jpeg',
+        initialQuality: CONFIG_IMAGEN.calidadInicial,
+        useWebWorker: true,
+      })
       setVista(URL.createObjectURL(comprimida))
       const fd = new FormData()
       fd.append('imagen', comprimida, 'incidencia.jpg')
@@ -111,7 +124,8 @@ export default function Reportar() {
         <h1 className="titulo-pagina">Reportar</h1>
         <div className="card flex flex-col items-center gap-4 py-10 text-center">
           <p className="m-0 text-muted">Toma una foto del problema y la IA te ayudará a llenar el reporte.</p>
-          <input ref={entrada} type="file" accept="image/*" capture="environment" hidden onChange={(e) => alElegirFoto(e.target.files?.[0])} />
+          {aviso && <p role="alert" className="m-0 text-sm text-danger">{aviso}</p>}
+          <input ref={entrada} type="file" accept={CONFIG_IMAGEN.tiposEntrada.join(',')} capture="environment" hidden onChange={(e) => alElegirFoto(e.target.files?.[0])} />
           <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={() => entrada.current?.click()}>
             <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
           </button>
