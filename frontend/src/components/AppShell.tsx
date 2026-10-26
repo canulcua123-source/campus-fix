@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { Camera, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useLogout } from '../api/hooks/auth'
 import { useAuth } from '../auth/store'
 import { InstallPrompt } from './InstallPrompt'
 import { navegacionPara, PERFIL_ITEM, REPORTAR, type ItemNav } from './navegacion'
@@ -128,14 +129,14 @@ export function NavegacionLateral({
 
 export function AppShell() {
   const usuario = useAuth((s) => s.usuario)
-  const cerrarSesion = useAuth((s) => s.cerrarSesion)
+  const logout = useLogout()
   const navigate = useNavigate()
   const permisos = usuario?.permisos ?? []
   const puedeBuscar = permisos.includes('incidencias:buscar')
 
   const salir = () => {
-    cerrarSesion()
-    navigate('/login')
+    if (logout.isPending) return
+    logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
   }
 
   return (

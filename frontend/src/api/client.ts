@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod'
 import { useAuth } from '../auth/store'
+import { refreshOutSchema } from '../schemas/usuario'
 
 /** Cliente HTTP único hacia la API (FB-02). Ninguna página llama a `fetch` directamente. */
 export const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000'
@@ -214,7 +215,7 @@ export function configurarExpiracion(fn: () => void) {
 }
 
 /**
- * 401 en un endpoint autenticado: cierra sesión UNA sola vez y RequirePermiso lleva a /login (FB-05).
+ * Sin renovación posible: cierra sesión UNA sola vez y RequirePermiso lleva a /login (FB-05).
  * Solo actúa si el token rechazado sigue siendo el vigente: varias peticiones en vuelo con 401
  * producen un solo cierre, y un 401 tardío del token anterior no cierra una sesión nueva.
  */
@@ -223,6 +224,35 @@ export function expirarSesion(tokenRechazado: string) {
   if (!auth.token || auth.token !== tokenRechazado) return
   auth.cerrarSesion(MENSAJE_SESION_EXPIRADA)
   alExpirar?.()
+}
+
+/** Rutas de sesión: viajan con la cookie HttpOnly de refresh y su 401 no dispara renovación. */
+const RUTAS_SESION = ['/auth/login', '/auth/refresh', '/auth/logout']
+const esRutaSesion = (ruta: string) => RUTAS_SESION.some((r) => ruta === r || ruta.startsWith(`${r}?`))
+
+let refrescoEnCurso: Promise<string | null> | null = null
+
+/**
+ * POST /auth/refresh con la cookie HttpOnly (`credentials: 'include'`). Un solo refresh a la vez:
+ * las peticiones que reciben 401 en paralelo comparten la misma promesa. Devuelve el nuevo
+ * access token (ya guardado en memoria) o null si la cookie no existe, expiró o fue revocada.
+ */
+export function refrescarSesion(): Promise<string | null> {
+  if (!refrescoEnCurso) {
+    refrescoEnCurso = (async () => {
+      try {
+        const r = await api('/auth/refresh', { method: 'POST', credentials: 'include', schema: refreshOutSchema })
+        useAuth.getState().actualizarToken(r.access_token)
+        return r.access_token
+      } catch (e) {
+        if (import.meta.env.DEV) console.info('[api] no fue posible renovar la sesión', e)
+        return null
+      } finally {
+        refrescoEnCurso = null
+      }
+    })()
+  }
+  return refrescoEnCurso
 }
 
 // ---------- petición ----------
@@ -235,6 +265,8 @@ export interface Opciones extends Omit<RequestInit, 'body'> {
   params?: Record<string, string | number | boolean | null | undefined>
   /** Timeout en ms (20 s por defecto; usa TIMEOUT_IA_MS para IA). */
   timeoutMs?: number
+  /** Interno: la petición ya se reintentó tras renovar la sesión (un solo reintento). */
+  reintentoSesion?: boolean
 }
 
 function construirUrl(ruta: string, params?: Opciones['params']): string {
@@ -268,7 +300,7 @@ export function validarRespuesta<S extends ZodType>(schema: S, datos: unknown, r
 export async function api<S extends ZodType>(ruta: string, init: Opciones & { schema: S }): Promise<S['_output']>
 export async function api<T = unknown>(ruta: string, init?: Opciones): Promise<T>
 export async function api(ruta: string, init: Opciones & { schema?: ZodType } = {}): Promise<unknown> {
-  const { json, headers, params, timeoutMs = TIMEOUT_MS, schema, signal, ...resto } = init
+  const { json, headers, params, timeoutMs = TIMEOUT_MS, schema, signal, reintentoSesion = false, ...resto } = init
   const h = new Headers(headers)
   const token = useAuth.getState().token
   if (token) h.set('Authorization', `Bearer ${token}`)
@@ -309,8 +341,16 @@ export async function api(ruta: string, init: Opciones & { schema?: ZodType } = 
   const cuerpo = leerCuerpo(texto, resp.headers.get('Content-Type'))
   if (!resp.ok) {
     const error = mapearError(resp.status, cuerpo, resp.headers)
-    // El 401 de /auth/login es "credenciales inválidas", no sesión expirada.
-    if (resp.status === 401 && token && !ruta.startsWith('/auth/login')) expirarSesion(token)
+    // El 401 de /auth/login es "credenciales inválidas"; los de refresh/logout los maneja quien llama.
+    if (resp.status === 401 && token && !esRutaSesion(ruta)) {
+      if (!reintentoSesion) {
+        // Otra petición ya renovó el token: basta con reintentar; si no, se renueva una sola vez.
+        const vigente = useAuth.getState().token
+        const nuevo = vigente && vigente !== token ? vigente : await refrescarSesion()
+        if (nuevo) return api(ruta, { ...init, reintentoSesion: true })
+      }
+      expirarSesion(token)
+    }
     throw error
   }
   return schema ? validarRespuesta(schema, cuerpo, ruta, resp.status) : cuerpo

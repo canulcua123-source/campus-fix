@@ -64,6 +64,12 @@ export const loginOutSchema = z.object({
 })
 export type LoginOut = z.infer<typeof loginOutSchema>
 
+/** POST /auth/refresh: nuevo access token; el refresh rota en la cookie HttpOnly. */
+export const refreshOutSchema = z.object({
+  access_token: z.string().min(1),
+  token_type: z.string(),
+})
+
 /** GET /auth/me */
 export const meSchema = usuarioSesion.extend({
   _id: z.string(),
