@@ -17,6 +17,8 @@ def _analisis(**cambios) -> AnalisisImagen:
         "advertencias": [],
     }
     datos.update(cambios)
+    if datos["categoria"] == "infraestructura":
+        datos.setdefault("detalle_infra", {"tipo_dano": "luminaria", "riesgo_seguridad": "bajo"})
     return AnalisisImagen(**datos)
 
 

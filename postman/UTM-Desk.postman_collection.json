@@ -1624,7 +1624,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Estructura de decisión y análisis', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.analisis.categoria).to.be.a('string'); pm.expect(j.analisis.confianza).to.be.within(0,1); });"
+                  "pm.test('Estructura de decisión y análisis', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.analisis.categoria).to.be.a('string'); pm.expect(j.analisis.confianza).to.be.within(0,1); if (j.analisis.categoria === 'infraestructura') { pm.expect(['filtracion','electrico','climatizacion','cerrajeria','luminaria','otro']).to.include(j.analisis.detalle_infra.tipo_dano); pm.expect(['bajo','medio','alto']).to.include(j.analisis.detalle_infra.riesgo_seguridad); } else { pm.expect(j.analisis).not.to.have.property('detalle_infra'); } });"
                 ]
               }
             }

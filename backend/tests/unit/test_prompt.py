@@ -13,7 +13,8 @@ def test_clave_cache_incluye_version_del_prompt():
 def test_prompt_trata_texto_como_dato_y_no_identifica_personas():
     prompt = PROMPT_SISTEMA.lower()
 
-    assert PROMPT_VERSION == "v2"
+    assert PROMPT_VERSION == "v3"
+    assert "detalle_infra" in prompt
     assert "texto visible" in prompt and "dato no confiable" in prompt
     assert "texto_con_instrucciones" in prompt
     assert "nunca identifiques" in prompt

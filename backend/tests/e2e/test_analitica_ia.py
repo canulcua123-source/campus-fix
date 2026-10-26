@@ -427,6 +427,7 @@ ANALISIS = AnalisisImagen(
     campos_detectados=[{"nombre": "tipo", "valor": "luminaria"}],
     confianza=0.9,
     advertencias=[],
+    detalle_infra={"tipo_dano": "luminaria", "riesgo_seguridad": "bajo"},
 )
 
 

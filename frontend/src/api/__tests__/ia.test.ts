@@ -15,6 +15,7 @@ const ANALISIS_IA = {
   campos_detectados: [{ nombre: 'tipo', valor: 'luminaria' }],
   confianza: 0.9,
   advertencias: [],
+  detalle_infra: { tipo_dano: 'luminaria', riesgo_seguridad: 'bajo' },
 }
 const ANALISIS = { accion: 'autollenar', mensaje: 'Revisa los datos', analisis: ANALISIS_IA, cache: false }
 

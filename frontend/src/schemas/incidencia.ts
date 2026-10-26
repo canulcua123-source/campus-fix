@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+import { RIESGOS, TIPOS_DANO } from './infraestructura'
+
+export { RIESGOS, TIPOS_DANO } from './infraestructura'
+
 /**
  * Espejo de backend/app/schemas/incidencia.py y de las clases ...In de backend/app/routers/incidencias.py (FB-12).
  * Mismos nombres, enums, mínimos, máximos y patrones. Si cambia Pydantic, cambia aquí en el mismo PR.
@@ -9,8 +13,6 @@ export const PRIORIDADES = ['baja', 'media', 'alta', 'critica'] as const
 export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada', 'retirada'] as const
 export const ESTADOS_SEGUIMIENTO = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
 export const CATEGORIAS = ['computo_redes', 'infraestructura', 'academico'] as const
-export const TIPOS_DANO = ['filtracion', 'electrico', 'climatizacion', 'cerrajeria', 'luminaria', 'otro'] as const
-export const RIESGOS = ['bajo', 'medio', 'alto'] as const
 export const PLATAFORMAS = ['lms', 'portal_calificaciones', 'correo'] as const
 export const TIPOS_MIME_EVIDENCIA = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
 export const ACCIONES_IA = ['agentico', 'formulario', 'duplicado', 'autollenar', 'sugerir', 'preguntar', 'rechazar'] as const
