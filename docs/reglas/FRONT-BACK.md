@@ -96,7 +96,7 @@ catch (e) {
 | Mutación | Invalidar |
 |---|---|
 | `POST /incidencias` | `['incidencias']`, `['analitica']` |
-| `PATCH .../seguimiento`, `PATCH .../asignacion` | `['incidencia', id]`, `['incidencias']`, `['analitica']` |
+| `PATCH .../seguimiento`, `PATCH .../asignacion`, `PATCH .../prioridad` | `['incidencia', id]`, `['incidencias']`, `['analitica']` |
 | `POST`/`DELETE .../tags` | `['incidencia', id]`, `['analitica', 'tags']` |
 | `POST .../evidencias` | `['incidencia', id]` |
 | `POST /roles`, `POST`/`PATCH /usuarios` | `['roles']` / `['usuarios']` |

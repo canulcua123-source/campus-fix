@@ -18,8 +18,8 @@ beforeAll(() => {
 afterEach(() => { cleanup(); server.resetHandlers(); useAuth.getState().cerrarSesion(); vi.useRealTimers() })
 afterAll(() => server.close())
 
-function montar() {
-  useAuth.setState({ usuario: { nombre: 'Dirección', rol: 'directivo', permisos: ['incidencias:ver'], alcance: 'global' } })
+function montar(rol = 'directivo', permisos = ['incidencias:ver']) {
+  useAuth.setState({ usuario: { nombre: 'Dirección', rol, permisos, alcance: 'global' } })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/incidencias/abc']}><Routes><Route path="/incidencias/:id" element={<DetalleIncidencia />} /></Routes></MemoryRouter></QueryClientProvider>)
 }
@@ -99,4 +99,49 @@ it('renueva la imagen si el almacenamiento rechaza su enlace', async () => {
   const imagen = await screen.findByRole('img', { name: 'Foto.jpg' })
   fireEvent.error(imagen)
   await waitFor(() => expect(imagen.getAttribute('src')).toBe('https://archivos.example/foto.jpg?v=2'))
+})
+
+it('cambia prioridad como coordinador y refresca el detalle', async () => {
+  let prioridad = 'alta'
+  let cuerpo: unknown
+  server.use(
+    http.get('*/incidencias/abc', () => HttpResponse.json({ ...detallePrueba, prioridad })),
+    http.patch('*/incidencias/abc/prioridad', async ({ request }) => {
+      cuerpo = await request.json()
+      prioridad = 'critica'
+      return HttpResponse.json({ ok: true, prioridad })
+    }),
+  )
+  montar('coordinador', ['incidencias:ver', 'incidencias:asignar'])
+  const select = await screen.findByLabelText('Prioridad')
+  const guardar = screen.getByRole('button', { name: 'Guardar prioridad' }) as HTMLButtonElement
+  expect(guardar.disabled).toBe(true)
+  fireEvent.change(select, { target: { value: 'critica' } })
+  fireEvent.click(guardar)
+  expect(await screen.findByText('Prioridad actualizada.')).toBeTruthy()
+  expect(cuerpo).toEqual({ prioridad: 'critica' })
+  await waitFor(() => expect(screen.getAllByText('Crítica').length).toBeGreaterThan(0))
+})
+
+it('muestra conflicto al cambiar prioridad', async () => {
+  server.use(
+    http.get('*/incidencias/abc', () => HttpResponse.json(detallePrueba)),
+    http.patch('*/incidencias/abc/prioridad', () => HttpResponse.json({ detail: 'La incidencia cambió' }, { status: 409 })),
+  )
+  montar('coordinador', ['incidencias:ver', 'incidencias:asignar'])
+  fireEvent.change(await screen.findByLabelText('Prioridad'), { target: { value: 'baja' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar prioridad' }))
+  expect((await screen.findByRole('alert')).textContent).toContain('La incidencia cambió')
+})
+
+it('oculta el selector de prioridad sin permiso o en incidencias cerradas', async () => {
+  server.use(http.get('*/incidencias/abc', () => HttpResponse.json(detallePrueba)))
+  montar()
+  await screen.findByText('Bitácora')
+  expect(screen.queryByRole('button', { name: 'Guardar prioridad' })).toBeNull()
+  cleanup()
+  server.use(http.get('*/incidencias/abc', () => HttpResponse.json({ ...detallePrueba, estado: 'cerrada' })))
+  montar('coordinador', ['incidencias:ver', 'incidencias:asignar'])
+  await screen.findByText('Bitácora')
+  expect(screen.queryByRole('button', { name: 'Guardar prioridad' })).toBeNull()
 })

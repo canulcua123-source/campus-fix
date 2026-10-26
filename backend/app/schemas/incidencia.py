@@ -150,6 +150,14 @@ class TomarIncidenciaOut(AccionEstadoOut):
     tecnico_asignado: TecnicoAsignadoOut
 
 
+class PrioridadIn(BaseModel):
+    """PATCH /incidencias/{id}/prioridad (T-052b)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prioridad: Prioridad
+
+
 class TagsIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -167,7 +175,7 @@ class EntradaHistorialOut(BaseModel):
     estado_nuevo: Estado
     comentario: str
     horas: float
-    tipo: Literal["asignacion"] | None = None
+    tipo: Literal["asignacion", "prioridad"] | None = None
     autor_nombre: str | None = Field(default=None, description="Nombre actual del autor, si sigue disponible")
 
 

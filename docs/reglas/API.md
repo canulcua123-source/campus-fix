@@ -19,6 +19,7 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `GET /incidencias/{id}` | `incidencias:ver` | 200 |
 | `PATCH /incidencias/{id}/seguimiento` | `seguimiento:registrar` | 200 `{ok, estado}` |
 | `PATCH /incidencias/{id}/asignacion` | `incidencias:asignar` | 200 |
+| `PATCH /incidencias/{id}/prioridad` | `incidencias:asignar` | 200 `{ok, prioridad}`; 400 prioridad fuera de `baja/media/alta/critica`; 404 fuera de alcance; 409 si está cerrada/retirada o cambió en paralelo |
 | `POST` / `DELETE /incidencias/{id}/tags` | `tags:gestionar` | 200 `{ok}` |
 | `POST /incidencias/{id}/evidencias/firma` | `evidencias:subir` | 200 `{evidencia_id, url_storage, upload_url, expira_en}` |
 | `POST /incidencias/{id}/evidencias` | `evidencias:subir` | **201** `{ok, evidencia_id}` |
@@ -40,6 +41,8 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 `propias=true` en `GET /incidencias` limita la lista a las incidencias reportadas por el usuario en sesión ("Mis reportes", T-045); se combina con `$and` con el alcance, así que nunca lo amplía.
 
 `tecnico` en `GET /incidencias` acepta el id (24 hex) del técnico asignado o `sin_asignar`; usa el índice `(tecnico_asignado.usuario_id, estado)`. `GET /usuarios/tecnicos` (T-054) lista a los usuarios activos cuyo rol tiene `seguimiento:registrar` y no `incidencias:asignar`, limitados al alcance del coordinador (sus áreas o edificios; global ve todos) y, con `area`, a esa área. Es solo para el selector y el filtro del tablero: `PATCH .../asignacion` sigue validando la elegibilidad.
+
+`PATCH /incidencias/{id}/prioridad` (T-052b) recibe `{prioridad}` (sin campos extra). Si cambia, agrega a la bitácora una entrada `tipo: "prioridad"` con el autor y el comentario `Prioridad: <anterior> → <nueva>`, conservando `estado_nuevo`; si es la misma prioridad responde 200 sin escribir. La escritura usa filtro optimista (estado y prioridad leídos) para no pisar un cambio concurrente.
 
 El filtro `categoria` de `GET /incidencias` acepta cualquier clave con formato válido (`^[a-z][a-z0-9_]*$`, 3-30 caracteres) porque las categorías son dinámicas (T-019): una clave bien formada que no existe responde **200 `[]`**, no 400. Un formato inválido (mayúsculas, guiones, operadores) sigue respondiendo 400 `validacion`.
 
