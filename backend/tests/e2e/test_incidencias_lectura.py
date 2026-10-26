@@ -5,6 +5,26 @@ from bson import ObjectId
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
+
+def _fechas(objeto):
+    if isinstance(objeto, dict):
+        return [valor for clave, valor in objeto.items() if clave == "fecha" or clave.startswith("fecha_")] + [
+            fecha for valor in objeto.values() for fecha in _fechas(valor)
+        ]
+    if isinstance(objeto, list):
+        return [fecha for valor in objeto for fecha in _fechas(valor)]
+    return []
+
+
+async def test_fechas_terminan_en_z(api):
+    incidencia = await api.crear("reportante_a", "infraestructura")
+    respuesta = await api.c.get(f"/incidencias/{incidencia['_id']}", headers=api.h("reportante_a"))
+    assert respuesta.status_code == 200, respuesta.text
+    fechas = _fechas(respuesta.json())
+    assert fechas
+    assert all(isinstance(fecha, str) and fecha.endswith("Z") for fecha in fechas)
+
+
 RE_OID = re.compile(r"^[0-9a-f]{24}$")
 
 
@@ -83,7 +103,7 @@ async def test_listado_filtros(api):
     "params",
     [
         {"estado": "borrado"},
-        {"categoria": "otra"},
+        {"categoria": "Otra-Categoria"},
         {"prioridad": "maxima"},
         {"estado": '{"$ne": null}'},
     ],
@@ -91,6 +111,13 @@ async def test_listado_filtros(api):
 async def test_listado_filtro_invalido(api, params):
     r = await api.c.get("/incidencias", params=params, headers=api.h("admin"))
     assert r.status_code == 400, r.text
+
+
+async def test_listado_categoria_inexistente_devuelve_lista_vacia(api):
+    # Con categorías dinámicas, una clave bien formada que no existe no es un error: no hay coincidencias.
+    r = await api.c.get("/incidencias", params={"categoria": "otra"}, headers=api.h("admin"))
+    assert r.status_code == 200, r.text
+    assert r.json() == []
 
 
 async def test_listado_inyeccion_en_query(api):

@@ -5,6 +5,7 @@ export const categoriasPrueba = [
   ['academico', { categoria: 'academico', plataforma: 'portal_calificaciones', codigo_curso: 'MAT-101', periodo: '2026-1', estudiantes_impactados: 42 }, 'Portal de calificaciones'],
 ] as const
 export const detallePrueba: IncidenciaDetalle = {
+  puede_retirar: false,
   _id: 'abc', codigo: 'INC-DEMO-0046', titulo: 'Reporte de prueba del campus', categoria: 'infraestructura',
   estado: 'en_proceso', prioridad: 'alta', ubicacion: { edificio: 'Edificio B', piso: 2, aula: 'B-204' }, tags: [],
   fecha_creacion: '2026-10-20T09:00:00Z', reportante: { usuario_id: 'u1', nombre: 'Ana López' },

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import "../../test/setup"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { BASE } from '../../api/client'
@@ -14,6 +14,7 @@ import DetalleIncidencia from '../DetalleIncidencia'
 
 const ID = '664f1c2e9b1e8a3d4c5b6a70'
 const RUTA = `${BASE}/incidencias/${ID}`
+const RUTA_RETIRO = `${RUTA}/retirar`
 
 function detalle(categoria: IncidenciaDetalle['categoria'] = 'infraestructura'): IncidenciaDetalle {
   const comunes = {
@@ -30,6 +31,7 @@ function detalle(categoria: IncidenciaDetalle['categoria'] = 'infraestructura'):
     evidencias_adjuntas: [],
     horas_invertidas: 0,
     historial_seguimiento: [],
+    puede_retirar: false,
   }
   if (categoria === 'computo_redes') {
     return {
@@ -137,5 +139,82 @@ describe('DetalleIncidencia (T-046)', () => {
     await usuario.click(abrir)
     expect(await screen.findByAltText('pasillo.jpg')).toHaveAttribute('src', 'https://ejemplo.test/pasillo.jpg')
     expect(consultasUrl).toBe(1)
+  })
+
+  it.each([
+    ['de otro usuario', { puede_retirar: false }],
+    ['fuera de la ventana', { puede_retirar: false }],
+    ['asignada', { puede_retirar: false, tecnico_asignado: { usuario_id: 'tecnico', nombre: 'Técnico' } }],
+    ['ya retirada', { puede_retirar: false, estado: 'retirada' as const }],
+  ])('oculta Retirar mi reporte cuando la incidencia está %s', async (_caso, cambios) => {
+    responderDetalle({ ...detalle(), ...cambios })
+    renderDetalle()
+    await screen.findByText('Luminaria fundida')
+    expect(screen.queryByRole('button', { name: 'Retirar mi reporte' })).not.toBeInTheDocument()
+  })
+
+  it('permite cancelar la confirmación sin enviar la solicitud', async () => {
+    const incidencia = { ...detalle(), puede_retirar: true }
+    let solicitudes = 0
+    responderDetalle(incidencia)
+    servidor.use(http.post(RUTA_RETIRO, () => {
+      solicitudes += 1
+      return HttpResponse.json({ ok: true, estado: 'retirada' })
+    }))
+    renderDetalle()
+
+    const usuario = userEvent.setup()
+    await usuario.click(await screen.findByRole('button', { name: 'Retirar mi reporte' }))
+    const dialogo = screen.getByRole('dialog', { name: 'Confirmar retiro' })
+    expect(within(dialogo).getByText(/dejará de ser atendido/i)).toBeInTheDocument()
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Confirmar retiro' })).not.toBeInTheDocument()
+    expect(solicitudes).toBe(0)
+  })
+
+  it('retira una incidencia, evita envíos repetidos y actualiza el estado', async () => {
+    const incidencia = { ...detalle(), puede_retirar: true }
+    let solicitudes = 0
+    responderDetalle(incidencia)
+    servidor.use(http.post(RUTA_RETIRO, async () => {
+      solicitudes += 1
+      await delay(80)
+      incidencia.estado = 'retirada'
+      incidencia.puede_retirar = false
+      return HttpResponse.json({ ok: true, estado: 'retirada' })
+    }))
+    renderDetalle()
+
+    const usuario = userEvent.setup()
+    await usuario.click(await screen.findByRole('button', { name: 'Retirar mi reporte' }))
+    const confirmar = within(screen.getByRole('dialog', { name: 'Confirmar retiro' }))
+      .getByRole('button', { name: 'Sí, retirar reporte' })
+    await usuario.click(confirmar)
+    expect(confirmar).toBeDisabled()
+    await usuario.click(confirmar)
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Tu reporte fue retirado correctamente')
+    expect(await screen.findByText('Retirada')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retirar mi reporte' })).not.toBeInTheDocument()
+    expect(solicitudes).toBe(1)
+  })
+
+  it('conserva el estado abierto y explica el conflicto 409', async () => {
+    responderDetalle({ ...detalle(), puede_retirar: true })
+    servidor.use(http.post(RUTA_RETIRO, () => HttpResponse.json(
+      { error: 'conflicto', detalle: 'La incidencia ya no puede retirarse' },
+      { status: 409 },
+    )))
+    renderDetalle()
+
+    const usuario = userEvent.setup()
+    await usuario.click(await screen.findByRole('button', { name: 'Retirar mi reporte' }))
+    await usuario.click(within(screen.getByRole('dialog', { name: 'Confirmar retiro' }))
+      .getByRole('button', { name: 'Sí, retirar reporte' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/ya no puede retirarse/i)
+    await waitFor(() => expect(screen.getByText('Abierta')).toBeInTheDocument())
+    expect(screen.queryByText('Tu reporte fue retirado correctamente.')).not.toBeInTheDocument()
   })
 })
