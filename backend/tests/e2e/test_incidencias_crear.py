@@ -88,6 +88,26 @@ async def test_crear_sin_piso_no_guarda_null(api):
     assert sin_nulos(doc) == []
 
 
+async def test_guarda_ia_sugerencia(api):
+    sugerencia = {
+        "modo": "asistido",
+        "modelo": "claude-opus-5-5",
+        "version_prompt": "v1",
+        "confianza": 0.91,
+        "accion": "autollenar",
+        "campos_autollenados": ["titulo", "descripcion", "tags"],
+    }
+    r = await api.c.post("/incidencias", json=cuerpo(ia_sugerencia=sugerencia), headers=api.h("reportante_a"))
+    assert r.status_code == 201, r.text
+    assert (await api.doc(r.json()["_id"]))["ia_sugerencia"] == sugerencia
+
+
+async def test_incidencia_sin_ia_sugerencia_valida(api):
+    r = await api.c.post("/incidencias", json=cuerpo(), headers=api.h("reportante_a"))
+    assert r.status_code == 201, r.text
+    assert "ia_sugerencia" not in await api.doc(r.json()["_id"])
+
+
 async def test_codigo_incrementa_por_categoria(api):
     a = await api.crear("reportante_a", "academico")
     b = await api.crear("reportante_a", "academico")
@@ -203,6 +223,28 @@ def _invalidos():
     casos["nosql_titulo"] = cuerpo(titulo={"$ne": ""})
     casos["nosql_prioridad"] = cuerpo(prioridad={"$gt": ""})
     casos["nosql_edificio"] = cuerpo(ubicacion={"edificio": {"$ne": None}, "aula": "1"})
+    casos["ia_null"] = cuerpo(ia_sugerencia=None)
+    casos["ia_accion_invalida"] = cuerpo(
+        ia_sugerencia={
+            "modo": "asistido",
+            "modelo": "claude-opus-5-5",
+            "version_prompt": "v1",
+            "confianza": 0.9,
+            "accion": "automatico",
+            "campos_autollenados": ["titulo"],
+        }
+    )
+    casos["ia_campo_extra"] = cuerpo(
+        ia_sugerencia={
+            "modo": "asistido",
+            "modelo": "claude-opus-5-5",
+            "version_prompt": "v1",
+            "confianza": 0.9,
+            "accion": "sugerir",
+            "campos_autollenados": ["titulo"],
+            "correo": "no@example.invalid",
+        }
+    )
     sin_cat = cuerpo()
     del sin_cat["detalle_especifico"]["categoria"]
     casos["detalle_sin_categoria"] = sin_cat
@@ -257,6 +299,20 @@ async def test_bd_documento_valido_se_acepta(api):
     doc = _doc_valido(api.oid("admin"))
     res = await api.db.incidencias_campus.insert_one(doc)
     await api.db.incidencias_campus.delete_one({"_id": res.inserted_id})
+
+
+async def test_bd_valida_ia_sugerencia(api):
+    doc = _doc_valido(api.oid("admin"))
+    doc["ia_sugerencia"] = {
+        "modo": "asistido",
+        "modelo": "claude-opus-5-5",
+        "version_prompt": "v1",
+        "confianza": 2.0,
+        "campos_autollenados": ["titulo"],
+    }
+    with pytest.raises(WriteError) as ei:
+        await api.db.incidencias_campus.insert_one(doc)
+    assert ei.value.code == 121
 
 
 @pytest.mark.parametrize(

@@ -188,6 +188,20 @@ npm run build
 
 Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`) y `VITE_DOMINIO_CORREO` (debe coincidir con `DOMINIO_CORREO`).
 
+### Configuración administrable de IA
+
+`IA_HABILITADA`, `IA_LIMITE_DIARIO=20` e `IA_LIMITE_GLOBAL_DIARIO=300` son únicamente los valores
+iniciales que `scripts/init_db.py` inserta la primera vez. Después, MongoDB (`configuracion_ia`, documento
+`ia`) es la fuente de verdad. `GET/PATCH /config/ia` requieren `configuracion:gestionar`, permiso sembrado
+solo para el rol administrador. Redis guarda una copia con TTL de 60 segundos; si la caché falla se lee
+MongoDB y una actualización sigue persistiendo.
+
+`ia_sugerencia` es opcional en `POST /incidencias` y sigue `IASugerencia` (`modo`, `modelo`, `version_prompt`,
+`confianza`, `campos_autollenados` y opcionales como `accion`). Solo se guarda cuando el cliente la incluye: analizar una imagen nunca crea
+ni modifica incidencias. Con IA deshabilitada o con fallo del proveedor, `/ia/analizar-imagen` devuelve 503
+y el alta manual permanece independiente. Al proveedor solo se envían la imagen, su tipo y el contexto
+escrito explícitamente; no se incorporan nombre, correo ni otros datos del perfil autenticado.
+
 ### Producción detrás del balanceador del hosting
 
 El hosting (Render, Koyeb, etc.) pone un proxy/balanceador delante de la API. Arráncala así para que los límites por IP vean la IP real del cliente y no la del proxy:

@@ -1,6 +1,8 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from types import SimpleNamespace
 
 import anthropic
 import httpx
@@ -8,15 +10,18 @@ import pytest
 import pytest_asyncio
 from bson import ObjectId
 from PIL import Image
+from pymongo.errors import WriteError
 from redis.exceptions import RedisError
 
 import app.routers.analitica as analitica_router
 import app.routers.ia as ia_router
+import app.services.config_ia as config_ia_service
 import app.services.ia as ia_service
 from app.core import cache as cache_core
-from app.core.config import settings
 from app.core.db import get_redis
 from app.schemas.ia import AnalisisImagen, RespuestaAnalisisImagen
+
+from .helpers import cuerpo
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
@@ -583,10 +588,15 @@ async def test_ia_sin_imagen(api, ia_falsa):
     assert r.status_code == 400
 
 
-async def test_ia_deshabilitada(api, ia_falsa, monkeypatch):
-    monkeypatch.setattr(settings, "ia_habilitada", False)
-    assert (await _post(api)).status_code == 503
-    assert ia_falsa == []
+async def test_ia_apagada_503(api, ia_falsa):
+    apagada = await api.c.patch("/config/ia", json={"habilitada": False}, headers=api.h("admin"))
+    assert apagada.status_code == 200, apagada.text
+    try:
+        assert (await _post(api)).status_code == 503
+        assert ia_falsa == []
+    finally:
+        restaurada = await api.c.patch("/config/ia", json={"habilitada": True}, headers=api.h("admin"))
+        assert restaurada.status_code == 200, restaurada.text
 
 
 async def test_ia_fallo_devuelve_cupo(api, monkeypatch):
@@ -707,3 +717,125 @@ async def test_ia_presupuesto_total_menor_al_timeout_del_cliente():
     peor_caso = ia_service.IA_INTENTOS_MAXIMOS * ia_service.IA_TIMEOUT_SEGUNDOS + ia_service.BACKOFF_MAX_SEGUNDOS
     assert ia_service.IA_DEADLINE_TOTAL_SEGUNDOS <= 28
     assert peor_caso <= ia_service.IA_DEADLINE_TOTAL_SEGUNDOS
+
+
+async def test_crear_incidencia_con_ia_caida(api, monkeypatch):
+    async def falla(*_a, **_k):
+        raise RuntimeError("proveedor caído")
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", falla)
+    assert (await _post(api)).status_code == 503
+    creada = await api.c.post("/incidencias", json=cuerpo(), headers=api.h("reportante_a"))
+    assert creada.status_code == 201, creada.text
+    assert "ia_sugerencia" not in await api.doc(creada.json()["_id"])
+
+
+async def test_payload_ia_sin_datos_personales(api, monkeypatch):
+    capturado = {}
+
+    class Mensajes:
+        async def create(self, **kwargs):
+            capturado.update(kwargs)
+            return SimpleNamespace(
+                stop_reason="end_turn",
+                content=[SimpleNamespace(type="text", text=ANALISIS.model_dump_json())],
+            )
+
+    cliente = SimpleNamespace(beta=SimpleNamespace(messages=Mensajes()))
+    monkeypatch.setattr(ia_service.anthropic, "AsyncAnthropic", lambda **_kwargs: cliente)
+    usuario = api.u["reportante_a"]
+    contexto = f"Reportó {usuario['nombre']} ({usuario['correo']}) en el pasillo"
+    r = await _post(api, contexto=contexto)
+    assert r.status_code == 200, r.text
+    payload = json.dumps(capturado, default=str)
+    assert usuario["nombre"] not in payload
+    assert usuario["correo"] not in payload
+    assert "[dato omitido]" in payload
+
+
+# ---------- Configuración de IA ----------
+
+
+async def test_config_ia_lectura_actualizacion_persistencia_y_cache(api):
+    inicial = await api.c.get("/config/ia", headers=api.h("admin"))
+    assert inicial.status_code == 200, inicial.text
+    try:
+        r = await api.c.patch(
+            "/config/ia",
+            json={"habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301},
+            headers=api.h("admin"),
+        )
+        assert r.status_code == 200, r.text
+        esperado = {"habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301}
+        assert r.json() == esperado
+        doc = await api.db.configuracion_ia.find_one({"_id": "ia"})
+        assert {k: doc[k] for k in esperado} == esperado
+        cache = await config_ia_service.get_redis().get(config_ia_service.CLAVE_CACHE)
+        assert json.loads(cache) == esperado
+        ttl = await config_ia_service.get_redis().ttl(config_ia_service.CLAVE_CACHE)
+        assert 0 < ttl <= 60
+        assert (await api.c.get("/config/ia", headers=api.h("admin"))).json() == esperado
+    finally:
+        restaurada = await api.c.patch("/config/ia", json=inicial.json(), headers=api.h("admin"))
+        assert restaurada.status_code == 200, restaurada.text
+
+
+async def test_config_ia_403_no_admin(api):
+    for metodo in ("get", "patch"):
+        kwargs = {"json": {"habilitada": False}} if metodo == "patch" else {}
+        r = await getattr(api.c, metodo)("/config/ia", headers=api.h("directivo"), **kwargs)
+        assert r.status_code == 403, r.text
+
+
+async def test_config_ia_401(api):
+    assert (await api.c.get("/config/ia")).status_code == 401
+    assert (await api.c.patch("/config/ia", json={"habilitada": False})).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"habilitada": None},
+        {"limite_diario_usuario": 0},
+        {"limite_diario_usuario": 1001},
+        {"limite_diario_global": 0},
+        {"limite_diario_global": 100001},
+        {"extra": True},
+    ],
+)
+async def test_config_ia_400_limites_invalidos(api, body):
+    assert (await api.c.patch("/config/ia", json=body, headers=api.h("admin"))).status_code == 400
+
+
+async def test_config_ia_sin_redis_usa_mongo(api, monkeypatch):
+    class RedisCaido:
+        async def get(self, *_a, **_k):
+            raise RedisError("caído")
+
+        async def set(self, *_a, **_k):
+            raise RedisError("caído")
+
+    inicial = await api.db.configuracion_ia.find_one({"_id": "ia"})
+    monkeypatch.setattr(config_ia_service, "get_redis", lambda: RedisCaido())
+    try:
+        r = await api.c.get("/config/ia", headers=api.h("admin"))
+        assert r.status_code == 200, r.text
+        nuevo_limite = inicial["limite_diario_usuario"] + 1
+        cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": nuevo_limite}, headers=api.h("admin"))
+        assert cambio.status_code == 200, cambio.text
+        doc = await api.db.configuracion_ia.find_one({"_id": "ia"})
+        assert doc["limite_diario_usuario"] == nuevo_limite
+    finally:
+        restaurada = await api.c.patch(
+            "/config/ia",
+            json={k: inicial[k] for k in ("habilitada", "limite_diario_usuario", "limite_diario_global")},
+            headers=api.h("admin"),
+        )
+        assert restaurada.status_code == 200, restaurada.text
+
+
+async def test_bd_valida_configuracion_ia(api):
+    with pytest.raises(WriteError) as exc:
+        await api.db.configuracion_ia.update_one({"_id": "ia"}, {"$set": {"limite_diario_usuario": 0}})
+    assert exc.value.code == 121

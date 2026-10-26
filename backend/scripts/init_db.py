@@ -708,6 +708,31 @@ def esquema_incidencias() -> dict:
     }
 
 
+def esquema_configuracion_ia() -> dict:
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "_id",
+                "schema_version",
+                "habilitada",
+                "limite_diario_usuario",
+                "limite_diario_global",
+                "fecha_actualizacion",
+            ],
+            "additionalProperties": False,
+            "properties": {
+                "_id": {"enum": ["ia"]},
+                "schema_version": {"bsonType": "int", "minimum": 1},
+                "habilitada": {"bsonType": "bool"},
+                "limite_diario_usuario": {"bsonType": "int", "minimum": 1, "maximum": 1000},
+                "limite_diario_global": {"bsonType": "int", "minimum": 1, "maximum": 100000},
+                "fecha_actualizacion": {"bsonType": "date"},
+            },
+        }
+    }
+
+
 async def asegurar_coleccion(db, nombre: str, validador: dict | None = None) -> None:
     existentes = await db.list_collection_names()
     if nombre not in existentes:
@@ -919,6 +944,22 @@ async def sembrar_base(db) -> dict:
         await db.roles.update_one({"clave": rol["clave"]}, {"$set": rol}, upsert=True)
     for cat in categorias_sistema():
         await db.categorias.update_one({"clave": cat["clave"]}, {"$setOnInsert": cat}, upsert=True)
+    await db.roles.update_one(
+        {"clave": "admin", "sistema": True}, {"$addToSet": {"permisos": "configuracion:gestionar"}}
+    )
+    await db.configuracion_ia.update_one(
+        {"_id": "ia"},
+        {
+            "$setOnInsert": {
+                "schema_version": 1,
+                "habilitada": settings.ia_habilitada,
+                "limite_diario_usuario": settings.ia_limite_diario,
+                "limite_diario_global": settings.ia_limite_global_diario,
+                "fecha_actualizacion": datetime.now(timezone.utc),
+            }
+        },
+        upsert=True,
+    )
     admin = await db.usuarios.find_one({"correo": "admin@utm.local"})
     if admin is None:
         local = es_uri_mongodb_local(settings.mongodb_admin_uri or settings.mongodb_uri)
@@ -1149,6 +1190,7 @@ async def main() -> None:
             ("coincidencias_duplicados", esquema_coincidencias_duplicados()),
             ("adhesiones_reportes", esquema_adhesiones_reportes()),
             ("ia_eventos", esquema_ia_eventos()),
+            ("configuracion_ia", esquema_configuracion_ia()),
         ):
             await asegurar_coleccion(db, nombre, validador)
         await crear_indices(db)

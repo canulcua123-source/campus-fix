@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import re
 import unicodedata
 from datetime import datetime, timezone
 from typing import Annotated
@@ -19,6 +20,7 @@ from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
 from app.schemas.ia import AnalisisImagen, EventoIAIn, EventoIAOut, RespuestaAnalisisImagen
+from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
     CoincidenciaNoElegible,
     CoincidenciaNoEncontrada,
@@ -65,6 +67,18 @@ return 1
 """
 
 
+def _minimizar_contexto(contexto: str | None, usuario: dict) -> str | None:
+    """Conserva solo el texto necesario y elimina datos del perfil autenticado."""
+    if contexto is None:
+        return None
+    limpio = contexto
+    for campo in ("nombre", "correo"):
+        valor = usuario.get(campo)
+        if isinstance(valor, str) and valor:
+            limpio = re.sub(re.escape(valor), "[dato omitido]", limpio, flags=re.IGNORECASE)
+    return limpio
+
+
 def _normalizar_contexto(contexto: str | None) -> str:
     if not contexto:
         return ""
@@ -92,18 +106,11 @@ def _claves_cupo(usuario_id: object, ahora: datetime) -> tuple[str, str]:
     return f"ia:uso:{usuario_id}:{dia}", f"ia:uso:global:{dia}"
 
 
-async def _consumir_cupo(redis, claves: tuple[str, str]) -> None:
-    resultado = await redis.eval(
-        _CONSUMIR_CUPO,
-        2,
-        *claves,
-        settings.ia_limite_diario,
-        settings.ia_limite_global_diario,
-        CUPO_TTL,
-    )
+async def _consumir_cupo(redis, claves: tuple[str, str], *, limite_usuario: int, limite_global: int) -> None:
+    resultado = await redis.eval(_CONSUMIR_CUPO, 2, *claves, limite_usuario, limite_global, CUPO_TTL)
     estado = int(resultado[0])
     if estado == 0:
-        raise HTTPException(429, f"Alcanzaste el límite de {settings.ia_limite_diario} análisis por día")
+        raise HTTPException(429, f"Alcanzaste el límite de {limite_usuario} análisis por día")
     if estado == -1:
         raise HTTPException(503, "El análisis con IA no está disponible por hoy")
 
@@ -151,9 +158,14 @@ async def analizar(
         raise HTTPException(
             400, "La imagen está corrupta o sus dimensiones están fuera del rango permitido (200–2600 px)"
         ) from exc
-    if not settings.ia_habilitada:
+    try:
+        config = await obtener_config_ia()
+    except ConfiguracionIANoDisponible as exc:
+        raise HTTPException(503, "La configuración de IA no está disponible") from exc
+    if not config.habilitada:
         raise HTTPException(503, "El análisis con IA está deshabilitado")
-    contexto_normalizado = _normalizar_contexto(contexto)
+    # Lista de datos permitidos para el proveedor: imagen, MIME y contexto sin datos del perfil.
+    contexto_normalizado = _normalizar_contexto(_minimizar_contexto(contexto, usuario))
     clave_cache = _clave_cache(
         validada.datos,
         contexto_normalizado,
@@ -179,7 +191,12 @@ async def analizar(
     try:
         if redis is None:
             raise RuntimeError("Redis no disponible")
-        await _consumir_cupo(redis, claves_cupo)
+        await _consumir_cupo(
+            redis,
+            claves_cupo,
+            limite_usuario=config.limite_diario_usuario,
+            limite_global=config.limite_diario_global,
+        )
     except HTTPException:
         raise
     except Exception as exc:

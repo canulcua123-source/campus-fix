@@ -205,16 +205,26 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
         return ANALISIS
 
     monkeypatch.setattr(ia_router, "analizar_imagen", fake)
-    monkeypatch.setattr(settings, "ia_limite_diario", 2)
+    inicial = (await api.c.get("/config/ia", headers=api.h("admin"))).json()
+    cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": 2}, headers=api.h("admin"))
+    assert cambio.status_code == 200, cambio.text
     u = await api.usuario_temporal()
 
     # Imágenes distintas: con caché por imagen, repetir la misma no consumiría cupo.
     def archivos(numero: int):
         return {"imagen": ("f.png", io.BytesIO(_imagen_png(200 + numero, 200)), "image/png")}
 
-    for numero in range(2):
-        assert (await api.c.post("/ia/analizar-imagen", files=archivos(numero), headers=_h(u))).status_code == 200
-    assert (await api.c.post("/ia/analizar-imagen", files=archivos(2), headers=_h(u))).status_code == 429
+    try:
+        for numero in range(2):
+            assert (await api.c.post("/ia/analizar-imagen", files=archivos(numero), headers=_h(u))).status_code == 200
+        assert (await api.c.post("/ia/analizar-imagen", files=archivos(2), headers=_h(u))).status_code == 429
+    finally:
+        restaurada = await api.c.patch(
+            "/config/ia",
+            json={"limite_diario_usuario": inicial["limite_diario_usuario"]},
+            headers=api.h("admin"),
+        )
+        assert restaurada.status_code == 200, restaurada.text
 
 
 async def test_cuerpo_demasiado_grande_413(api):

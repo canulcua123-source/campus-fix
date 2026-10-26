@@ -13,6 +13,8 @@ export const TIPOS_DANO = ['filtracion', 'electrico', 'climatizacion', 'cerrajer
 export const RIESGOS = ['bajo', 'medio', 'alto'] as const
 export const PLATAFORMAS = ['lms', 'portal_calificaciones', 'correo'] as const
 export const TIPOS_MIME_EVIDENCIA = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
+export const ACCIONES_IA = ['agentico', 'formulario', 'duplicado', 'autollenar', 'sugerir', 'preguntar', 'rechazar'] as const
+export const COMPUERTAS_IA = ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9'] as const
 
 export type Categoria = (typeof CATEGORIAS)[number]
 export type Estado = (typeof ESTADOS)[number]
@@ -102,6 +104,26 @@ export const ubicacionSchema = z.object({
   aula: z.string('Indica el aula').min(1, 'Indica el aula').max(60, 'Máximo 60 caracteres'),
 })
 
+const unicos = (v: readonly string[]) => new Set(v).size === v.length
+const campoIaSchema = z.string().regex(/^(titulo|descripcion|prioridad|tags|detalle_especifico\.[a-z][a-z0-9_]{0,49})$/)
+const camposIaSchema = z.array(campoIaSchema).max(15).refine(unicos, 'No repitas campos')
+
+/** IASugerencia (backend/app/schemas/ia.py y esquema_ia_sugerencia de init_db.py). */
+export const iaSugerenciaSchema = z.strictObject({
+  modo: z.enum(['agentico', 'asistido']),
+  modelo: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9._:/-]+$/),
+  version_prompt: z.string().trim().min(1).max(40).regex(/^[A-Za-z0-9._-]+$/),
+  confianza: z.number().min(0).max(1),
+  campos_autollenados: camposIaSchema,
+  proveedor: z.string().trim().min(2).max(30).regex(/^[a-z][a-z0-9_-]+$/).optional(),
+  analisis_id: z.string().regex(/^[A-Za-z0-9_-]{22,64}$/).optional(),
+  accion: z.enum(ACCIONES_IA).optional(),
+  campos_editados_por_usuario: camposIaSchema.optional(),
+  compuertas_fallidas: z.array(z.enum(COMPUERTAS_IA)).max(9).refine(unicos, 'No repitas compuertas').optional(),
+  ubicacion_fuente: z.enum(['qr', 'confirmada', 'selector']).optional(),
+})
+export type IASugerencia = z.infer<typeof iaSugerenciaSchema>
+
 /** IncidenciaIn (POST /incidencias). */
 export const incidenciaSchema = z.object({
   titulo: z.string('Requerido').min(5, 'Mínimo 5 caracteres').max(120, 'Máximo 120 caracteres'),
@@ -110,6 +132,7 @@ export const incidenciaSchema = z.object({
   ubicacion: ubicacionSchema,
   detalle_especifico: detalleEspecificoSchema,
   tags: z.array(tagSchema).max(15, 'Máximo 15 tags').transform(ordenarUnicos),
+  ia_sugerencia: iaSugerenciaSchema.optional(),
 })
 export type IncidenciaForm = z.infer<typeof incidenciaSchema>
 export type IncidenciaIn = IncidenciaForm
@@ -233,6 +256,7 @@ export const incidenciaDetalleSchema = incidenciaListaItemSchema.omit({ score: t
   fecha_actualizacion: fecha.optional(),
   fecha_resolucion: fecha.optional(),
   schema_version: z.number().optional(),
+  ia_sugerencia: iaSugerenciaSchema.optional(),
   puede_retirar: z.boolean().default(false),
 })
 export type IncidenciaDetalle = z.infer<typeof incidenciaDetalleSchema>

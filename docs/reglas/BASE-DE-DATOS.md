@@ -5,6 +5,8 @@ MongoDB Atlas M0 (512 MB, sin respaldos automáticos) en producción y `mongo:7.
 Archivos clave: `backend/scripts/init_db.py` (`esquema_incidencias`, `asegurar_coleccion`, `crear_indices`, `sembrar_base`, `sembrar_demo`), `backend/app/core/db.py` (`get_db`, cliente con `tz_aware=True`), `backend/scripts/limpiar_huerfanos.py`, `backend/tests/e2e/conftest.py` (guard de base local).
 
 Colecciones actuales: `incidencias_campus`, `usuarios`, `roles` y `categorias`, todas con `$jsonSchema`, `validationLevel: "strict"` y `validationAction: "error"`.
+`configuracion_ia` (también con `$jsonSchema` estricto) contiene el singleton `_id: "ia"`; MongoDB es su fuente de verdad
+y Redis conserva una copia por un máximo de 60 segundos.
 
 ---
 

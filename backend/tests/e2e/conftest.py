@@ -72,6 +72,7 @@ async def entorno():
         esquema_adhesiones_reportes,
         esquema_aulas,
         esquema_categorias,
+        esquema_configuracion_ia,
         esquema_coincidencias_duplicados,
         esquema_huellas_reportes,
         esquema_ia_eventos,
@@ -94,6 +95,7 @@ async def entorno():
         ("coincidencias_duplicados", esquema_coincidencias_duplicados()),
         ("adhesiones_reportes", esquema_adhesiones_reportes()),
         ("ia_eventos", esquema_ia_eventos()),
+        ("configuracion_ia", esquema_configuracion_ia()),
     ):
         await asegurar_coleccion(tdb, nombre, validador)
     await crear_indices(tdb)

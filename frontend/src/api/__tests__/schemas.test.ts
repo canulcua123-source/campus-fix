@@ -3,7 +3,7 @@ import {
   adhesionSchema, analisisImagenSchema, confirmarAdhesionSchema, posibleDuplicadoSchema, respuestaAnalisisImagenSchema,
 } from '../../schemas/ia'
 import {
-  evidenciaFirmaSchema, evidenciaSchema, incidenciaSchema, normalizarTag, seguimientoSchema, tagsSchema,
+  evidenciaFirmaSchema, evidenciaSchema, incidenciaSchema, normalizarTag, seguimientoSchema, tagsSchema, iaSugerenciaSchema,
 } from '../../schemas/incidencia'
 import { loginSchema, rolInSchema, usuarioInSchema, usuarioPatchSchema } from '../../schemas/usuario'
 
@@ -184,5 +184,17 @@ describe('contratos T-038 sin datos personales', () => {
     const adhesion = { ok: true, codigo: coincidencia.codigo, categoria: coincidencia.categoria, adhesiones: 1, registrada: true }
     expect(adhesionSchema.safeParse(adhesion).success).toBe(true)
     expect(adhesionSchema.safeParse({ ...adhesion, usuario_id: 'interno' }).success).toBe(false)
+  })
+})
+
+describe('ia_sugerencia (IASugerencia, extra=forbid, sin null)', () => {
+  const ok = { modo: 'asistido', modelo: 'claude-opus-5-5', version_prompt: 'v1', confianza: 0.9, campos_autollenados: ['titulo'] }
+  it('acepta el contrato de backend y rechaza null, extras y duplicados', () => {
+    expect(iaSugerenciaSchema.safeParse(ok).success).toBe(true)
+    expect(iaSugerenciaSchema.safeParse({ ...ok, accion: 'sugerir', campos_editados_por_usuario: ['detalle_especifico.ip'] }).success).toBe(true)
+    expect(iaSugerenciaSchema.safeParse({ ...ok, accion: null }).success).toBe(false)
+    expect(iaSugerenciaSchema.safeParse({ ...ok, correo: 'x@utm.edu.mx' }).success).toBe(false)
+    expect(iaSugerenciaSchema.safeParse({ ...ok, campos_autollenados: ['titulo', 'titulo'] }).success).toBe(false)
+    expect(iaSugerenciaSchema.safeParse({ ...ok, confianza: 1.2 }).success).toBe(false)
   })
 })

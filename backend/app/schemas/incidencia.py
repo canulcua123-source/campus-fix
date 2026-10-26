@@ -7,6 +7,7 @@ from app.dominio.categorias import CATEGORIAS_SISTEMA
 from app.dominio.estados import TRANSICIONES as _TRANSICIONES
 from app.dominio.tags import normalizar_tag as _normalizar_tag
 from app.dominio.tags import normalizar_tags
+from app.schemas.ia import IASugerencia
 
 TRANSICIONES = _TRANSICIONES
 normalizar_tag = _normalizar_tag
@@ -90,11 +91,18 @@ class IncidenciaIn(BaseModel):
         ),
     )
     tags: list[str] = Field(default_factory=list, max_length=15)
+    ia_sugerencia: IASugerencia | None = None
 
     @field_validator("tags")
     @classmethod
     def _tags(cls, v: list[str]) -> list[str]:
         return normalizar_tags(v)
+
+    @model_validator(mode="after")
+    def _ia_sin_null(self):
+        if "ia_sugerencia" in self.model_fields_set and self.ia_sugerencia is None:
+            raise ValueError("ia_sugerencia no admite null")
+        return self
 
 
 class SeguimientoIn(BaseModel):
