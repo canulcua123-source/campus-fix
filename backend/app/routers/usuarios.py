@@ -10,7 +10,7 @@ from pymongo.errors import DuplicateKeyError
 from app.core.auditoria import registrar_auditoria
 from app.core.db import get_db
 from app.core.config import PATRON_CORREO, validar_dominio_correo
-from app.core.security import hashear_password, permisos_del_usuario, puede_otorgar, require_permiso
+from app.core.security import hashear_password, puede_otorgar, require_permiso
 from app.core.serial import a_json
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
@@ -70,25 +70,50 @@ async def _validar_asignacion(rol: str, areas: list | None, edificios: list | No
     return campos
 
 
-async def _puede_gestionar(actor: dict, objetivo: dict) -> bool:
-    """El actor solo administra usuarios cuyo acceso actual no supera el suyo.
+async def _filtro_usuarios_gestionables(actor: dict) -> dict[str, Any]:
+    """Limita desde MongoDB el directorio visible y editable por el actor."""
+    permisos_actor = set(actor["_permisos"])
+    alcance_actor = actor["_alcance"]
+    roles_permitidos: list[str] = []
+    roles_prohibidos: list[str] = []
+    cursor = get_db().roles.find({}, {"clave": 1, "permisos": 1, "alcance": 1})
+    async for rol in cursor:
+        permisos_objetivo = set(rol.get("permisos", []))
+        if not permisos_objetivo <= permisos_actor:
+            roles_prohibidos.append(rol["clave"])
+            continue
+        if alcance_actor != "global" and (
+            rol.get("alcance", "propio") != alcance_actor or permisos_objetivo >= permisos_actor
+        ):
+            continue
+        roles_permitidos.append(rol["clave"])
 
-    Un gestor delegado (no global) además solo administra usuarios de su misma dimensión de alcance
-    (no a reportantes de todo el campus) y con menos permisos que él (no a sus pares).
-    """
-    info = await permisos_del_usuario(objetivo)
-    if actor["_alcance"] != "global":
-        if info["alcance"] != actor["_alcance"] or set(info["permisos"]) >= set(actor["_permisos"]):
-            return False
-    return puede_otorgar(actor, info["permisos"], info["alcance"], objetivo.get("areas"), objetivo.get("edificios"))
+    if alcance_actor == "global":
+        # Un usuario con rol inexistente no tiene permisos: el gestor global puede verlo y corregirlo.
+        return {"rol": {"$nin": roles_prohibidos}}
+
+    gestionables: dict[str, Any] = {"rol": {"$in": roles_permitidos}}
+
+    campo = "areas" if alcance_actor == "area" else "edificios"
+    gestionables["$expr"] = {
+        "$setIsSubset": [
+            {"$ifNull": [f"${campo}", []]},
+            {"$literal": list(actor.get(campo, []))},
+        ]
+    }
+    # El propio perfil se muestra para permitir editar el nombre, pero las
+    # reglas de autoedición siguen bloqueando rol, alcance y desactivación.
+    return {"$or": [{"_id": actor["_id"]}, gestionables]}
+
+
+async def _filtro_usuario_gestionable(actor: dict, objetivo_id: ObjectId) -> dict[str, Any]:
+    return {"$and": [{"_id": objetivo_id}, await _filtro_usuarios_gestionables(actor)]}
 
 
 @router.get("")
 async def listar(usuario: Annotated[dict, Depends(require_permiso("usuarios:gestionar"))]):
-    todos = [u async for u in get_db().usuarios.find({}, PROYECCION).sort("nombre", 1)]
-    if usuario["_alcance"] != "global":  # un gestor delegado solo ve a quien puede administrar
-        todos = [u for u in todos if u["_id"] == usuario["_id"] or await _puede_gestionar(usuario, u)]
-    return [a_json(u) for u in todos]
+    filtro = await _filtro_usuarios_gestionables(usuario)
+    return [a_json(u) async for u in get_db().usuarios.find(filtro, PROYECCION).sort("nombre", 1)]
 
 
 @router.post("", status_code=201)
@@ -128,14 +153,13 @@ async def editar(
     if not ObjectId.is_valid(usuario_id):
         raise HTTPException(400, "Identificador inválido")
     oid = ObjectId(usuario_id)
-    actual = await get_db().usuarios.find_one({"_id": oid})
+    filtro_gestionable = await _filtro_usuario_gestionable(usuario, oid)
+    actual = await get_db().usuarios.find_one(filtro_gestionable)
     if actual is None:
         raise HTTPException(404, "Usuario no encontrado")
     cambios = datos.model_dump(exclude_unset=True, exclude_none=True)
     if oid == usuario["_id"] and ({"rol", "areas", "edificios"} & cambios.keys() or cambios.get("activo") is False):
         raise HTTPException(400, "No puedes cambiar tu propio rol, alcance ni desactivarte")
-    if oid != usuario["_id"] and not await _puede_gestionar(usuario, actual):
-        raise HTTPException(403, "No puedes modificar a un usuario con más acceso que el tuyo")
     sets: dict[str, Any] = {k: v for k, v in cambios.items() if k in ("nombre", "tipo_reportante", "activo")}
     unsets: dict[str, str] = {}
     if {"rol", "areas", "edificios"} & cambios.keys():
@@ -150,9 +174,11 @@ async def editar(
     update: dict[str, Any] = {"$set": sets}
     if unsets:
         update["$unset"] = unsets
-    resultado = await get_db().usuarios.update_one({"_id": oid}, update)
+    res = await get_db().usuarios.update_one(filtro_gestionable, update)
+    if res.matched_count == 0:
+        raise HTTPException(404, "Usuario no encontrado")
     actualizado = await get_db().usuarios.find_one({"_id": oid}, PROYECCION)
-    if resultado.matched_count and actualizado is not None:
+    if actualizado is not None:
         await registrar_auditoria(
             actor=usuario,
             accion="editar",
