@@ -28,3 +28,35 @@ export const analisisImagenSchema = z.strictObject({
   advertencias: z.array(z.string()),
 })
 export type AnalisisImagen = z.infer<typeof analisisImagenSchema>
+
+/** RespuestaAnalisisImagen: respuesta de POST /ia/analizar-imagen (`cache` = reutilizó un análisis sin consumir cupo). */
+export const respuestaAnalisisImagenSchema = analisisImagenSchema.extend({ cache: z.boolean() })
+export type RespuestaAnalisisImagen = z.infer<typeof respuestaAnalisisImagenSchema>
+
+const categoriaSchema = z.string().regex(/^[a-z][a-z0-9_]{2,29}$/)
+const coincidenciaIdSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+
+/** Contrato independiente de T-038; T-033 lo incorporara a su respuesta G8. */
+export const posibleDuplicadoSchema = z.strictObject({
+  accion: z.literal('duplicado'),
+  coincidencia_id: coincidenciaIdSchema,
+  codigo: z.string().min(1).max(64),
+  categoria: categoriaSchema,
+  reportado_hace_minutos: z.number().int().min(0).max(1440),
+  adhesiones: z.number().int().min(0),
+})
+export type PosibleDuplicado = z.infer<typeof posibleDuplicadoSchema>
+
+export const confirmarAdhesionSchema = z.strictObject({
+  coincidencia_id: coincidenciaIdSchema,
+})
+export type ConfirmarAdhesionIn = z.infer<typeof confirmarAdhesionSchema>
+
+export const adhesionSchema = z.strictObject({
+  ok: z.literal(true),
+  codigo: z.string().min(1).max(64),
+  categoria: categoriaSchema,
+  adhesiones: z.number().int().min(1),
+  registrada: z.boolean(),
+})
+export type Adhesion = z.infer<typeof adhesionSchema>

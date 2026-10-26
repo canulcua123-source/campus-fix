@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { BarChart3, Camera, CircleAlert, Eye, EyeOff, ListChecks, LogIn, Wrench } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth, type Usuario } from '../auth/store'
@@ -29,6 +29,7 @@ export default function Login() {
   const iniciarSesion = useAuth((s) => s.iniciarSesion)
   const aviso = useAuth((s) => s.aviso)
   const navigate = useNavigate()
+  const location = useLocation()
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
@@ -37,7 +38,11 @@ export default function Login() {
     try {
       const r = await api<{ access_token: string; usuario: Usuario }>('/auth/login', { method: 'POST', json: { correo, password } })
       iniciarSesion(r.access_token, r.usuario)
-      navigate('/')
+      const candidato = (location.state as { desde?: unknown } | null)?.desde
+      const destino = typeof candidato === 'string' && candidato.startsWith('/') && !candidato.startsWith('//')
+        ? candidato
+        : '/'
+      navigate(destino, { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No fue posible iniciar sesión')
     } finally {

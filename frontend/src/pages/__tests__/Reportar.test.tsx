@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import '../../test/setup'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,8 @@ vi.mock('../../api/ia', () => ({ analizarImagen: dobles.analizarImagen }))
 vi.mock('browser-image-compression', () => ({ default: dobles.comprimir }))
 
 function renderReportar() {
-  return render(<MemoryRouter><Reportar /></MemoryRouter>)
+  const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={cliente}><MemoryRouter><Reportar /></MemoryRouter></QueryClientProvider>)
 }
 
 function seleccionarFoto() {
@@ -66,5 +68,24 @@ describe('Reportar', () => {
     await userEvent.type(titulo, 'Falla de iluminación')
     expect(titulo).toHaveValue('Falla de iluminación')
     expect(screen.getByRole('button', { name: 'Enviar reporte' })).toBeEnabled()
+  })
+
+  it('no sobrescribe lo que el usuario ya escribió al llegar la sugerencia', async () => {
+    let resolver: (valor: unknown) => void = () => undefined
+    dobles.analizarImagen.mockImplementation(() => new Promise((resolve) => { resolver = resolve }))
+    renderReportar()
+
+    seleccionarFoto()
+    await screen.findByText(/Analizando la foto/)
+    const titulo = screen.getByLabelText('Título')
+    await userEvent.type(titulo, 'Escrito por mí')
+    resolver({
+      es_incidencia_valida: true, categoria: 'infraestructura', titulo: 'Luminaria fundida',
+      descripcion: 'Se observa una luminaria apagada', prioridad_sugerida: 'alta', tags: ['luminaria'],
+      campos_detectados: [], confianza: 0.9, advertencias: [], cache: false,
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Descripción')).toHaveValue('Se observa una luminaria apagada'))
+    expect(titulo).toHaveValue('Escrito por mí')
   })
 })

@@ -9,7 +9,10 @@ from app.core.config import settings
 from app.schemas.ia import AnalisisImagen
 
 
-IA_TIMEOUT_SEGUNDOS = 25.0
+# Presupuesto: 2 intentos de 13.5 s + backoff (≤ 0.5 s) caben en el deadline total de 28 s,
+# por debajo del abort del cliente (TIMEOUT_IA_MS = 30 s) para que el reintento sí llegue al usuario.
+IA_TIMEOUT_SEGUNDOS = 13.5
+IA_DEADLINE_TOTAL_SEGUNDOS = 28.0
 IA_INTENTOS_MAXIMOS = 2
 BACKOFF_BASE_SEGUNDOS = 0.25
 BACKOFF_JITTER_SEGUNDOS = 0.25
@@ -25,6 +28,10 @@ class IAError(Exception):
 
 _esperar = asyncio.sleep
 _aleatorio_uniforme = random.uniform
+
+
+PROVEEDOR_IA = "anthropic"
+PROMPT_VERSION = "v1"
 
 
 PROMPT_SISTEMA = """Eres un asistente de la mesa de ayuda del campus universitario UTM Desk.
@@ -120,7 +127,19 @@ async def _intento_con_timeout[T](operacion: Callable[[], Awaitable[T]]) -> T:
 
 
 async def con_reintento_transitorio[T](operacion: Callable[[], Awaitable[T]]) -> T:
-    """Ejecuta como máximo dos intentos y nunca reintenta cancelaciones o fallos permanentes."""
+    """Ejecuta como máximo dos intentos dentro del deadline total y nunca reintenta fallos permanentes."""
+    try:
+        async with asyncio.timeout(IA_DEADLINE_TOTAL_SEGUNDOS):
+            return await _con_reintento(operacion)
+    except TimeoutError as error:
+        raise IAError(
+            "El proveedor de IA excedió el tiempo límite",
+            transitorio=True,
+            tipo="timeout",
+        ) from error
+
+
+async def _con_reintento[T](operacion: Callable[[], Awaitable[T]]) -> T:
     for intento in range(IA_INTENTOS_MAXIMOS):
         try:
             return await _intento_con_timeout(operacion)

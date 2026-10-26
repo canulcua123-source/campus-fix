@@ -1,4 +1,11 @@
-import { analisisImagenSchema, analizarImagenSchema, type AnalizarImagenIn } from '../schemas/ia'
+import {
+  adhesionSchema,
+  respuestaAnalisisImagenSchema,
+  analizarImagenSchema,
+  confirmarAdhesionSchema,
+  type AnalizarImagenIn,
+  type ConfirmarAdhesionIn,
+} from '../schemas/ia'
 import { TIMEOUT_IA_MS, api, validarEntrada } from './client'
 
 interface OpcionesAnalisis {
@@ -17,6 +24,16 @@ export function analizarImagen(datos: AnalizarImagenIn, opciones: OpcionesAnalis
     body: fd,
     timeoutMs: TIMEOUT_IA_MS,
     signal: opciones.signal,
-    schema: analisisImagenSchema,
+    schema: respuestaAnalisisImagenSchema,
+  })
+}
+
+/** Confirma una coincidencia ya emitida por G8; no crea una incidencia nueva. */
+export function confirmarAdhesion(datos: ConfirmarAdhesionIn) {
+  const entrada = validarEntrada(confirmarAdhesionSchema, datos)
+  return api('/ia/duplicados/adhesiones', {
+    method: 'POST',
+    body: JSON.stringify(entrada),
+    schema: adhesionSchema,
   })
 }
