@@ -154,3 +154,36 @@ def test_esquema_sin_referencias_conserva_campos():
 
     assert "$defs" not in esquema
     assert esquema["properties"]["campos_detectados"]["items"]["properties"].keys() == {"nombre", "valor"}
+
+
+@pytest.mark.parametrize(
+    ("ajustes", "esperado"),
+    [
+        ({"ia_proveedor": "claude", "anthropic_api_key": ""}, "ANTHROPIC_API_KEY"),
+        ({"ia_proveedor": "claude", "anthropic_api_key": "sk-prueba"}, None),
+        ({"ia_proveedor": "gemini", "gemini_api_key": ""}, "GEMINI_API_KEY"),
+        (
+            {
+                "ia_proveedor": "gemini",
+                "gemini_api_key": "x",
+                "gemini_capa": "gratuita",
+                "ia_permitir_capa_gratuita": False,
+            },
+            "IA_PERMITIR_CAPA_GRATUITA",
+        ),
+        (
+            {
+                "ia_proveedor": "gemini",
+                "gemini_api_key": "x",
+                "gemini_capa": "gratuita",
+                "ia_permitir_capa_gratuita": True,
+            },
+            None,
+        ),
+    ],
+)
+def test_falta_configuracion_detecta_proveedor_sin_llave(monkeypatch, ajustes, esperado):
+    for campo, valor in ajustes.items():
+        monkeypatch.setattr(settings, campo, valor)
+    motivo = vision.falta_configuracion()
+    assert motivo is None if esperado is None else esperado in motivo

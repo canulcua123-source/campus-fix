@@ -353,6 +353,8 @@ async def analizar(
             lambda: analizar_imagen(validada.datos, validada.tipo_mime, contexto_normalizado or None)
         )
     except Exception as e:  # IAError, errores de red/API, JSON inválido
+        # Solo el tipo y la categoría: el mensaje del proveedor puede incluir datos de la petición.
+        logger.warning("Falló el proveedor de IA: %s (%s)", type(e).__name__, getattr(e, "tipo", "desconocido"))
         try:
             await redis.eval(_DEVOLVER_CUPO, 2, *claves_cupo)
         except Exception:

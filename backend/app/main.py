@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
@@ -9,11 +10,17 @@ from app.core.config import settings
 from app.core.errores import registrar_manejadores_errores, respuesta_error
 from app.core.limiter import limite_general, limiter
 from app.routers import analitica, auditoria, aulas, auth, categorias, config, ia, incidencias, roles, usuarios
+from app.services.vision import falta_configuracion
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.abrir()  # los clientes conectan de forma perezosa
+    if settings.ia_habilitada and (motivo := falta_configuracion()):
+        # Sin esto el único síntoma es un 503 genérico en /ia/analizar-imagen.
+        logger.warning("IA habilitada pero no configurada: %s", motivo)
     yield
     await db.cerrar()
 

@@ -11,6 +11,19 @@ from app.services.vision.puerto import ErrorProveedor, ProveedorVision
 _instancias: dict[tuple[str, str], ProveedorVision] = {}
 
 
+def falta_configuracion() -> str | None:
+    """Motivo por el que el proveedor elegido no podrá responder (sin llave o capa bloqueada); None si está listo."""
+    if settings.ia_proveedor == "gemini":
+        if not settings.gemini_api_key:
+            return "IA_PROVEEDOR=gemini sin GEMINI_API_KEY"
+        if settings.gemini_capa == "gratuita" and not settings.ia_permitir_capa_gratuita:
+            return "capa gratuita de Gemini bloqueada (IA_PERMITIR_CAPA_GRATUITA=false)"
+        return None
+    if not settings.anthropic_api_key:
+        return "IA_PROVEEDOR=claude sin ANTHROPIC_API_KEY"
+    return None
+
+
 def _crear_claude() -> ProveedorVision:
     from app.services.vision.claude import ProveedorClaude
 
