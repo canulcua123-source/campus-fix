@@ -4,6 +4,7 @@ import { ApiError } from '../api/client'
 import { useIncidencia, useRetirar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { GaleriaEvidencias } from '../components/GaleriaEvidencias'
+import { FormSeguimiento } from '../components/FormSeguimiento'
 import { Timeline } from '../components/Timeline'
 import { EditorTags } from '../components/EditorTags'
 import { Badge, BottomSheet, Button, Card, ErrorState, PageHeader, Skeleton } from '../components/ui'
@@ -168,6 +169,14 @@ export default function DetalleIncidencia() {
           tecnico={detalle.tecnico_asignado}
         />
       </Card>
+
+      <FormSeguimiento
+        incidenciaId={detalle._id}
+        estadoActual={detalle.estado}
+        puedeRegistrar={usuario?.permisos.includes('seguimiento:registrar') ?? false}
+        puedeCerrar={usuario?.permisos.includes('incidencias:asignar') ?? false}
+        onSeguimientoGuardado={() => void refetch()}
+      />
 
       <BottomSheet
         abierto={confirmandoRetiro}

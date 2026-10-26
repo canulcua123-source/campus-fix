@@ -16,6 +16,7 @@ export const TIPOS_MIME_EVIDENCIA = ['image/jpeg', 'image/png', 'image/webp', 'a
 
 export type Categoria = (typeof CATEGORIAS)[number]
 export type Estado = (typeof ESTADOS)[number]
+export type EstadoSeguimiento = (typeof ESTADOS_SEGUIMIENTO)[number]
 export type Prioridad = (typeof PRIORIDADES)[number]
 export type TipoMimeEvidencia = (typeof TIPOS_MIME_EVIDENCIA)[number]
 
