@@ -117,6 +117,42 @@ Decisiones de UX y su fundamento:
 | G8 | Sin duplicado probable | No existe incidencia en `abierta / en_proceso / en_espera` con el mismo `edificio + aula + categoria` en las últimas 24 h **y** (mismo SHA-256 **o** dHash con Hamming ≤ 10 **o** mismo `tipo_dano`) | "¿Ya se reportó esto?" ⇒ **Sí:** no se crea ticket; se registra una *adhesión* (+1 reportante) · **No:** reenvía con `confirmar_no_duplicado=true` (ver nota de alcance abajo) |
 | G9 | Permisos y cupos | `ia:usar` **+** `incidencias:crear` **+** `evidencias:subir`; cupo agéntico diario disponible; *kill switch* `ia_modo_agentico_habilitado` | Formulario (o mensaje de cupo) |
 
+#### A.2.1 Contrato implementado por T19
+
+`evaluar_compuertas()` recibe únicamente estado validado por el servidor y devuelve los nueve resultados en orden
+`G1` → `G9`. Cada resultado conserva el identificador, si pasó y un motivo estable en español. La respuesta pública
+expone solo los motivos de las compuertas fallidas, en ese mismo orden y sin IDs internos, hashes ni datos del
+proveedor.
+
+La precedencia es única y explícita:
+
+1. Si G8 tiene evidencia `probable`, la acción es `duplicado`, incluso si fallan otras compuertas. El usuario debe
+   confirmar posteriormente que se trata de la misma incidencia; el servidor no crea ni adhiere nada en este paso.
+2. `agentico` exige que G1–G9 pasen. No hay promoción por confianza parcial ni por un campo enviado por el cliente.
+3. Cualquier otro fallo, dato ausente, validación fallida o estado `no_verificable` produce `formulario`.
+
+La decisión asistida de T-030 (`autollenar|sugerir|preguntar|rechazar`) no se sobrescribe: se devuelve por separado
+como `accion_asistida`. `accion` queda reservada al nuevo nivel de orquestación
+`agentico|formulario|duplicado`. Mientras T17/T18, T20 y T22 no aporten ubicación verificada, cupos/*kill switch* y
+evidencia de duplicados, respectivamente, el adaptador HTTP marca esos estados como no verificables y degrada de
+forma segura a `formulario`.
+
+G4 exige además que `calidad_cliente` llegue vacío. G7 se calcula con `mapeo_valido()`, que intenta el mapeo
+determinista de T-032 (`construir_incidencia`) con la ubicación verificada; sin ubicación (T17/T18 pendientes) es
+falso. La decisión asistida reutiliza `decidir()` de T-030. **Mientras no existan ubicación verificada, cupos/kill
+switch (T20) y duplicados (T22), `agentico` es inalcanzable a propósito.**
+
+Cada `POST /ia/analizar-imagen` (también en un *hit* de caché) genera un UUID v4 nuevo y guarda `ia:analisis:v1:<uuid>` en Redis con `SET ... EX
+1800`; por tanto, el valor y su expiración se escriben atómicamente. El registro contiene el usuario autenticado, el
+SHA-256 de los bytes exactos del archivo que recibe el proveedor de visión, la respuesta, los resultados G1–G9,
+`PROMPT_VERSION` y la fecha UTC. No guarda la imagen. Dos cargas idénticas tienen el mismo hash, pero IDs públicos
+distintos, de modo que el identificador no revela ni permite correlacionar el hash o al usuario.
+
+`GET /ia/analisis/{analisis_id}` comprueba el propietario usando exclusivamente la sesión autenticada y no renueva
+el TTL. Un ID ajeno, inexistente, expirado o un registro inválido responde el mismo `404` y cuerpo. Si Redis no está
+disponible, tanto la creación como la consulta fallan cerradas con `503`; nunca se concede acceso ni se devuelve una
+decisión sin poder guardar su contexto temporal.
+
 **Nota de alcance para G8 (choca con `AGENTS.md`, regla 6).** Toda consulta a `incidencias_campus` debe llevar `filtro_alcance(usuario)`, y un alumno tiene alcance `propio`. Buscar duplicados de **otros** usuarios en esa colección violaría la regla y filtraría datos ajenos.
 
 Propuesta, **que requiere aprobación del PO y de quien mantiene `AGENTS.md`**: una colección aparte `huellas_reportes` con TTL de 24 h, que se escribe al crear cada ticket con foto:

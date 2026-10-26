@@ -46,11 +46,17 @@ export const analisisImagenSchema = z.strictObject({
 })
 export type AnalisisImagen = z.infer<typeof analisisImagenSchema>
 
-/** RespuestaIA: decisión determinista del servidor y análisis (con la confianza efectiva). */
+/** RespuestaIA: decisión del servidor (compuertas y confianza) y análisis con la confianza efectiva. */
 export const respuestaIaSchema = z.strictObject({
-  accion: z.enum(['autollenar', 'sugerir', 'preguntar', 'rechazar']),
-  mensaje: z.string().min(1),
+  /** Compuertas G1–G9 del servidor; el cliente nunca puede forzar `agentico`. */
+  accion: z.enum(['agentico', 'formulario', 'duplicado']),
+  motivos: z.array(z.string()),
+  /** Identificador opaco (UUID v4) del análisis temporal; dura 30 min y está ligado al usuario. */
+  analisis_id: z.uuidv4(),
   analisis: analisisImagenSchema,
+  /** Decisión de confianza (T-030): qué autollenar en el formulario. */
+  accion_asistida: z.enum(['autollenar', 'sugerir', 'preguntar', 'rechazar']),
+  mensaje: z.string().min(1),
   /** true si reutilizó un análisis sin consumir cupo. */
   cache: z.boolean(),
 })

@@ -1624,7 +1624,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Estructura de decisión y análisis', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.analisis.categoria).to.be.a('string'); pm.expect(j.analisis.confianza).to.be.within(0,1); if (j.analisis.categoria === 'infraestructura') { pm.expect(['filtracion','electrico','climatizacion','cerrajeria','luminaria','otro']).to.include(j.analisis.detalle_infra.tipo_dano); pm.expect(['bajo','medio','alto']).to.include(j.analisis.detalle_infra.riesgo_seguridad); } else { pm.expect(j.analisis).not.to.have.property('detalle_infra'); } });"
+                  "pm.test('Decisión, compuertas y análisis tipados', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['agentico','formulario','duplicado']); pm.expect(j.accion_asistida).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.motivos).to.be.an('array'); pm.expect(j.analisis_id).to.be.a('string'); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.confianza).to.be.within(0,1); if (j.analisis.categoria === 'infraestructura') { pm.expect(['bajo','medio','alto']).to.include(j.analisis.detalle_infra.riesgo_seguridad); } else { pm.expect(j.analisis).not.to.have.property('detalle_infra'); } pm.environment.set('analisis_id', j.analisis_id); });"
                 ]
               }
             }
@@ -1664,6 +1664,43 @@
                   "type": "text",
                   "description": "Texto opcional (máx. 500)"
                 }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Consultar análisis temporal propio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Conserva el identificador', function () { pm.expect(pm.response.json().analisis_id).to.eql(pm.environment.get('analisis_id')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Debe pertenecer al propietario; otro usuario recibe 404"
+              }
+            ],
+            "description": "Consulta sin renovar el TTL. Un ID ajeno, inexistente o expirado responde 404 con el mismo cuerpo.",
+            "url": {
+              "raw": "{{base_url}}/ia/analisis/{{analisis_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "analisis",
+                "{{analisis_id}}"
               ]
             }
           }

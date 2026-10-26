@@ -80,7 +80,7 @@ describe('Reportar', () => {
     const titulo = screen.getByLabelText('Título')
     await userEvent.type(titulo, 'Escrito por mí')
     resolver({
-      accion: 'autollenar', mensaje: 'Revisa los datos', cache: false,
+      accion: 'formulario', motivos: ['Confirma la ubicación.'], analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4', accion_asistida: 'autollenar', mensaje: 'Revisa los datos', cache: false,
       analisis: {
         es_incidencia_valida: true, categoria: 'infraestructura', titulo: 'Luminaria fundida',
         descripcion: 'Se observa una luminaria apagada', prioridad_sugerida: 'alta', tags: ['luminaria'],
@@ -90,5 +90,24 @@ describe('Reportar', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Descripción')).toHaveValue('Se observa una luminaria apagada'))
     expect(titulo).toHaveValue('Escrito por mí')
+  })
+
+  it('no autollena riesgo alto de infraestructura: lo deja en medio para que la persona lo confirme', async () => {
+    dobles.analizarImagen.mockResolvedValue({
+      accion: 'formulario', motivos: [], analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4',
+      accion_asistida: 'sugerir', mensaje: 'Revisa los datos', cache: false,
+      analisis: {
+        es_incidencia_valida: true, categoria: 'infraestructura', titulo: 'Cable expuesto',
+        descripcion: 'Hay un cable eléctrico expuesto en el pasillo', prioridad_sugerida: 'critica', tags: ['electrico'],
+        campos_detectados: [], confianza: 0.7, advertencias: [],
+        detalle_infra: { tipo_dano: 'electrico', riesgo_seguridad: 'alto' },
+      },
+    })
+    renderReportar()
+
+    seleccionarFoto()
+
+    await waitFor(() => expect(screen.getByLabelText('Riesgo de seguridad')).toHaveValue('medio'))
+    expect(screen.getByLabelText('Prioridad')).toHaveValue('alta')
   })
 })

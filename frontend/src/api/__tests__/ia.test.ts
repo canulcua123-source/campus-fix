@@ -17,7 +17,7 @@ const ANALISIS_IA = {
   advertencias: [],
   detalle_infra: { tipo_dano: 'luminaria', riesgo_seguridad: 'bajo' },
 }
-const ANALISIS = { accion: 'autollenar', mensaje: 'Revisa los datos', analisis: ANALISIS_IA, cache: false }
+const ANALISIS = { accion: 'formulario', motivos: ['Confirma la ubicación.'], analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4', accion_asistida: 'autollenar', mensaje: 'Revisa los datos', analisis: ANALISIS_IA, cache: false }
 
 function imagen() {
   return new File(['foto'], 'foto.jpg', { type: 'image/jpeg' })
