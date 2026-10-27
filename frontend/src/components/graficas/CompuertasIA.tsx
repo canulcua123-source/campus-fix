@@ -1,37 +1,40 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { MetricasIA } from '../../schemas/metricasIA'
+import { Tabla, claseNumerica } from '../ui/Tabla'
+import { animarGraficas, cursorBarra, ejeLinea, ejeTick, rejilla, tooltipContenido, tooltipEtiqueta } from './comun'
 
 type Compuerta = MetricasIA['compuertas_fallidas'][number]
 
 export function CompuertasIA({ datos }: { datos: Compuerta[] }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="h-72 w-full" role="img" aria-label="Gráfica de barras de compuertas de IA fallidas">
+      <div className="h-60 w-full" role="img" aria-label="Gráfica de barras de compuertas de IA fallidas">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={datos} margin={{ top: 12, right: 16, left: 8, bottom: 8 }}>
-            <CartesianGrid stroke="var(--color-border)" vertical={false} />
-            <XAxis dataKey="compuerta" tick={{ fill: 'var(--color-text-muted)' }} />
-            <YAxis allowDecimals={false} tick={{ fill: 'var(--color-text-muted)' }} />
+          <BarChart data={datos} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+            <CartesianGrid stroke={rejilla} strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="compuerta" tick={ejeTick} axisLine={ejeLinea} tickLine={false} />
+            <YAxis allowDecimals={false} tick={ejeTick} axisLine={false} tickLine={false} />
             <Tooltip
+              cursor={cursorBarra}
               formatter={(valor) => [Number(valor), 'Fallos']}
-              contentStyle={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
-              labelStyle={{ color: 'var(--color-text)' }}
+              labelFormatter={(etiqueta) => `Compuerta ${String(etiqueta)}`}
+              contentStyle={tooltipContenido}
+              labelStyle={tooltipEtiqueta}
             />
-            <Bar dataKey="total" name="Fallos" fill="var(--color-primary)" />
+            <Bar dataKey="total" name="Fallos" fill="var(--color-primary)" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={animarGraficas()} />
           </BarChart>
         </ResponsiveContainer>
       </div>
       <details>
         <summary className="cursor-pointer text-sm font-semibold text-ink">Ver tabla de compuertas fallidas</summary>
-        <table className="w-full text-left text-sm">
-          <caption className="py-2 text-left text-muted">Frecuencia por identificador oficial G1–G9</caption>
-          <thead><tr><th scope="col" className="p-2">Compuerta</th><th scope="col" className="p-2">Fallos</th></tr></thead>
+        <Tabla etiqueta="Frecuencia por identificador oficial G1–G9" densa className="mt-2">
+          <thead><tr><th scope="col">Compuerta</th><th scope="col" className={claseNumerica}>Fallos</th></tr></thead>
           <tbody>{datos.map((fila) => (
-            <tr key={fila.compuerta} className="border-t border-[var(--color-border)]">
-              <th scope="row" className="p-2">{fila.compuerta}</th><td className="p-2">{fila.total}</td>
+            <tr key={fila.compuerta}>
+              <th scope="row">{fila.compuerta}</th><td className={claseNumerica}>{fila.total}</td>
             </tr>
           ))}</tbody>
-        </table>
+        </Tabla>
       </details>
     </div>
   )

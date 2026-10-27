@@ -31,7 +31,7 @@ const RESPUESTA: PaginaAuditoria = {
   ],
 }
 
-function preparar(manejador: (url: URL) => Response) {
+function preparar(manejador: (url: URL) => Response, cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const urls: URL[] = []
   servidor.use(http.get(`${BASE}/auditoria`, ({ request }) => {
     const url = new URL(request.url)
@@ -42,26 +42,46 @@ function preparar(manejador: (url: URL) => Response) {
     token: 'token-admin',
     usuario: { nombre: 'Administradora', rol: 'admin', alcance: 'global', permisos: ['usuarios:gestionar'] },
   })
-  const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={cliente}><MemoryRouter><AdminAuditoria /></MemoryRouter></QueryClientProvider>)
   return urls
 }
 
 describe('Auditoría administrativa', () => {
-  it('muestra skeleton y luego eventos con acción legible y diff antes → después', async () => {
-    preparar(() => HttpResponse.json(RESPUESTA))
-    expect(screen.getByRole('status', { name: 'Cargando eventos de auditoría' })).toBeInTheDocument()
-    const lista = await screen.findByRole('list', { name: 'Eventos de auditoría' })
-    const [edicion, creacion] = within(lista).getAllByRole('listitem')
-    expect(edicion).toHaveTextContent('Edición · Usuario')
-    expect(edicion).toHaveTextContent('reportante')
-    expect(edicion).toHaveTextContent('tecnico')
-    expect(edicion).toHaveTextContent('ActivoSí')
-    expect(edicion).toHaveTextContent('redes')
-    expect(within(edicion).getByText('25 oct 2026', { exact: false })).toBeInTheDocument()
-    expect(creacion).toHaveTextContent('Creación · Categoría')
-    expect(creacion).toHaveTextContent('mobiliario')
-    expect(screen.getByText('1–2 de 45')).toBeInTheDocument()
+  it('muestra skeleton y luego una línea de tiempo por día con texto legible y diff antes → después', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-26T18:00:00Z') })
+    try {
+      preparar(() => HttpResponse.json(RESPUESTA))
+      expect(screen.getByRole('status', { name: 'Cargando eventos de auditoría' })).toBeInTheDocument()
+      await screen.findByRole('list', { name: 'Eventos de auditoría' })
+      expect(screen.getByRole('heading', { name: 'Ayer' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Sábado, 24 de octubre de 2026' })).toBeInTheDocument()
+      const edicion = within(screen.getByRole('list', { name: 'Eventos de Ayer' })).getByRole('listitem')
+      expect(edicion).toHaveTextContent('Editó el usuario u1')
+      expect(edicion).toHaveTextContent('Admin admin1')
+      expect(edicion).toHaveTextContent('hace 23 horas')
+      expect(edicion).toHaveTextContent('reportante')
+      expect(edicion).toHaveTextContent('tecnico')
+      expect(edicion).toHaveTextContent('ActivoSí')
+      expect(edicion).toHaveTextContent('redes')
+      expect(within(edicion).getByText('25 oct 2026', { exact: false })).toBeInTheDocument()
+      const creacion = within(screen.getByRole('list', { name: /Eventos de Sábado/ })).getByRole('listitem')
+      expect(creacion).toHaveTextContent('Creó la categoría mobiliario')
+      expect(screen.getByText('1–2 de 45')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('muestra nombres de usuarios ya en caché en lugar de ids', async () => {
+    const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    cliente.setQueryData(['usuarios'], [
+      { _id: 'admin1', nombre: 'Ana Admin', correo: 'ana@utm.mx', rol: 'admin' },
+      { _id: 'u1', nombre: 'Luis Pérez', correo: 'luis@utm.mx', rol: 'tecnico' },
+    ])
+    preparar(() => HttpResponse.json(RESPUESTA), cliente)
+    await screen.findByRole('list', { name: 'Eventos de auditoría' })
+    expect(screen.getByText('Luis Pérez')).toBeInTheDocument()
+    expect(screen.getAllByText(/Ana Admin/).length).toBeGreaterThan(0)
   })
 
   it('filtra por recurso y pagina con Anterior/Siguiente', async () => {
@@ -72,7 +92,7 @@ describe('Auditoría administrativa', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
     expect(await screen.findByText('21–22 de 45')).toBeInTheDocument()
     expect(urls.at(-1)?.searchParams.get('pagina')).toBe('2')
-    await userEvent.selectOptions(screen.getByLabelText('Recurso'), 'roles')
+    await userEvent.click(within(screen.getByRole('group', { name: 'Recurso' })).getByRole('button', { name: 'Roles' }))
     await waitFor(() => expect(Object.fromEntries(urls.at(-1)!.searchParams)).toEqual({ pagina: '1', limite: '20', recurso: 'roles' }))
   })
 

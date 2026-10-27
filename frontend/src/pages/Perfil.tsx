@@ -1,8 +1,10 @@
 import { LogOut, Moon, ShieldCheck, Sun, SunMoon } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { mensajeDeError } from '../api/client'
 import { useLogout, useMe } from '../api/hooks'
-import { Button, Card, ErrorState, PageHeader, Segmentado, Skeleton } from '../components/ui'
+import { Button, ErrorState, PageHeader, Seccion, Segmentado, Skeleton } from '../components/ui'
+import { ETIQUETAS_PERMISO, ETIQUETAS_TIPO_REPORTANTE } from '../schemas/etiquetas'
 import { useTema, type Tema } from '../lib/tema'
 
 const ALCANCE: Record<string, string> = {
@@ -13,6 +15,20 @@ const ALCANCE: Record<string, string> = {
 }
 
 const legible = (clave: string) => clave.charAt(0).toUpperCase() + clave.slice(1).replaceAll('_', ' ')
+const textoPermiso = (p: string) => (ETIQUETAS_PERMISO as Record<string, string>)[p] ?? legible(p.replace(':', ' '))
+
+function iniciales(nombre: string) {
+  return nombre.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('')
+}
+
+function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-sm text-muted">{etiqueta}</dt>
+      <dd className="m-0 break-words text-ink">{children}</dd>
+    </div>
+  )
+}
 
 /** T-058: datos de la sesión (GET /auth/me), tema claro/oscuro/automático, aviso de privacidad y cierre de sesión. */
 export default function Perfil() {
@@ -22,48 +38,67 @@ export default function Perfil() {
   const [tema, setTema] = useTema()
 
   return (
-    <>
+    <div className="contenido-estrecho mx-auto pila">
       <PageHeader titulo="Perfil" />
 
-      <Card como="section" aria-labelledby="perfil-cuenta">
-        <h2 id="perfil-cuenta" className="mb-3 mt-0 text-base font-semibold text-ink">Tu cuenta</h2>
+      <Seccion titulo="Tu cuenta">
         {me.isPending && (
-          <div className="flex flex-col gap-2" role="status" aria-label="Cargando perfil">
-            <Skeleton ancho="60%" alto={20} />
-            <Skeleton ancho="80%" />
-            <Skeleton ancho="40%" />
+          <div className="flex items-center gap-3" role="status" aria-label="Cargando perfil">
+            <Skeleton ancho={56} alto={56} redondo />
+            <div className="flex flex-1 flex-col gap-2">
+              <Skeleton ancho="60%" alto={20} />
+              <Skeleton ancho="80%" />
+            </div>
           </div>
         )}
         {me.isError && (
-          <ErrorState mensaje={mensajeDeError(me.error, 'No pudimos cargar tu perfil')} onReintentar={() => void me.refetch()} reintentando={me.isFetching} />
+          <ErrorState
+            compacto
+            titulo="No pudimos cargar tu perfil"
+            mensaje={mensajeDeError(me.error, 'Revisa tu conexión e inténtalo de nuevo.')}
+            onReintentar={() => void me.refetch()}
+            reintentando={me.isFetching}
+          />
         )}
         {me.isSuccess && (
-          <dl className="m-0 grid gap-3 sm:grid-cols-2">
-            <div>
-              <dt className="text-sm text-muted">Nombre</dt>
-              <dd className="m-0 text-ink">{me.data.nombre}</dd>
-            </div>
-            {me.data.correo && (
-              <div>
-                <dt className="text-sm text-muted">Correo</dt>
-                <dd className="m-0 break-all text-ink">{me.data.correo}</dd>
+          <div className="pila">
+            <div className="flex items-center gap-3">
+              <span className="grid size-14 shrink-0 place-items-center rounded-full bg-brand text-lg font-bold text-on-brand" aria-hidden>
+                {iniciales(me.data.nombre)}
+              </span>
+              <div className="min-w-0">
+                <p className="m-0 text-lg font-semibold text-ink">{me.data.nombre}</p>
+                {me.data.correo && <p className="m-0 break-all text-sm text-muted">{me.data.correo}</p>}
               </div>
+            </div>
+            {me.data.tipo_reportante && (
+              <dl className="m-0 grid gap-3 sm:grid-cols-2">
+                <Dato etiqueta="Tipo de usuario">{ETIQUETAS_TIPO_REPORTANTE[me.data.tipo_reportante]}</Dato>
+              </dl>
             )}
-            <div>
-              <dt className="text-sm text-muted">Rol</dt>
-              <dd className="m-0 text-ink">{legible(me.data.rol)}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-muted">Alcance</dt>
-              <dd className="m-0 text-ink">{ALCANCE[me.data.alcance] ?? legible(me.data.alcance)}</dd>
-            </div>
-          </dl>
+          </div>
         )}
-      </Card>
+      </Seccion>
 
-      <Card como="section" className="mt-3" aria-labelledby="perfil-apariencia">
-        <h2 id="perfil-apariencia" className="mb-1 mt-0 text-base font-semibold text-ink">Apariencia</h2>
-        <p className="mb-3 mt-0 text-sm text-muted">Automático sigue el tema de tu dispositivo.</p>
+      {me.isSuccess && (
+        <Seccion titulo="Rol y permisos" descripcion="Lo que puedes hacer en UTM Desk.">
+          <div className="pila">
+            <dl className="m-0 grid gap-3 sm:grid-cols-2">
+              <Dato etiqueta="Rol">{legible(me.data.rol)}</Dato>
+              <Dato etiqueta="Alcance">{ALCANCE[me.data.alcance] ?? legible(me.data.alcance)}</Dato>
+            </dl>
+            {me.data.permisos.length > 0 && (
+              <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label="Permisos">
+                {me.data.permisos.map((p) => (
+                  <li key={p} className="rounded-full border border-line bg-panel-2 px-3 py-1 text-sm text-ink">{textoPermiso(p)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Seccion>
+      )}
+
+      <Seccion titulo="Apariencia" descripcion="Automático sigue el tema de tu dispositivo.">
         <Segmentado<Tema>
           etiqueta="Tema"
           valor={tema}
@@ -74,17 +109,15 @@ export default function Perfil() {
             { valor: 'auto', texto: 'Automático', icono: <SunMoon size={16} aria-hidden /> },
           ]}
         />
-      </Card>
+      </Seccion>
 
-      <Card como="section" className="mt-3" aria-labelledby="perfil-privacidad">
-        <h2 id="perfil-privacidad" className="mb-1 mt-0 text-base font-semibold text-ink">Privacidad</h2>
-        <p className="mb-3 mt-0 text-sm text-muted">Qué datos usamos y para qué.</p>
+      <Seccion titulo="Privacidad" descripcion="Qué datos usamos y para qué.">
         <Link to="/privacidad" className="ui-btn ui-btn--secundario">
           <ShieldCheck size={18} aria-hidden /> Aviso de privacidad
         </Link>
-      </Card>
+      </Seccion>
 
-      <div className="mt-6">
+      <Seccion titulo="Sesión" descripcion="Cierra sesión si usas un equipo compartido.">
         <Button
           variante="peligro"
           bloque
@@ -95,7 +128,7 @@ export default function Perfil() {
         >
           Cerrar sesión
         </Button>
-      </div>
-    </>
+      </Seccion>
+    </div>
   )
 }

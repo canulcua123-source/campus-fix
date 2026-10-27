@@ -40,21 +40,34 @@ describe('AdminEdificios', () => {
     })
   })
 
-  it('muestra skeleton y luego una tarjeta por edificio con conteos y aulas por piso', async () => {
+  it('muestra skeleton, indicadores y una sección por edificio con pisos y tabla de aulas', async () => {
+    const u = userEvent.setup()
     montar(() => HttpResponse.json(CATALOGO))
     expect(screen.getByRole('status', { name: 'Cargando edificios' })).toBeInTheDocument()
-    const tarjeta = (await screen.findByRole('heading', { name: 'Edificio A' })).closest('li')!
-    expect(within(tarjeta).getByText(/3 aulas · 2 activas · 1 inactiva · 2 pisos/)).toBeInTheDocument()
-    await userEvent.setup().click(within(tarjeta).getByText('Ver aulas por piso'))
-    const piso2 = within(tarjeta).getByRole('region', { name: 'Edificio A, Piso 2' })
-    expect(within(piso2).getByText('A-202')).toBeInTheDocument()
-    expect(within(piso2).getByText('Inactiva')).toBeInTheDocument()
-    expect(within(tarjeta).getByRole('region', { name: 'Edificio A, Planta baja' })).toBeInTheDocument()
-    expect(within(tarjeta).getByText('QR: AaaaaaaaaaaaaaaaaaaaA1')).toBeInTheDocument()
+    const seccion = (await screen.findByRole('heading', { name: 'Edificio A' })).closest('section')!
+    const resumen = screen.getByRole('group', { name: 'Resumen del catálogo' })
+    expect(resumen).toHaveTextContent('Edificios2')
+    expect(resumen).toHaveTextContent('Aulas4')
+    expect(resumen).toHaveTextContent('Activas3')
+    expect(resumen).toHaveTextContent('Inactivas1')
+    expect(within(seccion).getByText(/3 aulas · 2 activas · 1 inactiva · 2 pisos/)).toBeInTheDocument()
+    const pisos = within(seccion).getByRole('list', { name: 'Pisos de Edificio A' })
+    expect(pisos).toHaveTextContent('Planta baja· 1 aula')
+    expect(pisos).toHaveTextContent('Piso 2· 2 aulas')
+
+    await u.click(within(seccion).getByRole('button', { name: 'Ver aulas' }))
+    const tabla = within(seccion).getByRole('table', { name: 'Aulas de Edificio A' })
+    const fila = within(tabla).getByRole('row', { name: /A-202/ })
+    expect(fila).toHaveTextContent('Piso 2')
+    expect(fila).toHaveTextContent('Inactiva')
+    expect(within(tabla).getByText('AaaaaaaaaaaaaaaaaaaaA1')).toBeInTheDocument()
+    await u.click(within(tabla).getByRole('button', { name: 'Copiar QR de A-001' }))
+    expect(await navigator.clipboard.readText()).toBe('AaaaaaaaaaaaaaaaaaaaA1')
+    expect(within(tabla).getByRole('button', { name: 'QR de A-001 copiado' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Biblioteca' })).toBeInTheDocument()
   })
 
-  it('filtra por edificio o aula y muestra sin resultados', async () => {
+  it('filtra por edificio, aula o estado y muestra sin resultados', async () => {
     const u = userEvent.setup()
     montar(() => HttpResponse.json(CATALOGO))
     const buscar = await screen.findByRole('searchbox', { name: 'Buscar edificio o aula' })
@@ -63,11 +76,18 @@ describe('AdminEdificios', () => {
     expect(screen.queryByRole('heading', { name: 'Edificio A' })).not.toBeInTheDocument()
     await u.clear(buscar)
     await u.type(buscar, 'a-20')
-    expect(screen.getByText('Aulas encontradas (2)')).toBeInTheDocument()
+    expect(screen.getByText('2 de 3 aulas coinciden')).toBeInTheDocument()
+    expect(screen.getByText('A-201')).toBeInTheDocument()
     expect(screen.queryByText('A-001')).not.toBeInTheDocument()
+    await u.click(screen.getByRole('button', { name: 'Inactivas' }))
+    expect(screen.getByText('1 de 3 aulas coinciden')).toBeInTheDocument()
+    expect(screen.queryByText('A-201')).not.toBeInTheDocument()
     await u.clear(buscar)
     await u.type(buscar, 'zzz')
     expect(screen.getByRole('heading', { name: 'Sin resultados' })).toBeInTheDocument()
+    await u.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    expect(screen.getByRole('heading', { name: 'Biblioteca' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Todas' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('muestra estado vacío', async () => {

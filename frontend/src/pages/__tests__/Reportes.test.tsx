@@ -100,14 +100,15 @@ describe('Reportes', () => {
   it('valida el periodo y lo envía a todas las secciones', async () => {
     const { peticiones } = preparar()
     await screen.findByRole('table', { name: 'Indicadores principales' })
+    expect(screen.queryByRole('button', { name: 'Aplicar periodo' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Personalizado' }))
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-10-20' } })
+    await waitFor(() => expect(peticiones.filter((p) => p.params.get('desde') === '2026-10-20')).toHaveLength(5))
+    peticiones.length = 0
     fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-01' } })
     expect(screen.getByText('Desde debe ser igual o anterior a Hasta')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Aplicar periodo' })).toBeDisabled()
 
     fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-31' } })
-    peticiones.length = 0
-    fireEvent.click(screen.getByRole('button', { name: 'Aplicar periodo' }))
     await waitFor(() => expect(peticiones).toHaveLength(5))
     expect(peticiones.every((p) => p.params.get('desde') === '2026-10-20' && p.params.get('hasta') === '2026-10-31')).toBe(true)
     expect(await screen.findByText(/Del 20 de octubre de 2026 al 31 de octubre de 2026/)).toBeInTheDocument()
@@ -131,8 +132,8 @@ describe('Reportes', () => {
         : estado === 'en_proceso' ? [incidencia('3', '2026-10-02T10:00:00Z', 'en_proceso')] : [],
     })
     await screen.findByRole('table', { name: 'Indicadores principales' })
+    fireEvent.click(screen.getByRole('button', { name: 'Personalizado' }))
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-10-01' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Aplicar periodo' }))
     fireEvent.click(screen.getByRole('button', { name: 'Descargar CSV' }))
 
     expect(await screen.findByText('Se descargó el CSV con 2 incidencias.')).toBeInTheDocument()

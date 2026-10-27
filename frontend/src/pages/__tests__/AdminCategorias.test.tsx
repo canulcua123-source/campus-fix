@@ -59,18 +59,28 @@ describe('AdminCategorias (T-061)', () => {
     await u.type(screen.getByRole('textbox', { name: /Prefijo/ }), 'lab')
     await u.type(screen.getByRole('textbox', { name: /Área responsable/ }), 'Coordinación de laboratorios')
 
-    const campo1 = screen.getByRole('listitem', { name: 'Campo 1' })
-    await u.type(within(campo1).getByRole('textbox', { name: /^Etiqueta/ }), 'Número de serie')
-    expect(within(campo1).getByRole('textbox', { name: /Nombre interno/ })).toHaveValue('numero_de_serie')
+    // Paso 2: filas de campos; cada uno se edita en una hoja.
+    await u.click(screen.getByRole('button', { name: /Siguiente: Campos/ }))
+    await u.click(screen.getByRole('button', { name: 'Editar campo 1' }))
+    let hoja = screen.getByRole('dialog', { name: 'Campo 1' })
+    await u.type(within(hoja).getByRole('textbox', { name: /^Etiqueta/ }), 'Número de serie')
+    expect(within(hoja).getByRole('textbox', { name: /Nombre interno/ })).toHaveValue('numero_de_serie')
+    await u.click(within(hoja).getByRole('button', { name: 'Listo' }))
+    expect(screen.getByRole('listitem', { name: 'Campo 1' })).toHaveTextContent('Número de serie')
+    expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument()
 
     await u.click(screen.getByRole('button', { name: 'Agregar campo' }))
+    hoja = screen.getByRole('dialog', { name: 'Nuevo campo' })
+    await u.type(within(hoja).getByRole('textbox', { name: /^Etiqueta/ }), 'Turno')
+    await u.selectOptions(within(hoja).getByRole('combobox', { name: 'Tipo' }), 'lista')
+    await u.type(within(hoja).getByRole('textbox', { name: /Opciones/ }), 'Matutino{Enter}Vespertino')
+    await u.click(within(hoja).getByRole('button', { name: 'Listo' }))
     const campo2 = screen.getByRole('listitem', { name: 'Campo 2' })
-    await u.type(within(campo2).getByRole('textbox', { name: /^Etiqueta/ }), 'Turno')
-    await u.selectOptions(within(campo2).getByRole('combobox', { name: 'Tipo' }), 'lista')
-    await u.type(within(campo2).getByRole('textbox', { name: /Opciones/ }), 'Matutino{Enter}Vespertino')
+    expect(campo2).toHaveTextContent('Lista de opciones · turno')
     await u.click(within(campo2).getByRole('checkbox', { name: 'Obligatorio' }))
 
-    // Vista previa en vivo con el formulario dinámico.
+    // Paso 3: vista previa en vivo con el formulario dinámico.
+    await u.click(screen.getByRole('button', { name: /Siguiente: Vista previa/ }))
     const previa = screen.getByRole('region', { name: 'Vista previa del formulario' })
     expect(within(previa).getByRole('textbox', { name: /Número de serie/ })).toBeInTheDocument()
     expect(within(previa).getByRole('option', { name: 'Vespertino' })).toBeInTheDocument()
@@ -95,9 +105,13 @@ describe('AdminCategorias (T-061)', () => {
     const u = userEvent.setup()
     const enviados = montar()
     await u.click(await screen.findByRole('button', { name: 'Nueva categoría' }))
+    await u.click(screen.getByRole('button', { name: /Siguiente: Campos/ }))
     await u.click(screen.getByRole('button', { name: 'Crear categoría' }))
+    // Lleva al primer paso con errores y marca los demás.
     expect(screen.getByText('El prefijo son 3 letras mayúsculas (p. ej. LAB)')).toBeInTheDocument()
-    expect(screen.getByText('Escribe la etiqueta')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Campos.*tiene errores/ })).toBeInTheDocument()
+    await u.click(screen.getByRole('button', { name: /Campos.*tiene errores/ }))
+    expect(within(screen.getByRole('listitem', { name: 'Campo 1' })).getByText('Escribe la etiqueta')).toBeInTheDocument()
     expect(enviados).toHaveLength(0)
   })
 
@@ -108,7 +122,11 @@ describe('AdminCategorias (T-061)', () => {
     expect(screen.queryByRole('button', { name: 'Desactivar Infraestructura' })).not.toBeInTheDocument()
     await u.click(screen.getByRole('button', { name: 'Editar Infraestructura' }))
     expect(screen.getByRole('textbox', { name: /Prefijo/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled()
+    await u.click(screen.getByRole('button', { name: /Siguiente: Campos/ }))
+    expect(screen.getByRole('listitem', { name: 'Campo 1' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Agregar campo' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar campo 1' })).not.toBeInTheDocument()
   })
 
   it('edita el nombre de una categoría del sistema con PATCH parcial', async () => {
@@ -120,5 +138,16 @@ describe('AdminCategorias (T-061)', () => {
     await u.type(nombre, 'Infraestructura física')
     await u.click(screen.getByRole('button', { name: 'Guardar cambios' }))
     await waitFor(() => expect(enviados).toEqual([{ metodo: 'PATCH', url: 'infraestructura', cuerpo: { nombre: 'Infraestructura física' } }]))
+  })
+
+  it('pide confirmar antes de descartar cambios sin guardar', async () => {
+    const u = userEvent.setup()
+    montar()
+    await u.click(await screen.findByRole('button', { name: 'Nueva categoría' }))
+    await u.type(screen.getByRole('textbox', { name: 'Nombre' }), 'Temporal')
+    await u.click(screen.getByRole('button', { name: 'Cancelar' }))
+    const hoja = screen.getByRole('dialog', { name: '¿Descartar cambios?' })
+    await u.click(within(hoja).getByRole('button', { name: 'Descartar' }))
+    expect(await screen.findByRole('heading', { name: 'Infraestructura' })).toBeInTheDocument()
   })
 })

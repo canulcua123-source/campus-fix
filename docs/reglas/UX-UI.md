@@ -15,11 +15,16 @@ Archivos clave: `frontend/src/styles/tokens.css` (tokens), `frontend/src/styles/
 | `Card` | Superficie base (`como="section|article|li"`). Tarjeta que navega: `<Link className={claseCardInteractiva}>`. |
 | `Badge` | `tipo="estado|prioridad|categoria"` + `valor` del enum, o `tipo="ia"` + `confianza` (0–1). `ETIQUETAS`/`etiquetaDe()` dan el texto en español para `<option>`. |
 | `Skeleton`, `SkeletonLista` | Estado de carga con la forma del contenido. |
-| `EmptyState` | Estado vacío con `titulo`, `descripcion` y `accion`. |
+| `EmptyState` | Estado vacío con `titulo`, `descripcion` y `accion`; `compacto` dentro de tarjetas. |
 | `ErrorState` | Estado de error con botón "Reintentar" (`onReintentar`). |
 | `BottomSheet` | Hoja inferior en móvil / diálogo en escritorio (`<dialog>` nativo: foco atrapado, Escape cierra). |
 | `PageHeader` | Título de pantalla: 34 px en iOS, 22 px en Android, 26 px en escritorio; `subtitulo`, `atras`, `acciones`. |
 | `Spinner` | Solo dentro de botones o zonas pequeñas (nunca a pantalla completa). |
+| `BarraFiltros` | Fila compacta de filtros con acciones alineadas al final; en < 768 px se pliega tras «Filtros (n)». Dentro usa campos `tamano="sm"`. |
+| `RangoFechas` | Periodo con atajos (7/30/90 días) y «Personalizado»; fechas `YYYY-MM-DD` en America/Mexico_City (`lib/fechas.ts`). |
+| `StatTile`, `StatGrid` | Indicador compacto (etiqueta, valor, ícono, `tono`, `delta`, `pista`) y su rejilla. Sustituye tarjetas KPI hechas a mano. |
+| `Seccion` | Tarjeta con encabezado (título, descripción, acciones) y cuerpo; `sinPadding` para tablas a sangre. |
+| `Tabla` | Tabla con encabezado fijo y divisores; `apilada` la convierte en tarjetas en < 640 px (cada `<td>` con `data-label`); números con `claseNumerica`. |
 
 ---
 
@@ -205,7 +210,7 @@ Probar en los tres entornos. Para el celular usa el despliegue o un túnel HTTPS
 - [ ] Ícono maskable se ve bien en el lanzador.
 
 ### Escritorio (Chrome, Edge, Safari, Firefox)
-- [ ] ≥ 1024 px: sidebar visible, barra inferior oculta, contenido máx. 960 px centrado.
+- [ ] ≥ 1024 px: sidebar visible, barra inferior oculta, contenido máx. 1200 px centrado (formularios en `.contenido-estrecho`, 720 px).
 - [ ] Todo se puede usar solo con teclado; el foco siempre es visible.
 - [ ] Tablas/gráficas legibles; nada se estira a todo el ancho de un monitor grande.
 

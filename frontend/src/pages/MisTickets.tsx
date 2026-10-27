@@ -1,12 +1,21 @@
-import { ClipboardList, RefreshCw } from 'lucide-react'
+import { Camera, ClipboardList, RefreshCw } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useIncidencias } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
-import { Button, EmptyState, ErrorState, ETIQUETAS, PageHeader, SkeletonLista } from '../components/ui'
+import { Button, EmptyState, ErrorState, ETIQUETAS, PageHeader, Segmentado, SkeletonLista, type OpcionSegmentado } from '../components/ui'
 import { ESTADOS, type Estado } from '../schemas/incidencia'
 
 const esEstado = (valor: string | null): valor is Estado => ESTADOS.includes(valor as Estado)
+
+type Filtro = Estado | 'todos'
+/** Filtros principales del reportante; otro estado llegado por URL (?estado=en_espera) se agrega como opción. */
+const FILTROS: OpcionSegmentado<Filtro>[] = [
+  { valor: 'todos', texto: 'Todos' },
+  { valor: 'abierta', texto: 'Abiertas' },
+  { valor: 'en_proceso', texto: 'En proceso' },
+  { valor: 'resuelta', texto: 'Resueltas' },
+]
 
 /** "Mis reportes" (T-045): incidencias reportadas por el usuario, filtrables por estado en la URL (?estado=). */
 export default function MisTickets() {
@@ -23,15 +32,15 @@ export default function MisTickets() {
     setParams(siguiente, { replace: true })
   }
 
-  const chips: { valor?: Estado; texto: string }[] = [
-    { texto: 'Todos' },
-    ...ESTADOS.map((e) => ({ valor: e, texto: ETIQUETAS.estado[e] })),
-  ]
+  const opciones = estado && !FILTROS.some((f) => f.valor === estado)
+    ? [...FILTROS, { valor: estado, texto: ETIQUETAS.estado[estado] }]
+    : FILTROS
 
   return (
     <>
       <PageHeader
         titulo="Mis reportes"
+        subtitulo="Sigue el estado de cada falla que reportaste"
         acciones={(
           <Button
             variante="fantasma"
@@ -43,23 +52,14 @@ export default function MisTickets() {
         )}
       />
 
-      <div role="group" aria-label="Filtrar por estado" className="mb-4 flex gap-2 overflow-x-auto pb-1">
-        {chips.map((c) => {
-          const activo = c.valor === estado
-          return (
-            <button
-              key={c.texto}
-              type="button"
-              aria-pressed={activo}
-              className={`min-h-11 shrink-0 rounded-full border px-4 text-sm font-semibold ${
-                activo ? 'border-brand bg-brand text-on-brand' : 'border-line bg-panel text-muted'
-              }`}
-              onClick={() => filtrar(c.valor)}
-            >
-              {c.texto}
-            </button>
-          )
-        })}
+      <div className="-mx-4 mb-4 overflow-x-auto px-4 pb-1">
+        <Segmentado<Filtro>
+          etiqueta="Filtrar por estado"
+          valor={estado ?? 'todos'}
+          opciones={opciones}
+          onCambio={(v) => filtrar(v === 'todos' ? undefined : v)}
+          className="min-w-max"
+        />
       </div>
 
       {isPending && <SkeletonLista etiqueta="Cargando tus reportes" />}
@@ -84,9 +84,13 @@ export default function MisTickets() {
         ) : (
           <EmptyState
             titulo="Aún no tienes reportes"
-            descripcion="Cuando reportes una falla aparecerá aquí con su estado."
+            descripcion="Toma una foto de la falla, revisa lo que llena la IA y envíala. Aquí verás su avance."
             icono={ClipboardList}
-            accion={puedeReportar ? <Link to="/reportar" className="ui-btn ui-btn--primario">Reportar</Link> : undefined}
+            accion={puedeReportar ? (
+              <Link to="/reportar" className="ui-btn ui-btn--primario ui-btn--lg">
+                <Camera size={20} aria-hidden /> Reportar
+              </Link>
+            ) : undefined}
           />
         )
       )}

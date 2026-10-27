@@ -100,7 +100,7 @@ describe('AdminUsuarios (T-057)', () => {
         const persona = userEvent.setup()
         const fila = (await screen.findByText('Ana López')).closest('tr')!
         await persona.click(within(fila).getByRole('button', { name: 'Desactivar' }))
-        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+        expect(screen.getByRole('dialog', { name: '¿Desactivar usuario?' })).toBeInTheDocument()
         expect(cambios).toHaveLength(0)
         await persona.click(screen.getByRole('button', { name: 'Confirmar desactivación' }))
         await waitFor(() => expect(cambios).toEqual([{ activo: false }]))

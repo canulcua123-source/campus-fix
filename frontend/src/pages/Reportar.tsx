@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Camera, ImagePlus, PencilLine, Sparkles } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Camera, Check, ImagePlus, Lock, MapPin, PencilLine, Send, Sparkles } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { aulaQuery } from '../api/aulas'
@@ -12,13 +12,13 @@ import type { ReanudarSubida } from '../api/evidencias'
 import { AvisoCalidad } from '../components/AvisoCalidad'
 import { CamposDetalleReporte } from '../components/CamposDetalleReporte'
 import { SugerenciaIA } from '../components/SugerenciaIA'
-import { Button, Card, Input, PageHeader, Select, Skeleton, Spinner, Textarea } from '../components/ui'
+import { Badge, Button, Card, Input, PageHeader, Seccion, Segmentado, Select, Skeleton, Spinner, Textarea } from '../components/ui'
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
-import { OPCIONES_CATEGORIA, OPCIONES_PRIORIDAD } from '../lib/etiquetas'
+import { ETIQUETAS_PRIORIDAD, OPCIONES_CATEGORIA } from '../lib/etiquetas'
 import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
 import type { RespuestaIA } from '../schemas/ia'
-import { incidenciaSchema, type Categoria, type IncidenciaCreada, type IncidenciaForm } from '../schemas/incidencia'
+import { incidenciaSchema, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
 import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
 
 /** Rutas del formulario que tienen un campo visible: un 400 de la API en ellas se marca bajo el campo (UX-18). */
@@ -39,11 +39,56 @@ function Err({ id, msg }: { id?: string; msg?: string }) {
   return msg ? <p id={id} className="campo-error">{msg}</p> : null
 }
 
+const AYUDA_PRIORIDAD: Record<Prioridad, string> = {
+  baja: 'Molestia menor; puede esperar.',
+  media: 'Afecta tu trabajo, pero hay alternativa.',
+  alta: 'Impide una clase o actividad.',
+  critica: 'Riesgo de seguridad o servicio caído.',
+}
+
+const PASOS = ['Foto', 'Revisa', 'Envía'] as const
+
+/** Indicador de los 3 pasos de Reportar (UX-29). */
+function Pasos({ actual }: { actual: 1 | 2 | 3 }) {
+  return (
+    <ol className="m-0 flex list-none items-center gap-2 p-0 text-sm" aria-label="Pasos para reportar">
+      {PASOS.map((texto, i) => {
+        const n = i + 1
+        const hecho = n < actual
+        const activo = n === actual
+        return (
+          <li key={texto} className="flex flex-1 items-center gap-2" aria-current={activo ? 'step' : undefined}>
+            <span
+              className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                activo ? 'bg-brand text-on-brand' : hecho ? 'bg-accent text-on-accent' : 'border border-line-strong bg-panel text-muted'
+              }`}
+              aria-hidden
+            >
+              {hecho ? <Check size={14} /> : n}
+            </span>
+            <span className={activo ? 'font-semibold text-ink' : 'text-muted'}>
+              {texto}
+              {hecho && <span className="sr-only"> (listo)</span>}
+            </span>
+            {n < PASOS.length && <span className="h-px flex-1 bg-line" aria-hidden />}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 function normalizarTag(t: string): string {
   return t.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/\s+/g, '_')
 }
 
+/** Reportar en 3 pasos. "Reportar otro" remonta el flujo con una llave nueva (estado limpio). */
 export default function Reportar() {
+  const [ronda, setRonda] = useState(0)
+  return <FlujoReporte key={ronda} onReportarOtro={() => setRonda((r) => r + 1)} />
+}
+
+function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const navigate = useNavigate()
   const [parametros] = useSearchParams()
   const aulaId = parametros.get('aula')?.trim() ?? ''
@@ -83,6 +128,7 @@ export default function Reportar() {
   // Leer dirtyFields en el render suscribe el formulario a su seguimiento (lo usa sinEditar).
   const { errors, isSubmitting, dirtyFields: _camposEditados } = formState
   const categoria = useWatch({ control, name: 'detalle_especifico.categoria' })
+  const prioridad = useWatch({ control, name: 'prioridad' })
   const { mutateAsync: crear } = useCrearIncidencia()
   const { mutateAsync: subirFoto } = useEvidencia()
   const ubicacionFijada = Boolean(aula.data)
@@ -136,14 +182,16 @@ export default function Reportar() {
     setCriticaPendiente(false)
   }
 
-  const marcaIA = (campo: Parameters<typeof sinEditar>[0]) =>
+  /** Marca "Sugerido por IA" (color secundario) sobre los campos que llenó la IA; desaparece al editarlos (UX-30). */
+  const campoIA = (campo: Parameters<typeof sinEditar>[0], hijo: ReactNode) =>
     camposIA.includes(campo) && sinEditar(campo)
       ? (
-        <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-panel-2 px-2 py-0.5 text-xs font-semibold text-brand">
-          <Sparkles size={12} aria-hidden /> Sugerido por IA
-        </span>
+        <div className="flex flex-col gap-1 border-l-2 border-accent pl-3">
+          <span className="self-start"><Badge tipo="ia" /></span>
+          {hijo}
+        </div>
       )
-      : null
+      : hijo
 
   function abrirCamara() {
     entrada.current?.click()
@@ -315,7 +363,8 @@ export default function Reportar() {
         estadoFoto={estadoFoto}
         errorFoto={errorFoto}
         onReintentarFoto={() => void adjuntarFoto(creada._id)}
-        onContinuarSinFoto={() => navigate('/mis-tickets')}
+        onContinuarSinFoto={() => navigate('/mis-reportes')}
+        onReportarOtro={onReportarOtro}
       />
     )
   }
@@ -351,9 +400,10 @@ export default function Reportar() {
 
   if (paso === 'foto') {
     return (
-      <>
+      <div className="contenido-estrecho mx-auto pila">
         <PageHeader titulo="Reportar" subtitulo="Toma una foto del problema y la IA te ayudará a llenar el reporte." />
-        <Card como="section" className="mx-auto flex w-full max-w-md flex-col gap-4">
+        <Pasos actual={1} />
+        <Card como="section" className="flex flex-col gap-4">
           {entradaFoto}
           {entradaGaleria}
           <Button tamano="lg" bloque icono={<Camera size={22} aria-hidden />} cargando={analizando} textoCargando="Analizando…" onClick={abrirCamara}>
@@ -377,33 +427,48 @@ export default function Reportar() {
             onChange={(e) => setContexto(e.target.value)}
           />
         </Card>
-        <ol className="mx-auto mt-4 flex w-full max-w-md justify-between gap-2 text-xs text-muted" aria-label="Pasos para reportar">
-          <li><strong className="text-ink">1.</strong> Foto</li>
-          <li>2. Revisa el formulario</li>
-          <li>3. Envía y recibe tu folio</li>
-        </ol>
-      </>
+        <p className="m-0 flex items-start gap-2 text-sm text-muted">
+          <Sparkles size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+          La IA solo propone: podrás revisar y cambiar todo antes de enviar.
+        </p>
+      </div>
     )
   }
 
+  const sugerenciaAplicada = ia && (ia.accion_asistida === 'autollenar' || ia.accion_asistida === 'sugerir')
+
   return (
-    <>
-      <h1 className="titulo-pagina">Nueva incidencia</h1>
+    <div className="contenido-estrecho mx-auto pila">
+      <PageHeader titulo="Nuevo reporte" subtitulo="Revisa los datos y envía tu reporte." />
+      <Pasos actual={2} />
       {entradaFoto}
-      {vista && (
-        <div className="relative mb-3 w-fit max-w-full overflow-hidden rounded-card">
-          <img src={vista} alt="Foto de la incidencia" className="block max-h-56 object-cover" />
-          {analizando && (
-            <div aria-hidden className="absolute inset-0 flex items-center justify-center bg-canvas/60 backdrop-blur-[2px]">
-              <span className="flex items-center gap-2 rounded-full bg-panel px-3 py-1.5 text-sm font-semibold text-accent shadow">
-                <Sparkles size={16} className="animate-pulse" /> Analizando…
-              </span>
-            </div>
-          )}
+
+      <Card className="flex items-center gap-3 !p-3">
+        {vista ? (
+          <div className="relative size-20 shrink-0 overflow-hidden rounded-input">
+            <img src={vista} alt="Foto de la incidencia" className="block size-full object-cover" />
+            {analizando && (
+              <div aria-hidden className="absolute inset-0 grid place-items-center bg-canvas/60 backdrop-blur-[2px]">
+                <Sparkles size={20} className="animate-pulse text-accent" />
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="grid size-20 shrink-0 place-items-center rounded-input bg-panel-2 text-muted" aria-hidden>
+            <Camera size={26} />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="m-0 font-semibold text-ink">{vista ? 'Foto adjunta' : 'Sin foto'}</p>
+          <p className="m-0 text-sm text-muted">{vista ? 'Se enviará como evidencia.' : 'Una foto ayuda al técnico a entender el problema.'}</p>
         </div>
-      )}
+        <Button variante="secundario" tamano="sm" icono={<Camera size={16} />} disabled={analizando} onClick={abrirCamara}>
+          {vista ? 'Cambiar' : 'Agregar'}
+        </Button>
+      </Card>
+
       {analizando && (
-        <Card role="status" aria-live="polite" className="mb-3 flex flex-col gap-3 border-[var(--color-secondary)]">
+        <Card role="status" aria-live="polite" className="flex flex-col gap-3 border-[var(--color-secondary)]">
           <div className="flex items-start gap-3">
             <Spinner tamano={24} etiqueta="Analizando con IA" className="mt-0.5 shrink-0 text-accent" />
             <div>
@@ -422,21 +487,10 @@ export default function Reportar() {
       {calidadPendiente && (
         <AvisoCalidad pistas={calidadPendiente.pistas} onRepetir={repetirFoto} onUsar={usarFotoDeTodosModos} />
       )}
-      {aviso && <p role="status" className="card mb-3 text-sm">{aviso}</p>}
-      {aulaId && aula.isPending && <p role="status" className="card mb-3 text-sm">Comprobando la ubicación del código QR…</p>}
-      {aulaId && aula.isError && (
-        <p role="alert" className="card mb-3 text-sm text-warn">
-          No pudimos reconocer el aula del código QR. Puedes seleccionar la ubicación manualmente.
-        </p>
-      )}
-      {aula.data && (
-        <p role="status" className="card mb-3 text-sm text-ok">
-          Ubicación fijada por el código QR: {aula.data.ubicacion.edificio}, piso {aula.data.ubicacion.piso}, aula {aula.data.ubicacion.aula}.
-        </p>
-      )}
+      {aviso && <p role="status" className="card m-0 text-sm">{aviso}</p>}
       {ia && <SugerenciaIA respuesta={ia} />}
       {criticaPendiente && (
-        <Card role="alert" className="mb-3 text-sm">
+        <Card role="alert" className="text-sm">
           <p className="m-0 font-semibold">La IA sugiere prioridad crítica</p>
           <p className="mb-3 mt-1 text-muted">
             Crítica se reserva para riesgos de seguridad o servicios caídos. Mientras no la confirmes se usará «alta».
@@ -447,9 +501,9 @@ export default function Reportar() {
           </div>
         </Card>
       )}
-      {ia && (ia.accion_asistida === 'autollenar' || ia.accion_asistida === 'sugerir') && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-panel-2 px-3 py-1 text-xs font-semibold text-brand">
+      {sugerenciaAplicada && (
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold" style={{ background: 'var(--ia-bg)', color: 'var(--ia-text)' }}>
             <Sparkles size={14} aria-hidden /> Sugerido por IA · confianza {Math.round(ia.analisis.confianza * 100)}%
           </span>
           {ia.analisis.campos_detectados.map((c) => (
@@ -458,52 +512,94 @@ export default function Reportar() {
         </div>
       )}
 
-      <form onSubmit={enviarFormulario} className="card" noValidate>
-        {marcaIA('titulo')}
-        <Input etiqueta="Título" maxLength={120} error={errors.titulo?.message} {...register('titulo')} />
-        {marcaIA('descripcion')}
-        <Textarea etiqueta="Descripción" rows={4} maxLength={2000} error={errors.descripcion?.message} {...register('descripcion')} />
-        {marcaIA('prioridad')}
-        <Select
-          etiqueta="Prioridad"
-          opciones={OPCIONES_PRIORIDAD}
-          error={errors.prioridad?.message}
-          {...register('prioridad', { onChange: () => setCriticaPendiente(false) })}
-        />
+      <form onSubmit={enviarFormulario} className="pila" noValidate>
+        <Seccion titulo="Qué pasa" descripcion="Describe la falla en pocas palabras.">
+          <div className="pila">
+            {campoIA('titulo', <Input etiqueta="Título" maxLength={120} placeholder="Ej. Proyector no enciende" error={errors.titulo?.message} {...register('titulo')} />)}
+            {campoIA('descripcion', <Textarea etiqueta="Descripción" rows={4} maxLength={2000} error={errors.descripcion?.message} {...register('descripcion')} />)}
+          </div>
+        </Seccion>
 
-        <Input etiqueta="Edificio" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-          error={errors.ubicacion?.edificio?.message} {...register('ubicacion.edificio')} />
-        <Input etiqueta="Piso (opcional)" type="number" inputMode="numeric" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-          error={errors.ubicacion?.piso?.message}
-          {...register('ubicacion.piso', { setValueAs: (v) => (v === '' || v == null ? null : Number(v)) })} />
-        <Input etiqueta="Aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-          error={errors.ubicacion?.aula?.message} {...register('ubicacion.aula')} />
+        <Seccion titulo="Dónde" descripcion="Para que el técnico llegue directo.">
+          <div className="pila">
+            {aulaId && aula.isPending && <p role="status" className="m-0 text-sm text-muted">Comprobando la ubicación del código QR…</p>}
+            {aulaId && aula.isError && (
+              <p role="alert" className="m-0 text-sm text-warn">
+                No pudimos reconocer el aula del código QR. Puedes seleccionar la ubicación manualmente.
+              </p>
+            )}
+            {aula.data && (
+              <p role="status" className="m-0 flex items-start gap-2 rounded-card border border-line bg-panel-2 p-3 text-sm text-ink">
+                <Lock size={16} className="mt-0.5 shrink-0 text-ok" aria-hidden />
+                <span>
+                  <span className="block font-semibold">{aula.data.ubicacion.edificio}, piso {aula.data.ubicacion.piso}, aula {aula.data.ubicacion.aula}</span>
+                  <span className="block text-muted">Ubicación fijada por el código QR.</span>
+                </span>
+              </p>
+            )}
+            <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+              <Input etiqueta="Edificio" icono={<MapPin size={18} />} readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+                error={errors.ubicacion?.edificio?.message} {...register('ubicacion.edificio')} />
+              <Input etiqueta="Piso (opcional)" type="number" inputMode="numeric" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+                error={errors.ubicacion?.piso?.message}
+                {...register('ubicacion.piso', { setValueAs: (v) => (v === '' || v == null ? null : Number(v)) })} />
+              <Input etiqueta="Aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
+                error={errors.ubicacion?.aula?.message} {...register('ubicacion.aula')} />
+            </div>
+          </div>
+        </Seccion>
 
-        {marcaIA('detalle_especifico')}
-        <Select
-          etiqueta="Categoría"
-          opciones={OPCIONES_CATEGORIA}
-          value={categoria}
-          onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}
-        />
-        <CamposDetalleReporte categoria={categoria} register={register} errores={errors.detalle_especifico} />
+        <Seccion titulo="Detalles de la categoría" descripcion="Datos que ayudan a asignar al área correcta.">
+          <div className="pila">
+            {campoIA('detalle_especifico', (
+              <Select
+                etiqueta="Categoría"
+                opciones={OPCIONES_CATEGORIA}
+                value={categoria}
+                onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}
+              />
+            ))}
+            <CamposDetalleReporte categoria={categoria} register={register} errores={errors.detalle_especifico} />
+            {campoIA('tags', (
+              <Input
+                etiqueta="Tags (separados por coma)"
+                value={tagsTexto}
+                placeholder="Ej. proyector, hdmi"
+                aria-describedby={errors.tags ? 'tags-error' : undefined}
+                aria-invalid={errors.tags ? true : undefined}
+                onChange={(e) => {
+                  setTagsTexto(e.target.value)
+                  setValue('tags', e.target.value.split(',').map(normalizarTag).filter(Boolean), { shouldDirty: true })
+                }}
+              />
+            ))}
+            <Err id="tags-error" msg={errors.tags?.message ?? (Array.isArray(errors.tags) ? 'Revisa los tags: 2 a 30 letras, números o _' : undefined)} />
+          </div>
+        </Seccion>
 
-        {marcaIA('tags')}
-        <Input
-          etiqueta="Tags (separados por coma)"
-          value={tagsTexto}
-          aria-describedby={errors.tags ? 'tags-error' : undefined}
-          aria-invalid={errors.tags ? true : undefined}
-          onChange={(e) => {
-            setTagsTexto(e.target.value)
-            setValue('tags', e.target.value.split(',').map(normalizarTag).filter(Boolean), { shouldDirty: true })
-          }}
-        />
-        <Err id="tags-error" msg={errors.tags?.message ?? (Array.isArray(errors.tags) ? 'Revisa los tags: 2 a 30 letras, números o _' : undefined)} />
+        <Seccion titulo="Prioridad" descripcion="¿Qué tanto afecta?">
+          {campoIA('prioridad', (
+            <div className="flex flex-col gap-2">
+              <Segmentado<Prioridad>
+                etiqueta="Prioridad"
+                valor={prioridad}
+                opciones={PRIORIDADES.map((p) => ({ valor: p, texto: ETIQUETAS_PRIORIDAD[p] }))}
+                onCambio={(p) => {
+                  setValue('prioridad', p, { shouldDirty: true, shouldValidate: true })
+                  setCriticaPendiente(false)
+                }}
+              />
+              <p className="m-0 text-sm text-muted" aria-live="polite">{AYUDA_PRIORIDAD[prioridad]}</p>
+              <Err msg={errors.prioridad?.message} />
+            </div>
+          ))}
+        </Seccion>
 
-        {errorEnvio && <p className="campo-error" role="alert">{errorEnvio}</p>}
-        <Button type="submit" bloque className="mt-4" cargando={isSubmitting} textoCargando="Enviando…">Enviar reporte</Button>
+        <div className="sticky bottom-[calc(var(--tabbar-height)+var(--safe-bottom)+8px)] z-20 flex flex-col gap-2 rounded-card border border-line bg-panel p-3 shadow-lg lg:bottom-4">
+          {errorEnvio && <p className="campo-error m-0" role="alert">{errorEnvio}</p>}
+          <Button type="submit" tamano="lg" bloque icono={<Send size={20} />} cargando={isSubmitting} textoCargando="Enviando…">Enviar reporte</Button>
+        </div>
       </form>
-    </>
+    </div>
   )
 }

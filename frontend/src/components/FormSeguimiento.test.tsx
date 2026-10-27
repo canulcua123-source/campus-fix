@@ -31,7 +31,7 @@ afterEach(() => {
 function abrirFormulario() {
   fireEvent.click(screen.getByRole('button', { name: 'Registrar seguimiento' }))
   return {
-    estado: screen.getByLabelText(/Nuevo estado/),
+    estado: screen.getByRole('group', { name: 'Nuevo estado' }),
     horas: screen.getByLabelText(/Horas invertidas/),
     comentario: screen.getByLabelText(/Comentario/),
   }
@@ -63,9 +63,9 @@ it('registra una transición permitida con horas y comentario', async () => {
     />,
   )
 
-  const { estado, horas, comentario } = abrirFormulario()
-  expect(screen.queryByRole('option', { name: 'Cerrada' })).not.toBeInTheDocument()
-  fireEvent.change(estado, { target: { value: 'en_proceso' } })
+  const { horas, comentario } = abrirFormulario()
+  expect(screen.queryByRole('button', { name: 'Cerrada' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'En proceso' }))
   fireEvent.change(horas, { target: { value: '1.5' } })
   fireEvent.change(comentario, { target: { value: 'Se revisó el equipo y se inició la reparación.' } })
   fireEvent.click(screen.getByRole('button', { name: 'Guardar seguimiento' }))
@@ -104,14 +104,14 @@ it('ofrece el cierre solo a quien tiene permiso de cerrar', () => {
     <FormSeguimiento incidenciaId="inc-1" estadoActual="resuelta" puedeCerrar puedeRegistrar />,
   )
   abrirFormulario()
-  expect(screen.getByRole('option', { name: 'Cerrada' })).toBeInTheDocument()
-  expect(screen.getByRole('option', { name: 'En proceso' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Cerrada' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'En proceso' })).toBeInTheDocument()
   unmount()
 
   render(<FormSeguimiento incidenciaId="inc-1" estadoActual="resuelta" puedeCerrar={false} puedeRegistrar />)
   abrirFormulario()
-  expect(screen.queryByRole('option', { name: 'Cerrada' })).not.toBeInTheDocument()
-  expect(screen.getByRole('option', { name: 'En proceso' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Cerrada' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'En proceso' })).toBeInTheDocument()
 })
 
 it('no muestra acciones si la incidencia ya no admite transiciones', () => {
@@ -127,8 +127,8 @@ it('reinicia el estado inicial cuando cambia el estado actual de la incidencia',
 
   // Tras guardar y refrescar, la incidencia pasó a "en_proceso": el estado inicial anterior ya no es válido.
   rerender(<FormSeguimiento {...props} estadoActual="en_proceso" />)
-  const { estado, horas, comentario } = abrirFormulario()
-  expect(estado).toHaveValue('en_espera')
+  const { horas, comentario } = abrirFormulario()
+  expect(screen.getByRole('button', { name: 'En espera' })).toHaveAttribute('aria-pressed', 'true')
   fireEvent.change(horas, { target: { value: '1' } })
   fireEvent.change(comentario, { target: { value: 'Se dejó en espera por falta de refacciones.' } })
   fireEvent.click(screen.getByRole('button', { name: 'Guardar seguimiento' }))

@@ -5,6 +5,7 @@ import { AppShell } from './components/AppShell'
 import { ACCESO_RUTA as A } from './components/navegacion'
 import AdminAuditoria from './pages/AdminAuditoria'
 import AdminCategorias from './pages/AdminCategorias'
+import AdminConfiguracion from './pages/AdminConfiguracion'
 import AdminEdificios from './pages/AdminEdificios'
 import AdminRoles from './pages/AdminRoles'
 import AdminUsuarios from './pages/AdminUsuarios'
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="admin/categorias" element={<RequirePermiso {...A['/admin/categorias']}><AdminCategorias /></RequirePermiso>} />
         <Route path="admin/edificios" element={<RequirePermiso {...A['/admin/edificios']}><AdminEdificios /></RequirePermiso>} />
         <Route path="admin/auditoria" element={<RequirePermiso {...A['/admin/auditoria']}><AdminAuditoria /></RequirePermiso>} />
+        <Route path="admin/configuracion" element={<RequirePermiso {...A['/admin/configuracion']}><AdminConfiguracion /></RequirePermiso>} />
         <Route path="admin/metricas-ia" element={<RequirePermiso {...A['/admin/metricas-ia']}><MetricasIA /></RequirePermiso>} />
         <Route path="*" element={<SeccionNoDisponible />} />
       </Route>

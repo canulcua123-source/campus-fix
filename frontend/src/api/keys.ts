@@ -30,6 +30,7 @@ export const claves = {
   tecnicos: (area?: string) => ['usuarios', 'tecnicos', area ?? 'todas'] as const,
   aula: (id: string) => ['aulas', id] as const,
   catalogoAulas: ['aulas', 'catalogo'] as const,
+  configIA: ['config', 'ia'] as const,
 }
 
 /** Quita filtros vacíos para que {} y {estado: undefined} compartan caché. */

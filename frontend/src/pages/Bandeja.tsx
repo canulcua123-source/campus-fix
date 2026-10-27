@@ -1,11 +1,11 @@
-import { Inbox } from 'lucide-react'
+import { CircleCheck, Hand, Inbox, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useMe } from '../api/hooks/auth'
 import { mensajeDeError } from '../api/client'
 import { useIncidencias, useTomar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
-import { Badge, Button, EmptyState, ErrorState, Skeleton } from '../components/ui'
+import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
+import { Button, EmptyState, ErrorState, PageHeader, Segmentado, SkeletonLista } from '../components/ui'
 import { antiguedad, filtrarBandeja, ordenarBandeja, type PestanaBandeja } from '../lib/bandeja'
 
 const PESTANAS: { clave: PestanaBandeja; texto: string }[] = [
@@ -13,8 +13,7 @@ const PESTANAS: { clave: PestanaBandeja; texto: string }[] = [
   { clave: 'sin_asignar', texto: 'Sin asignar' },
 ]
 
-const TONO_SLA = { normal: 'text-muted', atencion: 'text-warn', vencida: 'text-bad' } as const
-
+/** Bandeja del técnico: sus asignadas y las de su área sin técnico, por prioridad y antigüedad. */
 export default function Bandeja() {
   const [pestana, setPestana] = useState<PestanaBandeja>('mias')
   const incidencias = useIncidencias({})
@@ -26,68 +25,73 @@ export default function Bandeja() {
   const { data, refetch, isFetching } = incidencias
   const isPending = incidencias.isPending || me.isPending
   const isError = incidencias.isError || me.isError
+  const actualizar = () => {
+    void refetch()
+    void me.refetch()
+  }
 
+  const conteo = {
+    mias: filtrarBandeja(data ?? [], 'mias', me.data?._id).length,
+    sin_asignar: filtrarBandeja(data ?? [], 'sin_asignar', me.data?._id).length,
+  }
   const lista = ordenarBandeja(filtrarBandeja(data ?? [], pestana, me.data?._id))
 
   return (
-    <>
-      <h1 className="titulo-pagina">Bandeja del técnico</h1>
+    <div className="pila">
+      <PageHeader
+        titulo="Bandeja"
+        subtitulo="Incidencias de tu área por atender"
+        acciones={(
+          <Button
+            variante="fantasma"
+            aria-label="Actualizar"
+            icono={<RefreshCw size={20} />}
+            cargando={isFetching && !isPending}
+            onClick={actualizar}
+          />
+        )}
+      />
 
-      <div role="tablist" aria-label="Incidencias de la bandeja" className="mb-4 flex gap-1 rounded-full border border-line bg-panel p-1">
-        {PESTANAS.map((p) => (
-          <button
-            key={p.clave}
-            type="button"
-            role="tab"
-            aria-selected={pestana === p.clave}
-            className={`min-h-11 flex-1 rounded-full px-4 text-sm font-semibold ${
-              pestana === p.clave ? 'bg-brand text-on-brand' : 'text-muted'
-            }`}
-            onClick={() => setPestana(p.clave)}
-          >
-            {p.texto}
-          </button>
-        ))}
-      </div>
+      <Segmentado
+        etiqueta="Incidencias de la bandeja"
+        valor={pestana}
+        onCambio={(v) => {
+          setPestana(v)
+          setAviso(null)
+        }}
+        className="flex w-full [&>button]:flex-1"
+        opciones={PESTANAS.map((p) => ({
+          valor: p.clave,
+          texto: isPending ? p.texto : `${p.texto} · ${conteo[p.clave]}`,
+        }))}
+      />
 
       {aviso && (
-        <p role="status" className="mb-3 rounded-input border border-ok p-3 text-sm text-ok">{aviso}</p>
+        <p role="status" className="m-0 flex items-center gap-2 rounded-input border border-ok bg-panel p-3 text-sm text-ok">
+          <CircleCheck size={18} aria-hidden className="shrink-0" />
+          {aviso}
+        </p>
       )}
       {tomar.isError && (
-        <p role="alert" className="mb-3 rounded-input border border-bad p-3 text-sm text-bad">
+        <p role="alert" className="m-0 rounded-input border border-bad bg-panel p-3 text-sm text-bad">
           {mensajeDeError(tomar.error, 'No pudimos asignarte la incidencia. Intenta de nuevo.')}
         </p>
       )}
 
-      {isPending && (
-        <div className="flex flex-col gap-3" role="status" aria-label="Cargando bandeja">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="card flex flex-col gap-2">
-              <Skeleton ancho="35%" alto={10} />
-              <Skeleton ancho="80%" alto={18} />
-              <div className="flex gap-2">
-                <Skeleton ancho={70} alto={20} redondo />
-                <Skeleton ancho={70} alto={20} redondo />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {isPending && <SkeletonLista etiqueta="Cargando bandeja" />}
 
       {isError && (
         <ErrorState
           titulo="No pudimos cargar la bandeja"
           mensaje="Revisa tu conexión e intenta de nuevo."
-          onReintentar={() => {
-            void refetch()
-            void me.refetch()
-          }}
+          onReintentar={actualizar}
           reintentando={isFetching || me.isFetching}
         />
       )}
 
       {!isPending && !isError && lista.length === 0 && (
         <EmptyState
+          compacto
           titulo={pestana === 'mias' ? 'Sin incidencias asignadas' : 'Sin incidencias por asignar'}
           descripcion={
             pestana === 'mias'
@@ -95,35 +99,27 @@ export default function Bandeja() {
               : 'No hay incidencias pendientes de asignación en tu área.'
           }
           icono={Inbox}
+          accion={pestana === 'mias' && conteo.sin_asignar > 0 ? (
+            <Button variante="secundario" tamano="sm" onClick={() => setPestana('sin_asignar')}>
+              Ver {conteo.sin_asignar} sin asignar
+            </Button>
+          ) : undefined}
         />
       )}
 
       {!isPending && !isError && lista.length > 0 && (
-        <ul className="m-0 flex list-none flex-col gap-3 p-0">
-          {lista.map((t) => {
-            const sla = antiguedad(t.fecha_creacion)
-            return (
-              <li key={t._id}>
-                <Link to={`/incidencias/${t._id}`} className="card block no-underline text-ink">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs text-muted">{t.codigo}</span>
-                    <span className={`text-xs font-semibold ${TONO_SLA[sla.nivel]}`}>{sla.texto}</span>
-                  </div>
-                  <div className="my-1 font-semibold">{t.titulo}</div>
-                  <div className="mb-2 text-sm text-muted">
-                    {[t.ubicacion.edificio, t.ubicacion.aula].filter(Boolean).join(' · ')}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge tipo="prioridad" valor={t.prioridad} />
-                    <Badge tipo="estado" valor={t.estado} />
-                    <Badge tipo="categoria" valor={t.categoria} />
-                  </div>
-                </Link>
-                {puedeTomar && !t.tecnico_asignado && (
+        <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Incidencias">
+          {lista.map((t) => (
+            <li key={t._id}>
+              <TarjetaIncidencia
+                incidencia={t}
+                tonoTiempo={antiguedad(t.fecha_creacion).nivel}
+                accion={puedeTomar && !t.tecnico_asignado ? (
                   <Button
-                    className="mt-2"
                     bloque
-                    variante="secundario"
+                    tamano="sm"
+                    variante="primario"
+                    icono={<Hand size={16} />}
                     aria-label={`Tomar ${t.codigo}`}
                     disabled={tomar.isPending}
                     cargando={tomar.isPending && tomar.variables === t._id}
@@ -135,12 +131,12 @@ export default function Bandeja() {
                   >
                     Tomar
                   </Button>
-                )}
-              </li>
-            )
-          })}
+                ) : undefined}
+              />
+            </li>
+          ))}
         </ul>
       )}
-    </>
+    </div>
   )
 }

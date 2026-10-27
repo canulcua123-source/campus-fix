@@ -1,10 +1,15 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState, type ReactNode } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, Printer } from 'lucide-react'
-import { useAnalitica, useAnaliticaTendencia, useAulasCronicas } from '../api/hooks/analitica'
+import {
+  analiticaAulasCronicasQuery, analiticaEdificiosQuery, analiticaResumenQuery, analiticaTagsQuery, analiticaTendenciaQuery,
+} from '../api/analitica'
 import { incidenciasQuery } from '../api/incidencias'
 import { mensajeDeError } from '../api/client'
-import { Button, Card, EmptyState, ErrorState, Input, PageHeader, Skeleton } from '../components/ui'
+import {
+  BarraFiltros, Button, EmptyState, ErrorState, PageHeader, RangoFechas, Seccion as SeccionUi, Skeleton, Spinner, Tabla as TablaUi,
+  claseNumerica, type ValorRango,
+} from '../components/ui'
 import { enPeriodo, incidenciasACsv, intervaloUtc } from '../lib/csv'
 import { formatearFecha, formatearHoras } from '../lib/detalle'
 import { ETIQUETAS_CATEGORIA } from '../schemas/etiquetas'
@@ -55,30 +60,24 @@ function descargar(contenido: string, nombre: string) {
   URL.revokeObjectURL(url)
 }
 
-function Tabla({ titulo, columnas, children }: { titulo: string; columnas: string[]; children: ReactNode }) {
+/** Columnas: texto o { texto, numerica } para alinear cifras a la derecha. */
+function Tabla({ titulo, columnas, children }: { titulo: string; columnas: (string | { texto: string; numerica: true })[]; children: ReactNode }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
-        <caption className="sr-only">{titulo}</caption>
-        <thead>
-          <tr>{columnas.map((c) => <th key={c} scope="col" className="p-2 text-muted">{c}</th>)}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
+    <TablaUi etiqueta={titulo} densa>
+      <thead>
+        <tr>{columnas.map((c) => typeof c === 'string'
+          ? <th key={c} scope="col">{c}</th>
+          : <th key={c.texto} scope="col" className={claseNumerica}>{c.texto}</th>)}</tr>
+      </thead>
+      <tbody>{children}</tbody>
+    </TablaUi>
   )
 }
 
-const fila = 'border-t border-line'
+const num = (texto: string) => ({ texto, numerica: true as const })
 
-function Seccion({ id, titulo, descripcion, children }: { id: string; titulo: string; descripcion: string; children: ReactNode }) {
-  return (
-    <Card como="section" aria-labelledby={id} className="reporte-seccion flex flex-col gap-3">
-      <h2 id={id} className="text-lg font-semibold">{titulo}</h2>
-      <p className="text-sm text-muted">{descripcion}</p>
-      {children}
-    </Card>
-  )
+function Seccion({ titulo, descripcion, children }: { titulo: string; descripcion: string; children: ReactNode }) {
+  return <SeccionUi titulo={titulo} descripcion={descripcion} className="reporte-seccion">{children}</SeccionUi>
 }
 
 function Cargando({ etiqueta }: { etiqueta: string }) {
@@ -91,29 +90,36 @@ function Cargando({ etiqueta }: { etiqueta: string }) {
 
 export default function Reportes() {
   const qc = useQueryClient()
-  const [borrador, setBorrador] = useState({ desde: '', hasta: '' })
+  const [rango, setRango] = useState<ValorRango>({})
+  const [versionRango, setVersionRango] = useState(0)
   const [filtros, setFiltros] = useState<FiltrosAnalitica>({})
   const [generando, setGenerando] = useState(false)
   const [aviso, setAviso] = useState<Aviso>(null)
   const [generado, setGenerado] = useState(ahora)
-  const { resumen, edificios, tags } = useAnalitica(filtros)
-  const tendencia = useAnaliticaTendencia(filtros)
-  const aulas = useAulasCronicas(filtros)
-  const fechasInvertidas = Boolean(borrador.desde && borrador.hasta && borrador.desde > borrador.hasta)
+  // keepPreviousData: al cambiar el periodo se conserva (atenuado) el reporte anterior hasta que llega el nuevo.
+  const resumen = useQuery({ ...analiticaResumenQuery(filtros), placeholderData: keepPreviousData })
+  const edificios = useQuery({ ...analiticaEdificiosQuery(filtros), placeholderData: keepPreviousData })
+  const tags = useQuery({ ...analiticaTagsQuery(filtros), placeholderData: keepPreviousData })
+  const tendencia = useQuery({ ...analiticaTendenciaQuery(filtros), placeholderData: keepPreviousData })
+  const aulas = useQuery({ ...analiticaAulasCronicasQuery(filtros), placeholderData: keepPreviousData })
+  const filtrando = [resumen, edificios, tags, tendencia, aulas].some((c) => c.isPlaceholderData)
+  const fechasInvertidas = Boolean(rango.desde && rango.hasta && rango.desde > rango.hasta)
 
-  function aplicar(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault()
-    if (fechasInvertidas) return
+  /** El periodo se aplica al momento; un rango invertido no se envía. */
+  function cambiarRango(siguiente: ValorRango) {
+    setRango(siguiente)
+    if (siguiente.desde && siguiente.hasta && siguiente.desde > siguiente.hasta) return
     setAviso(null)
     setGenerado(ahora())
     setFiltros({
-      ...(borrador.desde ? { desde: borrador.desde } : {}),
-      ...(borrador.hasta ? { hasta: borrador.hasta } : {}),
+      ...(siguiente.desde ? { desde: siguiente.desde } : {}),
+      ...(siguiente.hasta ? { hasta: siguiente.hasta } : {}),
     })
   }
 
   function limpiar() {
-    setBorrador({ desde: '', hasta: '' })
+    setRango({})
+    setVersionRango((v) => v + 1)
     setFiltros({})
     setAviso(null)
     setGenerado(ahora())
@@ -157,123 +163,118 @@ export default function Reportes() {
     tendencia.data?.find((t) => t.periodo === periodo && t.categoria === categoria)?.total ?? 0
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="pila">
       <div className="solo-pantalla">
         <PageHeader
           titulo="Reportes"
-          subtitulo="Resumen ejecutivo imprimible y exportación de incidencias"
+          subtitulo="Resumen ejecutivo imprimible y exportación de incidencias."
           acciones={(
             <>
               <Button
-                variante="secundario" icono={<Download size={18} />} cargando={generando} textoCargando="Generando CSV…"
+                variante="secundario" tamano="sm" icono={<Download size={16} />} cargando={generando} textoCargando="Generando CSV…"
                 onClick={() => { void descargarCsv() }}
               >Descargar CSV</Button>
-              <Button variante="secundario" icono={<Printer size={18} />} onClick={() => window.print()}>Imprimir / PDF</Button>
+              <Button variante="secundario" tamano="sm" icono={<Printer size={16} />} onClick={() => window.print()}>Imprimir / PDF</Button>
             </>
           )}
         />
       </div>
 
+      <BarraFiltros
+        etiqueta="Periodo del reporte"
+        activos={filtros.desde || filtros.hasta ? 1 : 0}
+        className="solo-pantalla"
+        acciones={(
+          <>
+            <span role="status" className="flex items-center gap-2 text-sm text-muted">
+              {filtrando && <><Spinner tamano={16} etiqueta={null} /> Actualizando…</>}
+            </span>
+            <Button tamano="sm" variante="fantasma" onClick={limpiar}>Limpiar</Button>
+          </>
+        )}
+      >
+        <RangoFechas key={versionRango} valor={rango} onCambio={cambiarRango} permitirTodo />
+      </BarraFiltros>
+      {fechasInvertidas && <p role="alert" className="solo-pantalla campo-error m-0">Desde debe ser igual o anterior a Hasta</p>}
+
       {aviso && (
-        <p role={aviso.tipo} className={`solo-pantalla text-sm ${aviso.tipo === 'alert' ? 'text-bad' : 'text-muted'}`}>{aviso.texto}</p>
+        <p role={aviso.tipo} className={`solo-pantalla m-0 text-sm ${aviso.tipo === 'alert' ? 'text-bad' : 'text-muted'}`}>{aviso.texto}</p>
       )}
 
-      <Card como="section" aria-label="Periodo del reporte" className="solo-pantalla flex flex-col gap-3">
-        <h2 className="text-base font-semibold">Periodo</h2>
-        <form onSubmit={aplicar} className="grid gap-3 md:grid-cols-3 md:items-end">
-          <Input
-            etiqueta="Desde" type="date" value={borrador.desde} max={borrador.hasta || undefined}
-            onChange={(e) => setBorrador((prev) => ({ ...prev, desde: e.target.value }))}
-            error={fechasInvertidas ? 'Desde debe ser igual o anterior a Hasta' : undefined}
-          />
-          <Input
-            etiqueta="Hasta" type="date" value={borrador.hasta} min={borrador.desde || undefined}
-            onChange={(e) => setBorrador((prev) => ({ ...prev, hasta: e.target.value }))}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={fechasInvertidas}>Aplicar periodo</Button>
-            <Button variante="secundario" onClick={limpiar}>Limpiar</Button>
-          </div>
-        </form>
-        <p className="text-xs text-muted">
-          El periodo usa fechas UTC. El CSV incluye las incidencias creadas en el periodo.
-        </p>
-      </Card>
-
-      <div className="reporte-imprimible flex flex-col gap-4">
+      <div className="reporte-imprimible pila transition-opacity duration-200" style={{ opacity: filtrando ? 0.55 : 1 }} aria-busy={filtrando}>
         <header className="flex flex-col gap-1">
-          <h2 className="text-xl font-bold">Resumen ejecutivo de incidencias</h2>
-          <p className="text-sm text-muted">{textoPeriodo(filtros)} · Generado el {generado}</p>
+          <h2 className="m-0 text-lg font-semibold">Resumen ejecutivo de incidencias</h2>
+          <p className="m-0 text-sm text-muted">{textoPeriodo(filtros)} · Generado el {generado}</p>
         </header>
 
-        <Seccion id="reporte-kpis" titulo="Indicadores principales" descripcion="Estado actual de las incidencias dentro de tu alcance.">
+        <Seccion titulo="Indicadores principales" descripcion="Estado actual de las incidencias dentro de tu alcance.">
           {resumen.isPending ? <Cargando etiqueta="Cargando indicadores" />
             : resumen.isError ? (
-              <ErrorState mensaje={mensajeDeError(resumen.error)} onReintentar={() => { void resumen.refetch() }} reintentando={resumen.isFetching} />
+              <ErrorState compacto mensaje={mensajeDeError(resumen.error)} onReintentar={() => { void resumen.refetch() }} reintentando={resumen.isFetching} />
             ) : (
-              <Tabla titulo="Indicadores principales" columnas={['Indicador', 'Incidencias']}>
+              <Tabla titulo="Indicadores principales" columnas={['Indicador', num('Incidencias')]}>
                 {KPIS.map((k) => (
-                  <tr key={k.clave} className={fila}>
-                    <th scope="row" className="p-2">{k.etiqueta}</th>
-                    <td className="p-2">{numero.format(resumen.data[k.clave])}</td>
+                  <tr key={k.clave}>
+                    <th scope="row">{k.etiqueta}</th>
+                    <td className={claseNumerica}>{numero.format(resumen.data[k.clave])}</td>
                   </tr>
                 ))}
               </Tabla>
             )}
         </Seccion>
 
-        <Seccion id="reporte-edificios" titulo="Edificios con más incidencias resueltas" descripcion="Por fecha de resolución; hasta diez edificios.">
+        <Seccion titulo="Edificios con más incidencias resueltas" descripcion="Por fecha de resolución; hasta diez edificios.">
           {edificios.isPending ? <Cargando etiqueta="Cargando edificios" />
             : edificios.isError ? (
-              <ErrorState mensaje={mensajeDeError(edificios.error)} onReintentar={() => { void edificios.refetch() }} reintentando={edificios.isFetching} />
+              <ErrorState compacto mensaje={mensajeDeError(edificios.error)} onReintentar={() => { void edificios.refetch() }} reintentando={edificios.isFetching} />
             ) : topEdificios.length === 0 ? (
-              <EmptyState titulo="Sin datos por edificio" descripcion="No hay incidencias resueltas en el periodo." />
+              <EmptyState compacto titulo="Sin datos por edificio" descripcion="No hay incidencias resueltas en el periodo." />
             ) : (
-              <Tabla titulo="Edificios con más incidencias resueltas" columnas={['Edificio', 'Resueltas', 'Horas invertidas', 'Promedio de resolución']}>
+              <Tabla titulo="Edificios con más incidencias resueltas" columnas={['Edificio', num('Resueltas'), num('Horas invertidas'), num('Promedio de resolución')]}>
                 {topEdificios.map((e) => (
-                  <tr key={e.edificio} className={fila}>
-                    <th scope="row" className="p-2">{e.edificio}</th>
-                    <td className="p-2">{numero.format(e.total)}</td>
-                    <td className="p-2">{formatearHoras(e.horas_invertidas)}</td>
-                    <td className="p-2">{e.horas_resolucion_prom === null ? 'Sin dato' : formatearHoras(e.horas_resolucion_prom)}</td>
+                  <tr key={e.edificio}>
+                    <th scope="row">{e.edificio}</th>
+                    <td className={claseNumerica}>{numero.format(e.total)}</td>
+                    <td className={claseNumerica}>{formatearHoras(e.horas_invertidas)}</td>
+                    <td className={claseNumerica}>{e.horas_resolucion_prom === null ? 'Sin dato' : formatearHoras(e.horas_resolucion_prom)}</td>
                   </tr>
                 ))}
               </Tabla>
             )}
         </Seccion>
 
-        <Seccion id="reporte-tags" titulo="Etiquetas más frecuentes" descripcion="Por fecha de creación; hasta diez etiquetas.">
+        <Seccion titulo="Etiquetas más frecuentes" descripcion="Por fecha de creación; hasta diez etiquetas.">
           {tags.isPending ? <Cargando etiqueta="Cargando etiquetas" />
             : tags.isError ? (
-              <ErrorState mensaje={mensajeDeError(tags.error)} onReintentar={() => { void tags.refetch() }} reintentando={tags.isFetching} />
+              <ErrorState compacto mensaje={mensajeDeError(tags.error)} onReintentar={() => { void tags.refetch() }} reintentando={tags.isFetching} />
             ) : tags.data.length === 0 ? (
-              <EmptyState titulo="Sin etiquetas" descripcion="No hay etiquetas registradas en el periodo." />
+              <EmptyState compacto titulo="Sin etiquetas" descripcion="No hay etiquetas registradas en el periodo." />
             ) : (
-              <Tabla titulo="Etiquetas más frecuentes" columnas={['Posición', 'Etiqueta', 'Incidencias']}>
+              <Tabla titulo="Etiquetas más frecuentes" columnas={[num('Posición'), 'Etiqueta', num('Incidencias')]}>
                 {tags.data.map((t, posicion) => (
-                  <tr key={t.tag} className={fila}>
-                    <td className="p-2">{posicion + 1}</td>
-                    <th scope="row" className="p-2">{t.tag}</th>
-                    <td className="p-2">{numero.format(t.total)}</td>
+                  <tr key={t.tag}>
+                    <td className={claseNumerica}>{posicion + 1}</td>
+                    <th scope="row">{t.tag}</th>
+                    <td className={claseNumerica}>{numero.format(t.total)}</td>
                   </tr>
                 ))}
               </Tabla>
             )}
         </Seccion>
 
-        <Seccion id="reporte-tendencia" titulo="Tendencia mensual" descripcion="Incidencias creadas por mes (UTC) y categoría.">
+        <Seccion titulo="Tendencia mensual" descripcion="Incidencias creadas por mes y categoría.">
           {tendencia.isPending ? <Cargando etiqueta="Cargando tendencia" />
             : tendencia.isError ? (
-              <ErrorState mensaje={mensajeDeError(tendencia.error)} onReintentar={() => { void tendencia.refetch() }} reintentando={tendencia.isFetching} />
+              <ErrorState compacto mensaje={mensajeDeError(tendencia.error)} onReintentar={() => { void tendencia.refetch() }} reintentando={tendencia.isFetching} />
             ) : periodosTendencia.length === 0 ? (
-              <EmptyState titulo="Sin tendencia" descripcion="No hay incidencias creadas en el periodo." />
+              <EmptyState compacto titulo="Sin tendencia" descripcion="No hay incidencias creadas en el periodo." />
             ) : (
-              <Tabla titulo="Tendencia mensual" columnas={['Mes', ...CATEGORIAS.map((c) => ETIQUETAS_CATEGORIA[c]), 'Total']}>
+              <Tabla titulo="Tendencia mensual" columnas={['Mes', ...CATEGORIAS.map((c) => num(ETIQUETAS_CATEGORIA[c])), num('Total')]}>
                 {periodosTendencia.map((p) => (
-                  <tr key={p} className={fila}>
-                    <th scope="row" className="p-2">{mes(p)}</th>
-                    {CATEGORIAS.map((c) => <td key={c} className="p-2">{numero.format(totalTendencia(p, c))}</td>)}
-                    <td className="p-2 font-semibold">
+                  <tr key={p}>
+                    <th scope="row">{mes(p)}</th>
+                    {CATEGORIAS.map((c) => <td key={c} className={claseNumerica}>{numero.format(totalTendencia(p, c))}</td>)}
+                    <td className={`${claseNumerica} font-semibold`}>
                       {numero.format(CATEGORIAS.reduce((suma, c) => suma + totalTendencia(p, c), 0))}
                     </td>
                   </tr>
@@ -282,20 +283,20 @@ export default function Reportes() {
             )}
         </Seccion>
 
-        <Seccion id="reporte-aulas" titulo="Aulas crónicas" descripcion="Aulas con tres o más incidencias en los últimos 30 días, dentro del periodo.">
+        <Seccion titulo="Aulas crónicas" descripcion="Aulas con tres o más incidencias en los últimos 30 días, dentro del periodo.">
           {aulas.isPending ? <Cargando etiqueta="Cargando aulas crónicas" />
             : aulas.isError ? (
-              <ErrorState mensaje={mensajeDeError(aulas.error)} onReintentar={() => { void aulas.refetch() }} reintentando={aulas.isFetching} />
+              <ErrorState compacto mensaje={mensajeDeError(aulas.error)} onReintentar={() => { void aulas.refetch() }} reintentando={aulas.isFetching} />
             ) : aulas.data.length === 0 ? (
-              <EmptyState titulo="Sin aulas crónicas" descripcion="Ninguna aula acumula tres o más incidencias recientes." />
+              <EmptyState compacto titulo="Sin aulas crónicas" descripcion="Ninguna aula acumula tres o más incidencias recientes." />
             ) : (
-              <Tabla titulo="Aulas crónicas" columnas={['Edificio', 'Piso', 'Aula', 'Incidencias']}>
+              <Tabla titulo="Aulas crónicas" columnas={['Edificio', 'Piso', 'Aula', num('Incidencias')]}>
                 {aulas.data.map((a) => (
-                  <tr key={`${a.edificio}-${a.piso ?? ''}-${a.aula}`} className={fila}>
-                    <td className="p-2">{a.edificio}</td>
-                    <td className="p-2">{a.piso ?? 'Sin piso'}</td>
-                    <th scope="row" className="p-2">{a.aula}</th>
-                    <td className="p-2">{numero.format(a.total)}</td>
+                  <tr key={`${a.edificio}-${a.piso ?? ''}-${a.aula}`}>
+                    <td>{a.edificio}</td>
+                    <td>{a.piso ?? 'Sin piso'}</td>
+                    <th scope="row">{a.aula}</th>
+                    <td className={claseNumerica}>{numero.format(a.total)}</td>
                   </tr>
                 ))}
               </Tabla>

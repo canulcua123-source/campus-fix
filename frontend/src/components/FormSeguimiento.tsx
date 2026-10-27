@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { ApiError } from '../api/client'
 import { useSeguimiento } from '../api/hooks/incidencias'
 import { seguimientoSchema, type SeguimientoIn } from '../schemas/incidencia'
 import { etiquetaEstado, transicionesDesde, type Estado } from '../lib/estados'
-import { BottomSheet, Button, Input, Select, Textarea } from './ui'
+import { ClipboardPen } from 'lucide-react'
+import { BottomSheet, Button, Input, Segmentado, Textarea } from './ui'
 
 interface FormSeguimientoProps {
   incidenciaId: string
@@ -15,7 +16,7 @@ interface FormSeguimientoProps {
   onSeguimientoGuardado?: () => void
 }
 
-/** Hoja para registrar una transición de estado y su bitácora. */
+/** Hoja para registrar una transición de estado y su bitácora. En móvil el botón queda fijo sobre la barra inferior. */
 export function FormSeguimiento({
   incidenciaId,
   estadoActual,
@@ -32,6 +33,7 @@ export function FormSeguimiento({
     mode: 'onTouched',
     defaultValues: { comentario: '', horas: 0, estado_nuevo: transiciones[0] },
   })
+  const estadoElegido = useWatch({ control: form.control, name: 'estado_nuevo' })
 
   // Al cambiar el estado de la incidencia (p. ej. tras guardar y refrescar) el formulario vuelve a su valor inicial válido.
   const primeraTransicion = transiciones[0]
@@ -67,23 +69,34 @@ export function FormSeguimiento({
   })
 
   return (
-    <section className="mt-3" aria-label="Acciones de seguimiento">
-      <Button bloque onClick={() => setAbierto(true)}>Registrar seguimiento</Button>
+    <section aria-label="Acciones de seguimiento">
+      <div
+        className="max-lg:fixed max-lg:inset-x-0 max-lg:z-20 max-lg:border-t max-lg:border-line max-lg:bg-panel max-lg:px-4 max-lg:py-2"
+        style={{ bottom: 'calc(var(--tabbar-height) + var(--safe-bottom))' }}
+      >
+        <Button bloque icono={<ClipboardPen size={18} />} onClick={() => setAbierto(true)}>Registrar seguimiento</Button>
+      </div>
       <BottomSheet abierto={abierto} onCerrar={cerrar} titulo="Registrar seguimiento">
         <form id="form-seguimiento" className="flex flex-col gap-4" onSubmit={enviar} noValidate>
-          <p className="m-0 text-sm text-muted">Estado actual: <strong className="text-ink">{etiquetaEstado(estadoActual)}</strong></p>
           {mensajeError && <p className="m-0 ui-campo__error" role="alert">{mensajeError}</p>}
-          <Select
-            etiqueta="Nuevo estado"
-            placeholder="Selecciona el nuevo estado"
-            opciones={transiciones.map((estado) => ({ valor: estado, texto: etiquetaEstado(estado) }))}
-            error={form.formState.errors.estado_nuevo?.message}
-            required
-            {...form.register('estado_nuevo')}
-          />
+          <div className="flex flex-col gap-1.5">
+            <span className="ui-campo__etiqueta">
+              Nuevo estado <span className="font-normal text-muted">· ahora {etiquetaEstado(estadoActual)}</span>
+            </span>
+            <Segmentado
+              etiqueta="Nuevo estado"
+              valor={estadoElegido ?? ''}
+              onCambio={(v) => form.setValue('estado_nuevo', v as SeguimientoIn['estado_nuevo'], { shouldValidate: true })}
+              opciones={transiciones.map((estado) => ({ valor: estado, texto: etiquetaEstado(estado) }))}
+              className="flex w-full [&>button]:flex-1"
+            />
+            {form.formState.errors.estado_nuevo?.message && (
+              <p className="m-0 ui-campo__error" role="alert">{form.formState.errors.estado_nuevo.message}</p>
+            )}
+          </div>
           <Input
             etiqueta="Horas invertidas"
-            ayuda="Puedes registrar de 0 a 24 horas con decimales."
+            ayuda="De 0 a 24 horas; usa decimales (1.5 = hora y media)."
             type="number"
             min="0"
             max="24"
