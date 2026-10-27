@@ -58,30 +58,36 @@ export default function MetricasIA() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader titulo="Métricas de IA" subtitulo="Auditoría agregada de ofertas, calidad, latencia y costo estimado" />
-      <p className="text-sm text-muted" role="note">Esta pantalla es exclusiva del rol administrador. No muestra eventos individuales ni datos personales.</p>
+      <PageHeader
+        titulo="Métricas de IA"
+        subtitulo="Ofertas, calidad, latencia y costo estimado. Solo datos agregados, sin eventos individuales ni datos personales."
+        acciones={<Button variante="secundario" icono={<RefreshCw size={18} aria-hidden />} cargando={consulta.isFetching && !consulta.isPending}
+          textoCargando="Actualizando…" onClick={() => { void consulta.refetch() }}>Actualizar</Button>}
+      />
 
       <Card como="section" aria-label="Filtros de métricas de IA" className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold">Filtrar métricas</h2>
-        <form onSubmit={aplicar} className="grid gap-3 md:grid-cols-2 xl:grid-cols-5 xl:items-end">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <h2 className="text-base font-semibold">Filtrar métricas</h2>
+          <p className="text-xs text-muted">Sin fechas: últimos 30 días · máximo 180 días</p>
+        </div>
+        <form onSubmit={aplicar} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-start">
           <Input etiqueta="Desde" type="date" value={borrador.desde} max={borrador.hasta || undefined}
             onChange={(e) => setBorrador((anterior) => ({ ...anterior, desde: e.target.value }))}
             error={fechasInvertidas ? 'Desde debe ser igual o anterior a Hasta' : undefined} />
           <Input etiqueta="Hasta" type="date" value={borrador.hasta} min={borrador.desde || undefined}
             onChange={(e) => setBorrador((anterior) => ({ ...anterior, hasta: e.target.value }))} />
-          <Select etiqueta="Categoría" value={borrador.categoria} placeholder="Todas las categorías"
+          <Select etiqueta="Categoría" value={borrador.categoria} placeholder="Todas"
             opciones={CATEGORIAS.map((clave) => ({ valor: clave, texto: ETIQUETAS_CATEGORIA[clave] }))}
             onChange={(e) => setBorrador((anterior) => ({ ...anterior, categoria: e.target.value }))} />
           <Input etiqueta="Proveedor" value={borrador.proveedor} maxLength={30} placeholder="Ej. claude"
             onChange={(e) => setBorrador((anterior) => ({ ...anterior, proveedor: e.target.value }))} />
           <Input etiqueta="Modelo" value={borrador.modelo} maxLength={100} placeholder="Modelo exacto"
             onChange={(e) => setBorrador((anterior) => ({ ...anterior, modelo: e.target.value }))} />
-          <div className="flex flex-wrap gap-2 xl:col-span-5">
+          <div className="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-1 lg:self-end">
             <Button type="submit" disabled={fechasInvertidas}>Aplicar filtros</Button>
             <Button variante="secundario" onClick={limpiar}>Limpiar</Button>
           </div>
         </form>
-        <p className="text-xs text-muted">Sin fechas se consultan los últimos 30 días. El máximo permitido es 180 días.</p>
       </Card>
 
       {consulta.isPending ? (
@@ -93,10 +99,6 @@ export default function MetricasIA() {
       ) : (
         <Contenido metricas={consulta.data} />
       )}
-
-      <div className="flex justify-end">
-        <Button variante="fantasma" icono={<RefreshCw size={18} />} onClick={() => { void consulta.refetch() }}>Actualizar métricas</Button>
-      </div>
     </div>
   )
 }

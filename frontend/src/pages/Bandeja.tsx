@@ -2,8 +2,10 @@ import { Inbox } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMe } from '../api/hooks/auth'
-import { useIncidencias } from '../api/hooks/incidencias'
-import { Badge, EmptyState, ErrorState, Skeleton } from '../components/ui'
+import { mensajeDeError } from '../api/client'
+import { useIncidencias, useTomar } from '../api/hooks/incidencias'
+import { useAuth } from '../auth/store'
+import { Badge, Button, EmptyState, ErrorState, Skeleton } from '../components/ui'
 import { antiguedad, filtrarBandeja, ordenarBandeja, type PestanaBandeja } from '../lib/bandeja'
 
 const PESTANAS: { clave: PestanaBandeja; texto: string }[] = [
@@ -17,6 +19,10 @@ export default function Bandeja() {
   const [pestana, setPestana] = useState<PestanaBandeja>('mias')
   const incidencias = useIncidencias({})
   const me = useMe()
+  const tomar = useTomar()
+  const [aviso, setAviso] = useState<string | null>(null)
+  // Espejo de POST /tomar: solo el rol técnico con permiso de seguimiento puede autoasignarse.
+  const puedeTomar = useAuth((s) => s.usuario?.rol === 'tecnico' && s.tiene('seguimiento:registrar'))
   const { data, refetch, isFetching } = incidencias
   const isPending = incidencias.isPending || me.isPending
   const isError = incidencias.isError || me.isError
@@ -43,6 +49,15 @@ export default function Bandeja() {
           </button>
         ))}
       </div>
+
+      {aviso && (
+        <p role="status" className="mb-3 rounded-input border border-ok p-3 text-sm text-ok">{aviso}</p>
+      )}
+      {tomar.isError && (
+        <p role="alert" className="mb-3 rounded-input border border-bad p-3 text-sm text-bad">
+          {mensajeDeError(tomar.error, 'No pudimos asignarte la incidencia. Intenta de nuevo.')}
+        </p>
+      )}
 
       {isPending && (
         <div className="flex flex-col gap-3" role="status" aria-label="Cargando bandeja">
@@ -104,6 +119,23 @@ export default function Bandeja() {
                     <Badge tipo="categoria" valor={t.categoria} />
                   </div>
                 </Link>
+                {puedeTomar && !t.tecnico_asignado && (
+                  <Button
+                    className="mt-2"
+                    bloque
+                    variante="secundario"
+                    aria-label={`Tomar ${t.codigo}`}
+                    disabled={tomar.isPending}
+                    cargando={tomar.isPending && tomar.variables === t._id}
+                    textoCargando="Tomando…"
+                    onClick={() => {
+                      setAviso(null)
+                      tomar.mutate(t._id, { onSuccess: () => setAviso(`Tomaste ${t.codigo}. Ya aparece en Mis asignadas.`) })
+                    }}
+                  >
+                    Tomar
+                  </Button>
+                )}
               </li>
             )
           })}

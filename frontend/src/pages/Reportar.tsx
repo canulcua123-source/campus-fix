@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Camera, ImagePlus, Sparkles } from 'lucide-react'
+import { Camera, ImagePlus, PencilLine, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -12,7 +12,7 @@ import type { ReanudarSubida } from '../api/evidencias'
 import { AvisoCalidad } from '../components/AvisoCalidad'
 import { CamposDetalleReporte } from '../components/CamposDetalleReporte'
 import { SugerenciaIA } from '../components/SugerenciaIA'
-import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui'
+import { Button, Card, Input, PageHeader, Select, Skeleton, Spinner, Textarea } from '../components/ui'
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
 import { OPCIONES_CATEGORIA, OPCIONES_PRIORIDAD } from '../lib/etiquetas'
@@ -352,29 +352,36 @@ export default function Reportar() {
   if (paso === 'foto') {
     return (
       <>
-        <h1 className="titulo-pagina">Reportar</h1>
-        <div className="card flex flex-col items-center gap-4 py-10 text-center">
-          <p className="m-0 text-muted">Toma una foto del problema y la IA te ayudará a llenar el reporte.</p>
-          <label className="etiqueta w-full max-w-xs text-left" htmlFor="contexto">Contexto para la IA (opcional)</label>
-          <textarea
-            id="contexto"
-            className="w-full max-w-xs"
+        <PageHeader titulo="Reportar" subtitulo="Toma una foto del problema y la IA te ayudará a llenar el reporte." />
+        <Card como="section" className="mx-auto flex w-full max-w-md flex-col gap-4">
+          {entradaFoto}
+          {entradaGaleria}
+          <Button tamano="lg" bloque icono={<Camera size={22} aria-hidden />} cargando={analizando} textoCargando="Analizando…" onClick={abrirCamara}>
+            Tomar foto
+          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variante="secundario" icono={<ImagePlus size={18} aria-hidden />} disabled={analizando} onClick={() => galeria.current?.click()}>
+              Galería
+            </Button>
+            <Button variante="secundario" icono={<PencilLine size={18} aria-hidden />} disabled={analizando} onClick={continuarManual}>
+              Llenar sin foto
+            </Button>
+          </div>
+          <Textarea
+            etiqueta="Contexto para la IA (opcional)"
+            ayuda="Ayuda a la IA a entender la foto. Máximo 500 caracteres."
             rows={2}
             maxLength={500}
             value={contexto}
             placeholder="Ej. el proyector no enciende desde ayer"
             onChange={(e) => setContexto(e.target.value)}
           />
-          {entradaFoto}
-          {entradaGaleria}
-          <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
-            <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
-          </button>
-          <Button variante="secundario" icono={<ImagePlus size={18} aria-hidden />} disabled={analizando} onClick={() => galeria.current?.click()}>
-            Elegir de la galería
-          </Button>
-          <button className="btn btn-secundario" onClick={continuarManual}>Llenar sin foto</button>
-        </div>
+        </Card>
+        <ol className="mx-auto mt-4 flex w-full max-w-md justify-between gap-2 text-xs text-muted" aria-label="Pasos para reportar">
+          <li><strong className="text-ink">1.</strong> Foto</li>
+          <li>2. Revisa el formulario</li>
+          <li>3. Envía y recibe tu folio</li>
+        </ol>
       </>
     )
   }
@@ -383,15 +390,33 @@ export default function Reportar() {
     <>
       <h1 className="titulo-pagina">Nueva incidencia</h1>
       {entradaFoto}
-      {vista && <img src={vista} alt="Foto de la incidencia" className="mb-3 max-h-56 rounded-card object-cover" />}
+      {vista && (
+        <div className="relative mb-3 w-fit max-w-full overflow-hidden rounded-card">
+          <img src={vista} alt="Foto de la incidencia" className="block max-h-56 object-cover" />
+          {analizando && (
+            <div aria-hidden className="absolute inset-0 flex items-center justify-center bg-canvas/60 backdrop-blur-[2px]">
+              <span className="flex items-center gap-2 rounded-full bg-panel px-3 py-1.5 text-sm font-semibold text-accent shadow">
+                <Sparkles size={16} className="animate-pulse" /> Analizando…
+              </span>
+            </div>
+          )}
+        </div>
+      )}
       {analizando && (
-        <Card role="status" className="mb-3 text-sm">
-          <p className="m-0">Analizando la foto… Puedes continuar llenando el formulario.</p>
-          <div aria-hidden className="mt-2 flex flex-col gap-2">
+        <Card role="status" aria-live="polite" className="mb-3 flex flex-col gap-3 border-[var(--color-secondary)]">
+          <div className="flex items-start gap-3">
+            <Spinner tamano={24} etiqueta="Analizando con IA" className="mt-0.5 shrink-0 text-accent" />
+            <div>
+              <p className="m-0 font-semibold">Analizando la foto con IA…</p>
+              <p className="m-0 text-sm text-muted">Llenaremos título, descripción, categoría y prioridad. Puedes seguir escribiendo; no borraremos lo que cambies.</p>
+            </div>
+          </div>
+          <div aria-hidden className="flex flex-col gap-2">
             <Skeleton ancho="70%" alto={12} />
+            <Skeleton ancho="90%" alto={12} />
             <Skeleton ancho="45%" alto={12} />
           </div>
-          <Button variante="secundario" className="mt-3" onClick={continuarSinIA}>Continuar sin IA</Button>
+          <Button variante="secundario" className="self-start" onClick={continuarSinIA}>Continuar sin IA</Button>
         </Card>
       )}
       {calidadPendiente && (

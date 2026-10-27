@@ -160,6 +160,19 @@ export const asignacionSchema = z.object({
 })
 export type AsignacionIn = z.infer<typeof asignacionSchema>
 
+/** ConfirmacionIn (POST /incidencias/{id}/confirmacion): el reportante confirma o reabre una incidencia resuelta. */
+export const confirmacionSchema = z.object({
+  accion: z.enum(['confirmar', 'reabrir']),
+  comentario: z.string().trim().min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres').optional(),
+})
+export type ConfirmacionIn = z.infer<typeof confirmacionSchema>
+
+/** ComentarioReportanteIn (POST /incidencias/{id}/comentarios): solo mientras la incidencia está en espera. */
+export const comentarioReportanteSchema = z.object({
+  comentario: z.string('Requerido').trim().min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres'),
+})
+export type ComentarioReportanteIn = z.infer<typeof comentarioReportanteSchema>
+
 /** PrioridadIn (PATCH /incidencias/{id}/prioridad). */
 export const prioridadSchema = z.object({
   prioridad: z.enum(PRIORIDADES, 'Selecciona la prioridad'),
@@ -279,6 +292,7 @@ export type IncidenciaCreada = z.infer<typeof incidenciaCreadaSchema>
 export const okSchema = z.object({ ok: z.literal(true) })
 export const seguimientoOutSchema = okSchema.extend({ estado: z.enum(ESTADOS) })
 export const asignacionOutSchema = okSchema.extend({ tecnico_asignado: personaRef })
+export const tomarOutSchema = seguimientoOutSchema.extend({ tecnico_asignado: personaRef })
 export const prioridadOutSchema = okSchema.extend({ prioridad: z.enum(PRIORIDADES) })
 
 export const firmaEvidenciaOutSchema = z.object({

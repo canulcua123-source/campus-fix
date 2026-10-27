@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AsignacionIn, FiltrosIncidencias, IncidenciaIn, PrioridadIn, SeguimientoIn, TagsIn } from '../../schemas/incidencia'
+import type {
+  AsignacionIn, ComentarioReportanteIn, ConfirmacionIn, FiltrosIncidencias, IncidenciaIn, PrioridadIn, SeguimientoIn, TagsIn,
+} from '../../schemas/incidencia'
 import { ApiError } from '../client'
 import { subirEvidencia, urlEvidenciaQuery, type SubidaEvidencia } from '../evidencias'
 import {
-  agregarTags, asignar, buscarQuery, cambiarPrioridad, crearIncidencia, incidenciaQuery, incidenciasQuery, quitarTags, registrarSeguimiento,
-  retirarIncidencia,
+  agregarTags, asignar, buscarQuery, cambiarPrioridad, comentarEnEspera, confirmarSolucion, crearIncidencia, incidenciaQuery, incidenciasQuery, quitarTags, registrarSeguimiento,
+  retirarIncidencia, tomarIncidencia,
 } from '../incidencias'
 import { claves } from '../keys'
 
@@ -84,6 +86,41 @@ export function useRetirar(id: string) {
       invalidar()
     },
     onError: (e) => esConflicto(e) && invalidar(),
+  })
+}
+
+/** Reportante: confirma (→ cerrada) o reabre (→ abierta) una incidencia resuelta. */
+export function useConfirmacion(id: string) {
+  const invalidar = useInvalidarIncidencia(id)
+  return useMutation({
+    mutationFn: (datos: ConfirmacionIn) => confirmarSolucion(id, datos),
+    onSuccess: invalidar,
+    onError: (e) => esConflicto(e) && invalidar(),
+  })
+}
+
+/** Reportante: agrega información mientras la incidencia está en espera (no cambia estado). */
+export function useComentarioReportante(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (datos: ComentarioReportanteIn) => comentarEnEspera(id, datos),
+    onSuccess: () => qc.invalidateQueries({ queryKey: claves.incidencia(id) }),
+    onError: (e) => esConflicto(e) && qc.invalidateQueries({ queryKey: claves.incidencia(id) }),
+  })
+}
+
+/** Técnico: se autoasigna una incidencia sin técnico. `useTomar().mutate(id)`; 409 = ya la tomó alguien más. */
+export function useTomar() {
+  const qc = useQueryClient()
+  const invalidar = (id: string) => {
+    qc.invalidateQueries({ queryKey: claves.incidencia(id) })
+    qc.invalidateQueries({ queryKey: claves.incidencias })
+    qc.invalidateQueries({ queryKey: claves.analitica })
+  }
+  return useMutation({
+    mutationFn: (id: string) => tomarIncidencia(id),
+    onSuccess: (_r, id) => invalidar(id),
+    onError: (e, id) => esConflicto(e) && invalidar(id),
   })
 }
 

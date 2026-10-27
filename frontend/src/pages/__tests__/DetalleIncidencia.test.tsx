@@ -217,4 +217,39 @@ describe('DetalleIncidencia (T-046)', () => {
     await waitFor(() => expect(screen.getByText('Abierta')).toBeInTheDocument())
     expect(screen.queryByText('Tu reporte fue retirado correctamente.')).not.toBeInTheDocument()
   })
+
+  it('el técnico toma desde el detalle una incidencia sin técnico', async () => {
+    useAuth.setState({
+      token: 't',
+      usuario: { nombre: 'Luis', rol: 'tecnico', permisos: ['incidencias:ver', 'seguimiento:registrar'], alcance: 'area' },
+    })
+    let tomada = false
+    servidor.use(
+      http.get(RUTA, () => HttpResponse.json(tomada ? { ...detalle(), tecnico_asignado: { usuario_id: 'u-luis', nombre: 'Luis' } } : detalle())),
+      http.post(`${RUTA}/tomar`, () => {
+        tomada = true
+        return HttpResponse.json({ ok: true, estado: 'abierta', tecnico_asignado: { usuario_id: 'u-luis', nombre: 'Luis' } })
+      }),
+    )
+    renderDetalle()
+    const usuario = userEvent.setup()
+    await usuario.click(await screen.findByRole('button', { name: 'Tomar incidencia' }))
+    expect(await screen.findByText(/Tomaste la incidencia/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tomar incidencia' })).not.toBeInTheDocument())
+  })
+
+  it('el reportante ve "¿Se resolvió tu problema?" solo cuando está resuelta', async () => {
+    useAuth.setState({
+      token: 't',
+      usuario: { nombre: 'Ana López', rol: 'reportante', permisos: ['incidencias:ver'], alcance: 'propio' },
+    })
+    servidor.use(
+      http.get(`${BASE}/auth/me`, () => HttpResponse.json({ _id: 'reportante', nombre: 'Ana López', rol: 'reportante', permisos: ['incidencias:ver'], alcance: 'propio' })),
+      http.get(RUTA, () => HttpResponse.json({ ...detalle(), estado: 'resuelta', fecha_resolucion: new Date().toISOString() })),
+    )
+    renderDetalle()
+    expect(await screen.findByText('¿Se resolvió tu problema?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'No, reabrir' })).toBeInTheDocument()
+    expect(screen.queryByText('Agregar información')).not.toBeInTheDocument()
+  })
 })

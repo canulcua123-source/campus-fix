@@ -9,6 +9,9 @@ import { FormSeguimiento } from '../components/FormSeguimiento'
 import { Timeline } from '../components/Timeline'
 import { EditorTags } from '../components/EditorTags'
 import { SelectorPrioridad } from '../components/SelectorPrioridad'
+import { ConfirmarSolucion } from '../components/ConfirmarSolucion'
+import { AgregarInformacion } from '../components/AgregarInformacion'
+import { TomarIncidencia } from '../components/TomarIncidencia'
 import { Badge, BottomSheet, Button, Card, ErrorState, PageHeader, Skeleton } from '../components/ui'
 import {
   datosDetalle, esSoloLectura, formatearFecha, formatearHoras, mensajeErrorDetalle, textoUbicacion,
@@ -21,6 +24,7 @@ export default function DetalleIncidencia() {
   const { usuario } = useAuth()
   const [confirmandoRetiro, setConfirmandoRetiro] = useState(false)
   const [retiroExitoso, setRetiroExitoso] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
 
   if (isPending) {
     return (
@@ -65,6 +69,9 @@ export default function DetalleIncidencia() {
   const soloLectura = esSoloLectura(usuario?.permisos ?? [])
   const puedeCambiarPrioridad = (usuario?.permisos.includes('incidencias:asignar') ?? false)
     && detalle.estado !== 'cerrada' && detalle.estado !== 'retirada'
+  // Espejo de POST /tomar: solo rol técnico, sin técnico asignado y en estado activo (la API decide).
+  const puedeTomar = usuario?.rol === 'tecnico' && (usuario.permisos.includes('seguimiento:registrar'))
+    && !detalle.tecnico_asignado && ['abierta', 'en_proceso', 'en_espera'].includes(detalle.estado)
   const datos = [
     { etiqueta: 'Ubicación', valor: textoUbicacion(detalle.ubicacion) },
     { etiqueta: 'Reportante', valor: detalle.reportante.nombre },
@@ -89,6 +96,25 @@ export default function DetalleIncidencia() {
         <Badge tipo="categoria" valor={detalle.categoria} />
 
       </div>
+
+      {aviso && (
+        <p role="status" className="mb-3 rounded-input border border-ok p-3 text-sm text-ok">{aviso}</p>
+      )}
+
+      {detalle.estado === 'resuelta' && (
+        <ConfirmarSolucion
+          incidenciaId={detalle._id}
+          reportanteId={detalle.reportante.usuario_id}
+          fechaResolucion={detalle.fecha_resolucion}
+          onHecho={setAviso}
+        />
+      )}
+
+      {detalle.estado === 'en_espera' && (
+        <AgregarInformacion incidenciaId={detalle._id} reportanteId={detalle.reportante.usuario_id} />
+      )}
+
+      {puedeTomar && <TomarIncidencia incidenciaId={detalle._id} onHecho={setAviso} />}
 
       {detalle.puede_retirar && detalle.estado === 'abierta' && !detalle.tecnico_asignado && (
         <Card como="section" className="mb-3">

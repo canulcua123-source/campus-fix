@@ -110,7 +110,7 @@ export const NAVEGACION: Record<PerfilNav, Config> = {
   directivo: { movil: [I.dashboard, I.buscar, I.perfil], lateral: [I.dashboard, I.incidencias, I.reportes] },
   admin: {
     movil: [I.usuarios, I.roles, I.categorias, I.perfil],
-    lateral: [I.usuarios, I.roles, I.categorias, I.edificios, I.auditoria, I.configuracion, I.metricasIA],
+    lateral: [I.dashboard, I.usuarios, I.roles, I.categorias, I.edificios, I.auditoria, I.configuracion, I.metricasIA],
   },
 }
 

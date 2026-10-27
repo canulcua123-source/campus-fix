@@ -197,3 +197,24 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Reportes: impresión / PDF. Oculta el cromo de navegación y los controles de pantalla. */
+@media print {
+  .nav-chrome,
+  .solo-pantalla {
+    display: none !important;
+  }
+  .reporte-imprimible {
+    color: var(--color-text);
+  }
+  .reporte-imprimible .reporte-seccion {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+  .reporte-imprimible table {
+    break-inside: auto;
+  }
+  .reporte-imprimible tr {
+    break-inside: avoid;
+  }
+}

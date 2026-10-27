@@ -1,5 +1,6 @@
 export * from './admin'
 export * from './analitica'
+export * from './auditoria'
 export * from './auth'
 export * from './ia'
 export * from './incidencias'

@@ -13,8 +13,8 @@ const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
   directivo: { movil: ['Dashboard', 'Buscar', 'Perfil'], lateral: ['Dashboard', 'Incidencias', 'Reportes'] },
   admin: {
     movil: ['Usuarios', 'Roles', 'Categorías', 'Perfil'],
-    // + Métricas IA (T-030, exclusiva del rol admin), fuera de la tabla original.
-    lateral: ['Usuarios', 'Roles', 'Categorías', 'Edificios', 'Auditoría', 'Configuración', 'Métricas IA'],
+    // + Dashboard (acceso a analítica:ver) y Métricas IA (T-030, exclusiva del rol admin), fuera de la tabla original.
+    lateral: ['Dashboard', 'Usuarios', 'Roles', 'Categorías', 'Edificios', 'Auditoría', 'Configuración', 'Métricas IA'],
   },
 }
 

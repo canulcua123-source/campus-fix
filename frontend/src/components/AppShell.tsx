@@ -147,7 +147,7 @@ export function AppShell() {
       <div className="min-w-0 flex-1">
         <OfflineBanner />
         <header className="topbar nav-chrome flex flex-wrap items-center gap-2">
-          <span className="font-semibold">UTM Desk</span>
+          <span className="font-semibold lg:hidden">UTM Desk</span>
           {puedeBuscar && <BuscadorGlobal />}
         </header>
         <main className="app-main">

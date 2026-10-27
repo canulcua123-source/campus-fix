@@ -3038,6 +3038,47 @@
       ]
     },
     {
+      "name": "Aulas",
+      "description": "Catálogo de aulas agrupado por edificio (solo lectura).",
+      "item": [
+        {
+          "name": "Catálogo de aulas por edificio (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Edificios con aulas agrupadas', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(e => { pm.expect(e.edificio).to.be.a('string'); pm.expect(e.total_aulas).to.equal(e.aulas.length); pm.expect(e.activas).to.be.at.most(e.total_aulas); pm.expect(e.pisos).to.be.an('array'); e.aulas.forEach(a => { pm.expect(a.id_publico).to.match(/^[A-Za-z0-9_-]{22}$/); pm.expect(a.piso).to.be.a('number'); pm.expect(a.aula).to.be.a('string'); pm.expect(a.activa).to.be.a('boolean'); }); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Catálogo de aulas agrupado por edificio. Requiere usuarios:gestionar (401 sin sesión, 403 sin permiso).",
+            "url": {
+              "raw": "{{base_url}}/aulas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Auditoria administrativa",
       "description": "Consulta paginada de T-022, exclusiva del administrador.",
       "item": [

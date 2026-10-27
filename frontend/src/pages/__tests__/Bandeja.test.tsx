@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../test/setup'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
@@ -120,5 +120,55 @@ describe('Bandeja (T-050)', () => {
 
     expect(await screen.findByText('No pudimos cargar la bandeja')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('el técnico toma una incidencia sin asignar', async () => {
+    let tomada = false
+    servidor.use(
+      http.get(`${BASE}/incidencias`, () => HttpResponse.json(tomada
+        ? INCIDENCIAS.map((i) => (i._id === 'sin-asignar' ? { ...i, tecnico_asignado: { usuario_id: 'u-ana', nombre: 'Ana' } } : i))
+        : INCIDENCIAS)),
+      http.post(`${BASE}/incidencias/sin-asignar/tomar`, () => {
+        tomada = true
+        return HttpResponse.json({ ok: true, estado: 'abierta', tecnico_asignado: { usuario_id: 'u-ana', nombre: 'Ana' } })
+      }),
+    )
+    renderBandeja()
+    const usuario = userEvent.setup()
+    await screen.findByText('Crítica asignada')
+    expect(screen.queryByRole('button', { name: /Tomar/ })).not.toBeInTheDocument()
+    await usuario.click(screen.getByRole('tab', { name: 'Sin asignar' }))
+    await usuario.click(screen.getByRole('button', { name: 'Tomar INC-SIN' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Tomaste INC-SIN')
+    await waitFor(() => expect(screen.queryByText('Pendiente de asignación')).not.toBeInTheDocument())
+  })
+
+  it('muestra el 409 cuando otro técnico la tomó antes y refresca la lista', async () => {
+    let listas = 0
+    servidor.use(
+      http.get(`${BASE}/incidencias`, () => {
+        listas += 1
+        return HttpResponse.json(INCIDENCIAS)
+      }),
+      http.post(`${BASE}/incidencias/sin-asignar/tomar`, () =>
+        HttpResponse.json({ detail: 'La incidencia no está disponible para autoasignación' }, { status: 409 })),
+    )
+    renderBandeja()
+    const usuario = userEvent.setup()
+    await screen.findByText('Crítica asignada')
+    await usuario.click(screen.getByRole('tab', { name: 'Sin asignar' }))
+    await usuario.click(screen.getByRole('button', { name: 'Tomar INC-SIN' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('La incidencia no está disponible para autoasignación')
+    await waitFor(() => expect(listas).toBeGreaterThan(1))
+  })
+
+  it('no ofrece "Tomar" a un coordinador', async () => {
+    responder(INCIDENCIAS)
+    renderBandeja()
+    useAuth.setState({ usuario: { nombre: 'Ana', rol: 'coordinador', permisos: ['incidencias:ver', 'seguimiento:registrar'], alcance: 'area' } })
+    const usuario = userEvent.setup()
+    await screen.findByText('Crítica asignada')
+    await usuario.click(screen.getByRole('tab', { name: 'Sin asignar' }))
+    expect(screen.queryByRole('button', { name: /Tomar/ })).not.toBeInTheDocument()
   })
 })
