@@ -119,6 +119,13 @@
   input::-webkit-date-and-time-value {
     text-align: left;
     margin: 0;
+    /* Safari: sin esto el texto de la fecha queda pegado arriba del campo. */
+    min-height: 1.5em;
+    line-height: 1.5;
+  }
+  input::-webkit-datetime-edit {
+    padding: 0;
+    line-height: 1.5;
   }
   input::-webkit-calendar-picker-indicator {
     opacity: 0.6;

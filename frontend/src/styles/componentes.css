@@ -347,6 +347,19 @@
   .ui-filtros__campos > .ui-rango {
     flex: 0 1 auto;
   }
+  /* En la barra de filtros el periodo va en una sola línea: atajos y, si es personalizado, desde/hasta al lado. */
+  @media (min-width: 768px) {
+    .ui-filtros__campos > .ui-rango {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 8px 12px;
+    }
+    .ui-filtros__campos > .ui-rango .ui-rango__fechas {
+      grid-template-columns: repeat(2, minmax(150px, 170px));
+      margin-top: 0;
+    }
+  }
   .ui-filtros .ui-campo + .ui-campo {
     margin-top: 0;
   }

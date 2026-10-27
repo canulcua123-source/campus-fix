@@ -180,6 +180,15 @@ async def test_buscar(api):
     assert redes["_id"] in ids and infra["_id"] not in ids and infra2["_id"] not in ids
     assert all(d["categoria"] == "computo_redes" for d in r.json())
 
+    # Folio completo o parcial: busca por prefijo del código y respeta el alcance.
+    r = await api.c.get("/incidencias/buscar", params={"q": infra["codigo"].lower()}, headers=api.h("admin"))
+    assert r.status_code == 200, r.text
+    assert [d["_id"] for d in r.json()] == [infra["_id"]]
+    r = await api.c.get("/incidencias/buscar", params={"q": infra["codigo"][:9]}, headers=api.h("admin"))
+    assert infra["_id"] in {d["_id"] for d in r.json()}
+    r = await api.c.get("/incidencias/buscar", params={"q": infra["codigo"]}, headers=api.h("tecnico_redes"))
+    assert r.json() == []
+
     r = await api.c.get("/incidencias/buscar", params={"q": "zumbido"}, headers=api.h("jefe_a"))
     assert r.status_code == 200
     assert all(d["ubicacion"]["edificio"] == "Edificio A" for d in r.json())

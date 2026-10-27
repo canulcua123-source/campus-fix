@@ -293,6 +293,9 @@ async def listar_incidencias(
     return [a_json(d) async for d in cursor]
 
 
+PATRON_FOLIO = re.compile(r"^INC-[A-Za-z0-9-]{0,40}$", re.IGNORECASE)
+
+
 @router.get("/buscar")
 @limiter.limit(lambda: settings.limite_consulta_pesada)
 async def buscar(
@@ -300,6 +303,12 @@ async def buscar(
     q: Annotated[str, Query(min_length=2, max_length=100)],
     usuario: Annotated[dict, Depends(require_permiso("incidencias:buscar"))],
 ):
+    if PATRON_FOLIO.match(q.strip()):
+        # Folio completo o parcial (INC-2026-1020…): prefijo anclado sobre el índice único de `codigo`.
+        prefijo = re.escape(q.strip().upper())
+        filtro_folio = {"codigo": {"$regex": f"^{prefijo}"}, **filtro_alcance(usuario)}
+        cursor = get_db().incidencias_campus.find(filtro_folio, PROYECCION_LISTA).sort("codigo", 1).limit(20)
+        return [a_json(d) async for d in cursor]
     filtro = {"$text": {"$search": q}, **filtro_alcance(usuario)}
     proyeccion = {**PROYECCION_LISTA, "score": {"$meta": "textScore"}}
     cursor = get_db().incidencias_campus.find(filtro, proyeccion).sort([("score", {"$meta": "textScore"})]).limit(20)

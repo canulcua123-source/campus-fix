@@ -218,7 +218,7 @@ function BuscadorInicial({ inicial }: { inicial: string }) {
           etiquetaOculta
           type="search"
           icono={<Search size={18} />}
-          placeholder="Ej. proyector, wifi, A-201"
+          placeholder="Ej. wifi, luminaria o un folio INC-2026-…"
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           claseCampo="flex-1"
@@ -227,7 +227,7 @@ function BuscadorInicial({ inicial }: { inicial: string }) {
         />
         <Button type="submit" disabled={!valido}>Buscar</Button>
       </form>
-      <p className="m-0 text-sm text-muted">Escribe al menos dos caracteres. Busca en el título y la descripción.</p>
+      <p className="m-0 text-sm text-muted">Escribe al menos dos caracteres. Busca palabras en el título y la descripción, o un folio completo o parcial.</p>
     </div>
   )
 }
