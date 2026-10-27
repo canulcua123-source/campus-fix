@@ -47,6 +47,8 @@ services:
         value: gemini
       - key: GEMINI_CAPA
         value: gratuita
+      - key: GEMINI_MODELO
+        value: gemini-3.5-flash
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: GEMINI_API_KEY
