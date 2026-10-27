@@ -149,10 +149,11 @@ describe('Métricas de IA T-035', () => {
     const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<QueryClientProvider client={cliente}><MemoryRouter initialEntries={['/admin/metricas-ia']}><Routes>
       <Route path="/" element={<p>Inicio autorizado</p>} />
+      <Route path="/dashboard" element={<p>Dashboard del directivo</p>} />
       <Route path="/admin/metricas-ia" element={<RequirePermiso permiso="analitica:ver" rol="admin"><MetricasIA /></RequirePermiso>} />
     </Routes></MemoryRouter></QueryClientProvider>)
-    // T-071: por URL sin el rol muestra «Sin acceso» en lugar de redirigir.
-    expect(await screen.findByRole('heading', { name: 'Sin acceso' })).toBeInTheDocument()
+    // Por URL sin el rol no se monta la pantalla: lleva a la principal del rol (antes T-071 mostraba «Sin acceso»).
+    expect(await screen.findByText('Dashboard del directivo')).toBeInTheDocument()
     expect(llamadas).toBe(0)
   })
 })

@@ -1,7 +1,7 @@
 import { ShieldX } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
-import { cumpleAcceso, type Acceso } from '../components/navegacion'
+import { cumpleAcceso, rutaInicio, type Acceso } from '../components/navegacion'
 import { EmptyState, Spinner } from '../components/ui'
 import { useAuth } from './store'
 import { usePermiso } from './usePermiso'
@@ -20,7 +20,7 @@ export function SinAcceso() {
 
 /**
  * Guarda de ruta: sin sesión → /login (conservando el destino); mientras se restaura la sesión →
- * spinner; sin permiso/rol → «Sin acceso». La seguridad real está en la API (403/404).
+ * spinner; sin permiso/rol → su pantalla principal (la ruta no existe para su rol). La seguridad real está en la API (403/404).
  */
 export function RequirePermiso({ permiso, rol, children }: Acceso & { children: ReactNode }) {
   const usuario = useAuth((s) => s.usuario)
@@ -34,7 +34,9 @@ export function RequirePermiso({ permiso, rol, children }: Acceso & { children: 
     )
   }
   if (!usuario) return <Navigate to="/login" replace state={{ desde: `${location.pathname}${location.search}` }} />
-  if (!cumpleAcceso({ permiso, rol }, usuario.permisos, usuario.rol)) return <SinAcceso />
+  if (!cumpleAcceso({ permiso, rol }, usuario.permisos, usuario.rol)) {
+    return <Navigate to={rutaInicio(usuario.permisos, usuario.rol)} replace />
+  }
   return <>{children}</>
 }
 

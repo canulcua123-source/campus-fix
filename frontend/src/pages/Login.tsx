@@ -4,6 +4,7 @@ import { BarChart3, Camera, CircleAlert, Eye, EyeOff, ListChecks, Lock, LogIn, M
 import { mensajeDeError } from '../api/client'
 import { useLogin } from '../api/hooks/auth'
 import { useAuth } from '../auth/store'
+import { accesoDe, cumpleAcceso, rutaInicio } from '../components/navegacion'
 import { Button, Input } from '../components/ui'
 
 const VENTAJAS = [
@@ -41,7 +42,14 @@ export default function Login() {
     entrar.mutate(
       { correo, password },
       {
-        onSuccess: () => navigate(destino, { replace: true }),
+        onSuccess: () => {
+          // La ruta previa puede ser de otra cuenta (p. ej. /tablero del coordinador): si no es de este rol, va a su inicio.
+          const actual = useAuth.getState().usuario
+          const acceso = accesoDe(destino.split('?')[0])
+          const permitido = actual && (!acceso || cumpleAcceso(acceso, actual.permisos, actual.rol))
+          const final = !actual ? destino : destino === '/' || !permitido ? rutaInicio(actual.permisos, actual.rol) : destino
+          navigate(final, { replace: true })
+        },
         onError: (err) => setError(mensajeDeError(err, 'No fue posible iniciar sesión')),
       },
     )

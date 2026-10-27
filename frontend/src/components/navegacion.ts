@@ -140,3 +140,8 @@ export function navegacionPara(permisos: readonly string[], rol?: string) {
     puedeReportar: permitido(REPORTAR),
   }
 }
+
+/** Pantalla principal del rol: la primera de su menú lateral (Bandeja, Tablero, Dashboard…); «/» si no hay. */
+export function rutaInicio(permisos: readonly string[], rol?: string): string {
+  return navegacionPara(permisos, rol).lateral[0]?.to ?? '/'
+}
