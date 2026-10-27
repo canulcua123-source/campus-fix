@@ -23,6 +23,11 @@ import {
 
 export default function DetalleIncidencia() {
   const { id = '' } = useParams<{ id: string }>()
+  return <VistaDetalleIncidencia id={id} />
+}
+
+/** Detalle completo de una incidencia; `enPanel` lo adapta al panel lateral (una columna, sin «Volver»). */
+export function VistaDetalleIncidencia({ id, enPanel = false }: { id: string; enPanel?: boolean }) {
   const { data: detalle, isPending, isError, error, isFetching, refetch } = useIncidencia(id)
   const retirar = useRetirar(id)
   const { usuario } = useAuth()
@@ -33,8 +38,8 @@ export default function DetalleIncidencia() {
   if (isPending) {
     return (
       <>
-        <PageHeader titulo="Detalle" atras={{ to: '/', texto: 'Volver' }} />
-        <div role="status" aria-label="Cargando incidencia." className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+        <PageHeader titulo="Detalle" atras={enPanel ? undefined : { to: '/', texto: 'Volver' }} />
+        <div role="status" aria-label="Cargando incidencia." className={enPanel ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]'}>
           <div className="pila">
             <Card className="flex flex-col gap-2">
               <Skeleton ancho="45%" alto={12} />
@@ -60,7 +65,7 @@ export default function DetalleIncidencia() {
     const info = mensajeErrorDetalle(error instanceof ApiError ? error.status : 500)
     return (
       <>
-        <PageHeader titulo="Detalle de incidencia" atras={{ to: '/', texto: 'Volver' }} />
+        <PageHeader titulo="Detalle de incidencia" atras={enPanel ? undefined : { to: '/', texto: 'Volver' }} />
         <ErrorState
           titulo={info.titulo}
           mensaje={info.mensaje}
@@ -111,7 +116,7 @@ export default function DetalleIncidencia() {
       <PageHeader
         titulo={detalle.titulo}
         subtitulo={detalle.codigo}
-        atras={{ to: '/', texto: 'Volver' }}
+        atras={enPanel ? undefined : { to: '/', texto: 'Volver' }}
         acciones={soloLectura ? (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-sm text-muted">
             <Eye size={14} aria-hidden />
@@ -156,9 +161,9 @@ export default function DetalleIncidencia() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:grid-rows-[auto_auto_1fr] lg:items-start">
+      <div className={enPanel ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:grid-rows-[auto_auto_1fr] lg:items-start'}>
         {/* Acciones: arriba en móvil; columna lateral en escritorio. */}
-        <div className="pila empty:hidden lg:col-start-2 lg:row-start-1">
+        <div className={enPanel ? 'pila empty:hidden' : 'pila empty:hidden lg:col-start-2 lg:row-start-1'}>
           {detalle.estado === 'resuelta' && (
             <ConfirmarSolucion
               incidenciaId={detalle._id}
@@ -209,7 +214,7 @@ export default function DetalleIncidencia() {
           )}
         </div>
 
-        <div className="pila min-w-0 lg:col-start-1 lg:row-span-3 lg:row-start-1">
+        <div className={enPanel ? 'pila min-w-0' : 'pila min-w-0 lg:col-start-1 lg:row-span-3 lg:row-start-1'}>
           <Seccion titulo="Descripción">
             <p className="m-0 whitespace-pre-line text-ink">{detalle.descripcion}</p>
           </Seccion>
@@ -237,7 +242,7 @@ export default function DetalleIncidencia() {
           </Seccion>
         </div>
 
-        <div className="pila lg:col-start-2 lg:row-start-2">
+        <div className={enPanel ? 'pila' : 'pila lg:col-start-2 lg:row-start-2'}>
           <Seccion titulo="Detalles">
             <dl className="m-0 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               {generales.map((dato) => (

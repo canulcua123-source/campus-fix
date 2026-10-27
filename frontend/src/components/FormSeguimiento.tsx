@@ -71,6 +71,7 @@ export function FormSeguimiento({
   return (
     <section aria-label="Acciones de seguimiento">
       <div
+        data-barra-fija
         className="max-lg:fixed max-lg:inset-x-0 max-lg:z-20 max-lg:border-t max-lg:border-line max-lg:bg-panel max-lg:px-4 max-lg:py-2"
         style={{ bottom: 'calc(var(--tabbar-height) + var(--safe-bottom))' }}
       >

@@ -2,6 +2,7 @@ import { Camera, ChevronRight, CircleCheck, ClipboardCheck, ClipboardList, FileT
 import { Link } from 'react-router-dom'
 import { useIncidencias } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
+import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
 import { Card, EmptyState, ErrorState, Seccion, SkeletonLista, StatGrid, StatTile } from '../components/ui'
 
@@ -30,6 +31,7 @@ export default function Inicio() {
   const cuenta = (estado: string) => lista.filter((t) => t.estado === estado).length
   const recientes = [...lista].sort((a, b) => b.fecha_creacion.localeCompare(a.fecha_creacion)).slice(0, 3)
   const cargando = propias.isPending
+  const { abrir, panel } = usePanelIncidencia()
 
   return (
     <div className="pila pila--lg">
@@ -112,7 +114,7 @@ export default function Inicio() {
                 ) : (
                   <ul className="m-0 flex list-none flex-col gap-3 p-0">
                     {recientes.map((t) => (
-                      <li key={t._id}><TarjetaIncidencia incidencia={t} /></li>
+                      <li key={t._id}><TarjetaIncidencia incidencia={t} onAbrir={abrir} /></li>
                     ))}
                   </ul>
                 )}
@@ -121,6 +123,7 @@ export default function Inicio() {
           )}
         </>
       )}
+      {panel}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useMe } from '../api/hooks/auth'
 import { mensajeDeError } from '../api/client'
 import { useIncidencias, useTomar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
+import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
 import { Button, EmptyState, ErrorState, PageHeader, Segmentado, SkeletonLista } from '../components/ui'
 import { antiguedad, filtrarBandeja, ordenarBandeja, type PestanaBandeja } from '../lib/bandeja'
@@ -20,6 +21,7 @@ export default function Bandeja() {
   const me = useMe()
   const tomar = useTomar()
   const [aviso, setAviso] = useState<string | null>(null)
+  const { abrir, panel } = usePanelIncidencia()
   // Espejo de POST /tomar: solo el rol técnico con permiso de seguimiento puede autoasignarse.
   const puedeTomar = useAuth((s) => s.usuario?.rol === 'tecnico' && s.tiene('seguimiento:registrar'))
   const { data, refetch, isFetching } = incidencias
@@ -113,6 +115,7 @@ export default function Bandeja() {
             <li key={t._id}>
               <TarjetaIncidencia
                 incidencia={t}
+                onAbrir={abrir}
                 tonoTiempo={antiguedad(t.fecha_creacion).nivel}
                 accion={puedeTomar && !t.tecnico_asignado ? (
                   <Button
@@ -137,6 +140,7 @@ export default function Bandeja() {
           ))}
         </ul>
       )}
+      {panel}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { Camera, ClipboardList, RefreshCw } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useIncidencias } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
+import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
 import { Button, EmptyState, ErrorState, ETIQUETAS, PageHeader, Segmentado, SkeletonLista, type OpcionSegmentado } from '../components/ui'
 import { ESTADOS, type Estado } from '../schemas/incidencia'
@@ -20,6 +21,7 @@ const FILTROS: OpcionSegmentado<Filtro>[] = [
 /** "Mis reportes" (T-045): incidencias reportadas por el usuario, filtrables por estado en la URL (?estado=). */
 export default function MisTickets() {
   const [params, setParams] = useSearchParams()
+  const { abrir, panel } = usePanelIncidencia()
   const crudo = params.get('estado')
   const estado = esEstado(crudo) ? crudo : undefined
   const { data, isPending, isError, isFetching, refetch } = useIncidencias({ propias: true, estado })
@@ -99,11 +101,12 @@ export default function MisTickets() {
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
           {data.map((t) => (
             <li key={t._id}>
-              <TarjetaIncidencia incidencia={t} />
+              <TarjetaIncidencia incidencia={t} onAbrir={abrir} />
             </li>
           ))}
         </ul>
       )}
+      {panel}
     </>
   )
 }

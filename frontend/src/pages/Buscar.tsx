@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { Clock, MapPin, Search, SearchX } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -62,6 +63,7 @@ function sugerencias(termino: string): string[] {
 }
 
 export default function Buscar() {
+  const { abrir, panel } = usePanelIncidencia()
   const [parametros] = useSearchParams()
   const termino = parametros.get('q')?.trim() ?? ''
   const consultaValida = busquedaSchema.safeParse(termino).success
@@ -168,6 +170,11 @@ export default function Buscar() {
               <h2 className="m-0 text-base font-semibold leading-snug">
                 <Link
                   to={`/incidencias/${incidencia._id}`}
+                  onClick={(e) => {
+                          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                          e.preventDefault()
+                          abrir(incidencia._id)
+                        }}
                   className="text-ink no-underline after:absolute after:inset-0 after:rounded-card after:content-['']"
                 >
                   <TextoResaltado texto={incidencia.titulo} termino={termino} />
@@ -191,6 +198,7 @@ export default function Buscar() {
           </li>
         ))}
       </ul>
+      {panel}
     </div>
   )
 }

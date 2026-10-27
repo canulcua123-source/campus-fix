@@ -14,6 +14,8 @@ interface TarjetaIncidenciaProps {
   accion?: ReactNode
   /** Tono del tiempo transcurrido (SLA): atención = ámbar, vencida = rojo. */
   tonoTiempo?: 'normal' | 'atencion' | 'vencida'
+  /** Abre el detalle en un panel en lugar de navegar (clic normal); Ctrl/⌘ o clic medio siguen abriendo la página. */
+  onAbrir?: (id: string) => void
 }
 
 const TONO_TIEMPO = { normal: 'text-muted', atencion: 'text-warn font-semibold', vencida: 'text-bad font-semibold' } as const
@@ -37,11 +39,11 @@ function textoUbicacionCorta(u: IncidenciaListaItem['ubicacion']): string {
 }
 
 /** Tarjeta compacta de incidencia: el título es el enlace y su área táctil cubre toda la tarjeta; borde izquierdo con el color de la prioridad. */
-export function TarjetaIncidencia({ incidencia: t, mostrarTecnico = false, accion, tonoTiempo = 'normal' }: TarjetaIncidenciaProps) {
+export function TarjetaIncidencia({ incidencia: t, mostrarTecnico = false, accion, tonoTiempo = 'normal', onAbrir }: TarjetaIncidenciaProps) {
   const ubicacion = textoUbicacionCorta(t.ubicacion)
   return (
     <Card
-      className="relative flex flex-col gap-2 transition-colors hover:border-line-strong focus-within:border-line-strong"
+      className="ui-card--resaltable relative flex cursor-pointer flex-col gap-2"
       style={{ borderLeft: `4px solid var(--prioridad-${t.prioridad}, var(--color-border))` }}
     >
       <div className="flex items-center justify-between gap-2 text-xs">
@@ -53,6 +55,11 @@ export function TarjetaIncidencia({ incidencia: t, mostrarTecnico = false, accio
       </div>
       <Link
         to={`/incidencias/${encodeURIComponent(t._id)}`}
+        onClick={onAbrir ? (e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+          e.preventDefault()
+          onAbrir(t._id)
+        } : undefined}
         className="line-clamp-2 font-semibold leading-snug text-ink no-underline after:absolute after:inset-0 after:rounded-card after:content-['']"
       >
         {t.titulo}

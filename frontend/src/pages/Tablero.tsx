@@ -1,3 +1,4 @@
+import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { CircleCheck, Clock, KanbanSquare, MapPin, RefreshCw, Siren, UserX, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -52,6 +53,7 @@ function CeldaPrioridad({ incidencia: t }: { incidencia: IncidenciaListaItem }) 
 
 /** Tablero del coordinador (T-054): resumen, filtros en la URL, tabla densa con asignación y prioridad en línea. */
 export default function Tablero() {
+  const { abrir, panel } = usePanelIncidencia()
   const [params, setParams] = useSearchParams()
   const filtros = filtrosDeUrl(params)
   const { data, isPending, isError, isFetching, refetch } = useIncidencias(filtros)
@@ -158,7 +160,11 @@ export default function Tablero() {
                   <tr key={t._id}>
                     <td data-label="Incidencia">
                       <div className="flex min-w-0 flex-col">
-                        <Link to={`/incidencias/${encodeURIComponent(t._id)}`} className="line-clamp-2 font-semibold text-ink">
+                        <Link to={`/incidencias/${encodeURIComponent(t._id)}`} onClick={(e) => {
+                          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                          e.preventDefault()
+                          abrir(t._id)
+                        }} className="line-clamp-2 font-semibold text-ink">
                           {t.titulo}
                         </Link>
                         <span className="flex flex-wrap items-center gap-x-2 text-xs">
@@ -221,6 +227,7 @@ export default function Tablero() {
           }}
         />
       )}
+      {panel}
     </div>
   )
 }
