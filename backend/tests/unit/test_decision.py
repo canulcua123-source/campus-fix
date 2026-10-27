@@ -58,3 +58,15 @@ def test_confianza_topada_es_la_que_se_expone():
     assert respuesta.accion == "sugerir"
     assert respuesta.analisis.confianza == 0.79
     assert analisis.confianza == 0.95
+
+
+
+@pytest.mark.parametrize("pista", ["borrosa", "oscura", "sobreexpuesta"])
+def test_pistas_de_calidad_del_cliente_topan_la_confianza(pista):
+    decision = decidir(_analisis(confianza=0.95), (pista,))
+    assert decision.accion == "sugerir"
+    assert decision.analisis.confianza == 0.79
+
+
+def test_advertencia_falta_contexto_tambien_topa():
+    assert decidir(_analisis(confianza=0.95, advertencias=["Falta contexto del lugar"])).accion == "sugerir"

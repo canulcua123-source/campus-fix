@@ -144,6 +144,40 @@ describe('Reportar', () => {
   })
 })
 
+
+describe('Reportar: robustez del análisis con IA', () => {
+  it('muestra el motivo real del servidor (p. ej. límite diario) en vez de un error genérico', async () => {
+    dobles.analizarImagen.mockRejectedValue(new ApiError(429, 'limite', 'Alcanzaste el límite de 20 análisis por día.'))
+    renderReportar()
+    seleccionarFoto()
+    expect(await screen.findByText('Alcanzaste el límite de 20 análisis por día. Puedes llenar el formulario manualmente.')).toBeInTheDocument()
+  })
+
+  it('recorta lo que propone la IA a los límites del formulario y avisa de «crítica» aunque la prioridad ya esté elegida', async () => {
+    const tags = Array.from({ length: 20 }, (_, i) => `etiqueta_${i}`)
+    dobles.analizarImagen.mockResolvedValue({
+      ...respuestaIA('critica'),
+      analisis: { ...respuestaIA('critica').analisis, descripcion: 'x'.repeat(2500), tags: [...tags, 'etiqueta_0', '!'] },
+    })
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Descripción')).toHaveValue('x'.repeat(2000)))
+    expect(screen.getByLabelText(/^Tags/)).toHaveValue(tags.slice(0, 15).join(', '))
+    expect(await screen.findByText('La IA sugiere prioridad crítica')).toBeInTheDocument()
+  })
+
+  it('al tomar otra foto no deja visible la sugerencia anterior', async () => {
+    dobles.analizarImagen.mockResolvedValueOnce(respuestaIA()).mockRejectedValueOnce(new Error('red'))
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+    expect(screen.getByText(/confianza 90%/)).toBeInTheDocument()
+    seleccionarFoto()
+    expect(await screen.findByText(/No se pudo analizar la imagen con IA/)).toBeInTheDocument()
+    expect(screen.queryByText(/confianza 90%/)).not.toBeInTheDocument()
+  })
+})
+
 const ID_ANALISIS = '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4'
 
 function respuestaIA(prioridad: 'baja' | 'media' | 'alta' | 'critica' = 'alta') {

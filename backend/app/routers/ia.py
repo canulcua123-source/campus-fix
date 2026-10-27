@@ -198,7 +198,8 @@ async def _responder(
     calidad_cliente: tuple[str, ...] = (),
 ) -> RespuestaIA:
     """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
-    asistida = decidir(analisis, cache=cache)
+    # Las pistas del cliente (borrosa/oscura/sobreexpuesta) también topan la confianza: nunca autollena.
+    asistida = decidir(analisis, calidad_cliente, cache=cache)
     entrada = _entrada_compuertas(
         analisis,
         usuario,
@@ -353,6 +354,13 @@ async def analizar(
             lambda: analizar_imagen(validada.datos, validada.tipo_mime, contexto_normalizado or None)
         )
     except Exception as e:  # IAError, errores de red/API, JSON inválido
+        # Registra la causa (sin datos de la imagen ni llaves) para poder diagnosticar (#132).
+        logger.warning(
+            "Fallo del proveedor de IA: proveedor=%s tipo=%s error=%s",
+            settings.ia_proveedor,
+            getattr(e, "tipo", "desconocido"),
+            type(e).__name__,
+        )
         try:
             await redis.eval(_DEVOLVER_CUPO, 2, *claves_cupo)
         except Exception:

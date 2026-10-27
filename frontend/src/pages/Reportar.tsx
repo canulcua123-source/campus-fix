@@ -19,7 +19,7 @@ import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
 import { ETIQUETAS_PRIORIDAD, OPCIONES_CATEGORIA } from '../lib/etiquetas'
 import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
 import type { RespuestaIA } from '../schemas/ia'
-import { incidenciaSchema, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
+import { incidenciaSchema, LIMITES, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
 import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
 
 /** Rutas del formulario que tienen un campo visible: un 400 de la API en ellas se marca bajo el campo (UX-18). */
@@ -210,13 +210,17 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     setAviso(null)
     setCriticaPendiente(false)
     setCamposIA([])
+    setIa(null) // no deja visible la sugerencia de la foto anterior
     try {
       await tarea(control)
     } catch (e) {
       if (!vigente(control)) return
+      // El servidor ya manda un mensaje claro (límite diario, IA apagada, foto muy pequeña…): se muestra tal cual.
       setAviso(e instanceof ErrorImagen
         ? `${e.message} Puedes llenar el formulario sin foto.`
-        : 'No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
+        : e instanceof ApiError && e.message
+          ? `${e.message.replace(/\.$/, '')}. Puedes llenar el formulario manualmente.`
+          : 'No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
     } finally {
       if (montado.current && operacionIA.current === control) {
         operacionIA.current = null
@@ -241,17 +245,21 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
         rellenados.push('titulo')
       }
       if (sinEditar('descripcion')) {
-        setValue('descripcion', analisis.descripcion)
+        setValue('descripcion', analisis.descripcion.slice(0, LIMITES.descripcion[1]))
         rellenados.push('descripcion')
       }
-      // "critica" nunca se autollena: se deja "alta" y se pide confirmación explícita.
+      // "critica" nunca se autollena: se deja "alta" y se pide confirmación explícita
+      // (el aviso aparece aunque el usuario ya haya elegido otra prioridad).
+      setCriticaPendiente(analisis.prioridad_sugerida === 'critica')
       if (sinEditar('prioridad')) {
         setValue('prioridad', analisis.prioridad_sugerida === 'critica' ? 'alta' : analisis.prioridad_sugerida)
-        setCriticaPendiente(analisis.prioridad_sugerida === 'critica')
         rellenados.push('prioridad')
       }
       if (sinEditar('tags')) {
-        const tags = analisis.tags.map(normalizarTag)
+        // Mismas reglas que el formulario: sin repetidos, formato válido y máximo 15.
+        const tags = [...new Set(analisis.tags.map(normalizarTag))]
+          .filter((t) => /^[a-z0-9_]{2,30}$/.test(t))
+          .slice(0, LIMITES.tags_max)
         setValue('tags', tags)
         setTagsTexto(tags.join(', '))
         rellenados.push('tags')
