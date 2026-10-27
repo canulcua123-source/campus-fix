@@ -154,6 +154,34 @@ npm run dev                             # http://localhost:5173
 
 > El `.env` real con llaves de Atlas, Backblaze e IA **solo lo tiene el responsable de despliegue**. Para desarrollar no lo necesitas.
 
+## Despliegue de la API (Render)
+
+La API se publica en Render como servicio Docker gratuito definido en [`render.yaml`](render.yaml) (imagen: `backend/Dockerfile`, usuario no root, health check en `/health`). Cada push/merge a `main` despliega solo.
+
+1. En Render: **New → Blueprint**, conecta el repositorio y elige la rama `main`. Render lee `render.yaml`.
+2. Captura en el panel las variables marcadas `sync: false` (nunca en el repo): `MONGODB_URI` (usuario Atlas con permisos mínimos, no el admin), `REDIS_URL` (Upstash, `rediss://…`), `JWT_SECRET` (`openssl rand -hex 32`), `CORS_ORIGINS` (dominio exacto de la PWA, sin `*`), credenciales del bucket (`R2_*`, `STORAGE_*`) e IA (`IA_PROVEEDOR`, `ANTHROPIC_API_KEY`/`GEMINI_API_KEY`).
+3. La PWA y la API están en dominios distintos, por eso `render.yaml` fija `REFRESH_COOKIE_SAMESITE=none` y `REFRESH_COOKIE_SECURE=true`.
+4. IA: el despliegue usa **Gemini con llave gratuita** (`IA_PROVEEDOR=gemini`, `IA_PERMITIR_CAPA_GRATUITA=true`). En esa capa Google puede usar las fotos para mejorar sus productos; la PWA lo avisa al reportar. Ajusta el cupo diario global en **Configuración** (admin) al límite que muestre la consola de AI Studio.
+5. Verifica: `GET https://<servicio>.onrender.com/health` → 200 y `/docs` accesible. Postman: carpetas *Auth* e *Incidencias* con el environment `UTM-Desk.prod`.
+
+**Arranque en frío:** el plan gratuito duerme el servicio tras ~15 min sin tráfico; la primera petición tarda ~30–60 s. Antes de la demo, despiértalo abriendo `/health` unos minutos antes.
+
+Prueba local de la imagen (sin el `.env` real):
+
+```bash
+docker build -t utm-desk-api backend
+docker run --rm -p 8000:8000 -e MONGODB_URI=mongodb://host.docker.internal:27017 \
+  -e REDIS_URL=redis://host.docker.internal:6379/0 -e JWT_SECRET=$(openssl rand -hex 32) utm-desk-api
+```
+
+## Despliegue de la PWA (Cloudflare Pages)
+
+1. Cloudflare → **Workers & Pages → Create → Pages → Connect to Git**, repositorio `campus-fix`, rama `main`.
+2. Configuración de build: *Root directory* `frontend`, *Build command* `npm ci && npm run build`, *Output* `dist`, variable `NODE_VERSION` = la de `.nvmrc`.
+3. Variables de entorno (Production): `VITE_API_URL=https://<servicio>.onrender.com` y `VITE_DOMINIO_CORREO=utm.edu.mx`. Se leen **al compilar**: si cambian, vuelve a desplegar.
+4. Copia el dominio que te da Pages (`https://<proyecto>.pages.dev`) a `CORS_ORIGINS` en Render y redepliega la API.
+5. `frontend/public/_redirects` sirve la SPA en cualquier ruta y `_headers` añade cabeceras de seguridad y evita cachear `sw.js`/`index.html` (para que lleguen las actualizaciones).
+
 ## CI
 
 GitHub Actions ejecuta el pipeline en cada Pull Request hacia `dev` o `main` y en cada push a `dev`. Los jobs se filtran por las rutas modificadas y el check final obligatorio es `ci-ok`.
