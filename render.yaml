@@ -41,11 +41,15 @@ services:
         sync: false
       - key: IA_HABILITADA
         value: "true"
+      # Gemini con llave gratuita (AI Studio). En la capa gratuita Google puede usar las fotos:
+      # la PWA lo avisa al usuario. El cupo diario global se ajusta en Configuración (admin).
       - key: IA_PROVEEDOR
-        sync: false
+        value: gemini
+      - key: GEMINI_CAPA
+        value: gratuita
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: IA_PERMITIR_CAPA_GRATUITA
-        value: "false"
+        value: "true"
