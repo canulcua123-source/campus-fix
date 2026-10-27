@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Camera, Check, ImagePlus, Lock, MapPin, PencilLine, Send, Sparkles } from 'lucide-react'
+import { Camera, Check, ImagePlus, Lock, PencilLine, Send, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -11,6 +11,7 @@ import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import { AvisoCalidad } from '../components/AvisoCalidad'
 import { CamposDetalleReporte } from '../components/CamposDetalleReporte'
+import { SelectorUbicacion } from '../components/SelectorUbicacion'
 import { SugerenciaIA } from '../components/SugerenciaIA'
 import { Badge, Button, Card, Input, PageHeader, Seccion, Segmentado, Select, Skeleton, Spinner, Textarea } from '../components/ui'
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
@@ -537,15 +538,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
                 </span>
               </p>
             )}
-            <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
-              <Input etiqueta="Edificio" icono={<MapPin size={18} />} readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-                error={errors.ubicacion?.edificio?.message} {...register('ubicacion.edificio')} />
-              <Input etiqueta="Piso (opcional)" type="number" inputMode="numeric" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-                error={errors.ubicacion?.piso?.message}
-                {...register('ubicacion.piso', { setValueAs: (v) => (v === '' || v == null ? null : Number(v)) })} />
-              <Input etiqueta="Aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-                error={errors.ubicacion?.aula?.message} {...register('ubicacion.aula')} />
-            </div>
+            <SelectorUbicacion control={control} register={register} setValue={setValue} errors={errors} fijada={ubicacionFijada} />
           </div>
         </Seccion>
 

@@ -33,3 +33,12 @@ export const catalogoAulasSchema = z.array(edificioCatalogoSchema)
 
 export type AulaCatalogo = z.infer<typeof aulaCatalogoSchema>
 export type EdificioCatalogo = z.infer<typeof edificioCatalogoSchema>
+
+/** Ubicación elegible al reportar (GET /aulas/ubicaciones): solo aulas activas, sin id_publico. */
+export const ubicacionAulaSchema = z.object({
+  edificio: z.string().min(1).max(60),
+  piso: z.number().int().min(-5).max(50),
+  aula: z.string().min(1).max(60),
+}).strict()
+export const ubicacionesAulaSchema = z.array(ubicacionAulaSchema)
+export type UbicacionAula = z.infer<typeof ubicacionAulaSchema>

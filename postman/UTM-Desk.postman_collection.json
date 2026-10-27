@@ -219,9 +219,23 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}"}],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
             "description": "Un reportante no distingue una incidencia ajena de una inexistente.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_ajena_id}}", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_ajena_id}}"]}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_ajena_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_ajena_id}}"
+              ]
+            }
           }
         },
         {
@@ -240,9 +254,23 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}"}],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}"
+              }
+            ],
             "description": "Un técnico de área no puede consultar una incidencia de otra área.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_fuera_area_id}}"]}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_fuera_area_id}}"
+              ]
+            }
           }
         },
         {
@@ -262,12 +290,36 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Un coordinador no puede asignar una incidencia de otra área.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/asignacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_fuera_area_id}}", "asignacion"]},
-            "body": {"mode": "raw", "raw": "{\n  \"tecnico_id\": \"{{tecnico_id}}\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/asignacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_fuera_area_id}}",
+                "asignacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tecnico_id\": \"{{tecnico_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -287,12 +339,36 @@
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_directivo}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_directivo}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "El alcance global de DIR no concede tags:gestionar; la falta de capacidad general responde 403.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/tags", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "tags"]},
-            "body": {"mode": "raw", "raw": "{\n  \"tags\": [\"no_autorizado\"]\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/tags",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "tags"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tags\": [\"no_autorizado\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -312,12 +388,35 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_gestor_delegado}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_gestor_delegado}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Un gestor delegado recibe la misma respuesta que para un usuario inexistente.",
-            "url": {"raw": "{{base_url}}/usuarios/{{usuario_no_gestionable_id}}", "host": ["{{base_url}}"], "path": ["usuarios", "{{usuario_no_gestionable_id}}"]},
-            "body": {"mode": "raw", "raw": "{\n  \"nombre\": \"Nombre ficticio\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/usuarios/{{usuario_no_gestionable_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "{{usuario_no_gestionable_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Nombre ficticio\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -337,12 +436,35 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Ni ADM puede modificar su propio rol, áreas, edificios o desactivarse.",
-            "url": {"raw": "{{base_url}}/usuarios/{{admin_id}}", "host": ["{{base_url}}"], "path": ["usuarios", "{{admin_id}}"]},
-            "body": {"mode": "raw", "raw": "{\n  \"areas\": [\"infraestructura\"]\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/usuarios/{{admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "{{admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"areas\": [\"infraestructura\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]
@@ -879,96 +1001,276 @@
       "item": [
         {
           "name": "Confirmar resolución",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-            "pm.test('Respuesta de cierre válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('cerrada'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de cierre válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('cerrada'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Requiere {{incidencia_resuelta_id}} en estado resuelta y propiedad del reportante. Conserva fecha_resolucion.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_resuelta_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_resuelta_id}}", "confirmacion"]},
-            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"confirmar\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_resuelta_id}}/confirmacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_resuelta_id}}",
+                "confirmacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accion\": \"confirmar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Reabrir incidencia dentro de siete días",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-            "pm.test('Respuesta de reapertura válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('abierta'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de reapertura válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('abierta'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Requiere {{incidencia_reabrir_id}} resuelta hace no más de siete días. Elimina fecha_resolucion.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_reabrir_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_reabrir_id}}", "confirmacion"]},
-            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa después de la reparación\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_reabrir_id}}/confirmacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_reabrir_id}}",
+                "confirmacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa después de la reparación\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Comentario del reportante en espera",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-            "pm.test('Conserva estado en_espera', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('en_espera'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Conserva estado en_espera', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('en_espera'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Requiere {{incidencia_espera_id}} en estado en_espera; solo agrega historial y actualiza la fecha.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_espera_id}}/comentarios", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_espera_id}}", "comentarios"]},
-            "body": {"mode": "raw", "raw": "{\n  \"comentario\": \"El problema presenta ahora información adicional\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_espera_id}}/comentarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_espera_id}}",
+                "comentarios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comentario\": \"El problema presenta ahora información adicional\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Tomar incidencia disponible",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-            "pm.test('Devuelve técnico asignado', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado', 'tecnico_asignado'); pm.expect(j.ok).to.eql(true); pm.expect(j.tecnico_asignado.usuario_id).to.be.a('string'); pm.expect(j.tecnico_asignado.nombre).to.be.a('string'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Devuelve técnico asignado', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado', 'tecnico_asignado'); pm.expect(j.ok).to.eql(true); pm.expect(j.tecnico_asignado.usuario_id).to.be.a('string'); pm.expect(j.tecnico_asignado.nombre).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}", "description": "Token de un técnico del área"}],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}",
+                "description": "Token de un técnico del área"
+              }
+            ],
             "description": "Autoasigna atómicamente {{incidencia_disponible_id}} si está en el área, no es terminal y carece de técnico.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_disponible_id}}/tomar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_disponible_id}}", "tomar"]}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_disponible_id}}/tomar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_disponible_id}}",
+                "tomar"
+              ]
+            }
           }
         },
         {
           "name": "Reapertura fuera de plazo (409)",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Requiere {{incidencia_resuelta_vencida_id}} con fecha_resolucion anterior a siete días; no debe escribir historial.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_resuelta_vencida_id}}/confirmacion", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_resuelta_vencida_id}}", "confirmacion"]},
-            "body": {"mode": "raw", "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa fuera del plazo permitido\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_resuelta_vencida_id}}/confirmacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_resuelta_vencida_id}}",
+                "confirmacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa fuera del plazo permitido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Autoasignación duplicada (409)",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{token_tecnico}}", "description": "Token de técnico"}],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}",
+                "description": "Token de técnico"
+              }
+            ],
             "description": "Requiere {{incidencia_tomada_id}} ya asignada; el segundo intento no debe duplicar historial.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_tomada_id}}/tomar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_tomada_id}}", "tomar"]}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_tomada_id}}/tomar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_tomada_id}}",
+                "tomar"
+              ]
+            }
           }
         }
       ]
@@ -979,28 +1281,76 @@
       "item": [
         {
           "name": "Retirar reporte elegible",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-            "pm.test('Respuesta de retiro válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('retirada'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de retiro válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('retirada'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"}],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              }
+            ],
             "description": "Requiere {{incidencia_retirar_id}} propia, abierta, sin técnico y creada hace 15 minutos o menos.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_retirar_id}}/retirar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_retirar_id}}", "retirar"]}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_retirar_id}}/retirar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_retirar_id}}",
+                "retirar"
+              ]
+            }
           }
         },
         {
           "name": "Retiro no elegible (409)",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Authorization", "value": "Bearer {{token_reportante}}", "description": "Token del reportante propietario"}],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              }
+            ],
             "description": "Requiere {{incidencia_retirar_conflicto_id}} vencida, asignada o en estado distinto de abierta.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_retirar_conflicto_id}}/retirar", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_retirar_conflicto_id}}", "retirar"]}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_retirar_conflicto_id}}/retirar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_retirar_conflicto_id}}",
+                "retirar"
+              ]
+            }
           }
         }
       ]
@@ -1076,12 +1426,36 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "El coordinador cambia la prioridad de una incidencia de su área; queda en la bitácora como tipo 'prioridad'.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "prioridad"]},
-            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"alta\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"alta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -1100,12 +1474,36 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Solo acepta baja, media, alta o critica.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "prioridad"]},
-            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"urgente\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"urgente\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -1124,12 +1522,36 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_directivo}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_directivo}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "DIR no tiene incidencias:asignar.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_id}}", "prioridad"]},
-            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"alta\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"alta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -1148,12 +1570,36 @@
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_coordinador}}"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Un coordinador no puede cambiar la prioridad de una incidencia de otra área.",
-            "url": {"raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/prioridad", "host": ["{{base_url}}"], "path": ["incidencias", "{{incidencia_fuera_area_id}}", "prioridad"]},
-            "body": {"mode": "raw", "raw": "{\n  \"prioridad\": \"alta\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_fuera_area_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"alta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]
@@ -1436,9 +1882,21 @@
                 "edificios"
               ],
               "query": [
-                { "key": "desde", "value": "2026-01-01", "disabled": true },
-                { "key": "hasta", "value": "2026-12-31", "disabled": true },
-                { "key": "categoria", "value": "infraestructura", "disabled": true }
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
               ]
             }
           }
@@ -1477,9 +1935,21 @@
                 "tags"
               ],
               "query": [
-                { "key": "desde", "value": "2026-01-01", "disabled": true },
-                { "key": "hasta", "value": "2026-12-31", "disabled": true },
-                { "key": "categoria", "value": "infraestructura", "disabled": true }
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
               ]
             }
           }
@@ -1510,8 +1980,13 @@
             "description": "KPIs sin filtros. Requiere analitica:ver.",
             "url": {
               "raw": "{{base_url}}/analitica/resumen",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "resumen"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ]
             }
           }
         },
@@ -1522,21 +1997,39 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"
+                ]
               }
             }
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Ejemplo con periodo UTC inclusivo por fechas calendario.",
             "url": {
               "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "resumen"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
               "query": [
-                { "key": "desde", "value": "2026-01-01" },
-                { "key": "hasta", "value": "2026-12-31" }
+                {
+                  "key": "desde",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31"
+                }
               ]
             }
           }
@@ -1548,19 +2041,36 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"
+                ]
               }
             }
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Ejemplo filtrado por una categoría válida.",
             "url": {
               "raw": "{{base_url}}/analitica/resumen?categoria=infraestructura",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "resumen"],
-              "query": [{ "key": "categoria", "value": "infraestructura" }]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
+              "query": [
+                {
+                  "key": "categoria",
+                  "value": "infraestructura"
+                }
+              ]
             }
           }
         },
@@ -1571,22 +2081,43 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"]
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"
+                ]
               }
             }
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Ejemplo con periodo y categoría; los filtros nunca amplían el alcance autorizado.",
             "url": {
               "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31&categoria=infraestructura",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "resumen"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
               "query": [
-                { "key": "desde", "value": "2026-01-01" },
-                { "key": "hasta", "value": "2026-12-31" },
-                { "key": "categoria", "value": "infraestructura" }
+                {
+                  "key": "desde",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura"
+                }
               ]
             }
           }
@@ -1607,13 +2138,28 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Fecha inexistente: debe responder 400 con el contrato común.",
             "url": {
               "raw": "{{base_url}}/analitica/resumen?desde=2026-02-30",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "resumen"],
-              "query": [{ "key": "desde", "value": "2026-02-30" }]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-02-30"
+                }
+              ]
             }
           }
         },
@@ -1624,7 +2170,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });"]
+                "exec": [
+                  "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });"
+                ]
               }
             }
           ],
@@ -1634,8 +2182,13 @@
             "description": "Solicitud sin JWT: debe responder 401.",
             "url": {
               "raw": "{{base_url}}/analitica/resumen",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "resumen"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ]
             }
           }
         },
@@ -1646,18 +2199,30 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"]
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
               }
             }
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token_reportante}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
             "description": "Reportante sin analitica:ver: debe responder 403.",
             "url": {
               "raw": "{{base_url}}/analitica/resumen",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "resumen"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ]
             }
           }
         },
@@ -1677,16 +2242,38 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Ubicaciones con al menos tres incidencias creadas en la ventana UTC de los últimos 30 días. Requiere analitica:ver.",
             "url": {
               "raw": "{{base_url}}/analitica/aulas-cronicas",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "aulas-cronicas"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "aulas-cronicas"
+              ],
               "query": [
-                { "key": "desde", "value": "2026-01-01", "disabled": true },
-                { "key": "hasta", "value": "2026-12-31", "disabled": true },
-                { "key": "categoria", "value": "infraestructura", "disabled": true }
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
               ]
             }
           }
@@ -1707,16 +2294,38 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Incidencias activas asignadas y horas persistidas acumuladas por técnico. Requiere analitica:ver.",
             "url": {
               "raw": "{{base_url}}/analitica/carga-tecnicos",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "carga-tecnicos"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "carga-tecnicos"
+              ],
               "query": [
-                { "key": "desde", "value": "2026-01-01", "disabled": true },
-                { "key": "hasta", "value": "2026-12-31", "disabled": true },
-                { "key": "categoria", "value": "infraestructura", "disabled": true }
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
               ]
             }
           }
@@ -1737,61 +2346,136 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Conteo mensual por categoría usando fecha_creacion en UTC. Requiere analitica:ver.",
             "url": {
               "raw": "{{base_url}}/analitica/tendencia",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "tendencia"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "tendencia"
+              ],
               "query": [
-                { "key": "desde", "value": "2026-01-01", "disabled": true },
-                { "key": "hasta", "value": "2026-12-31", "disabled": true },
-                { "key": "categoria", "value": "infraestructura", "disabled": true }
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
               ]
             }
           }
         },
         {
           "name": "Métricas de IA (solo admin)",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "type": "text/javascript",
-              "exec": [
-                "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                "pm.test('Agregados de IA sin eventos crudos', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('periodo', 'totales', 'tasa_deshacer', 'tasa_edicion', 'correccion_tecnica_72h', 'cobertura_agentica', 'tiempo_toque_folio', 'compuertas_fallidas', 'latencia_ia', 'errores_ia', 'timeouts_ia', 'costos', 'semanal'); pm.expect(j).not.to.have.any.keys('actor_clave', 'correo', 'nombre'); });"
-              ]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Agregados de IA sin eventos crudos', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('periodo', 'totales', 'tasa_deshacer', 'tasa_edicion', 'correccion_tecnica_72h', 'cobertura_agentica', 'tiempo_toque_folio', 'compuertas_fallidas', 'latencia_ia', 'errores_ia', 'timeouts_ia', 'costos', 'semanal'); pm.expect(j).not.to.have.any.keys('actor_clave', 'correo', 'nombre'); });"
+                ]
+              }
             }
-          }],
+          ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "description": "Tablero agregado exclusivo del rol admin. Filtros opcionales, periodo máximo de 180 días.",
             "url": {
               "raw": "{{base_url}}/analitica/ia",
-              "host": ["{{base_url}}"],
-              "path": ["analitica", "ia"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "ia"
+              ],
               "query": [
-                { "key": "desde", "value": "2026-10-01", "disabled": true },
-                { "key": "hasta", "value": "2026-10-31", "disabled": true },
-                { "key": "categoria", "value": "infraestructura", "disabled": true },
-                { "key": "proveedor", "value": "claude", "disabled": true },
-                { "key": "modelo", "value": "claude-opus-5-5", "disabled": true }
+                {
+                  "key": "desde",
+                  "value": "2026-10-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-10-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                },
+                {
+                  "key": "proveedor",
+                  "value": "claude",
+                  "disabled": true
+                },
+                {
+                  "key": "modelo",
+                  "value": "claude-opus-5-5",
+                  "disabled": true
+                }
               ]
             }
           }
         },
         {
           "name": "Métricas IA - no administrador",
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"] }
-          }],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token_reportante}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
             "description": "Un usuario que no es admin recibe 403 aunque esté autenticado.",
-            "url": { "raw": "{{base_url}}/analitica/ia", "host": ["{{base_url}}"], "path": ["analitica", "ia"] }
+            "url": {
+              "raw": "{{base_url}}/analitica/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "ia"
+              ]
+            }
           }
         }
       ]
@@ -1927,70 +2611,165 @@
             "description": "Confirma una coincidencia opaca emitida por G8. Es idempotente por usuario y no crea otra incidencia. T-033 aún debe integrar la emisión de coincidencia_id.",
             "url": {
               "raw": "{{base_url}}/ia/duplicados/adhesiones",
-              "host": ["{{base_url}}"],
-              "path": ["ia", "duplicados", "adhesiones"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "duplicados",
+                "adhesiones"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"coincidencia_id\": \"{{coincidencia_id}}\"\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
         {
           "name": "Registrar evento de oferta IA",
-          "event": [{
-            "listen": "test",
-            "script": {
-              "type": "text/javascript",
-              "exec": [
-                "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                "pm.test('Respuesta idempotente y mínima', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('analisis_id', 'evento', 'registrado', 'es_final'); pm.expect(j).not.to.have.any.keys('costo_estimado_usd', 'tokens_entrada', 'actor_clave'); });"
-              ]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta idempotente y mínima', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('analisis_id', 'evento', 'registrado', 'es_final'); pm.expect(j).not.to.have.any.keys('costo_estimado_usd', 'tokens_entrada', 'actor_clave'); });"
+                ]
+              }
             }
-          }],
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Requiere un analisis_id emitido y ligado al mismo usuario por el backend agéntico. T-033/T-036 aún deben proporcionar esa oferta.",
-            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
-            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"{{analisis_id}}\",\n  \"evento\": \"editado\",\n  \"motivo\": \"usuario_edito\"\n}", "options": { "raw": { "language": "json" } } }
+            "url": {
+              "raw": "{{base_url}}/ia/eventos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "eventos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analisis_id\": \"{{analisis_id}}\",\n  \"evento\": \"editado\",\n  \"motivo\": \"usuario_edito\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Evento IA - oferta inexistente",
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });"] }
-          }],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
-            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"deshecho\"\n}", "options": { "raw": { "language": "json" } } }
+            "url": {
+              "raw": "{{base_url}}/ia/eventos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "eventos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"deshecho\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Evento IA - costo falsificado",
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": ["pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"] }
-          }],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_reportante}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "El navegador no puede declarar costo, tokens ni latencia.",
-            "url": { "raw": "{{base_url}}/ia/eventos", "host": ["{{base_url}}"], "path": ["ia", "eventos"] },
-            "body": { "mode": "raw", "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"editado\",\n  \"costo_estimado_usd\": 99\n}", "options": { "raw": { "language": "json" } } }
+            "url": {
+              "raw": "{{base_url}}/ia/eventos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "eventos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"editado\",\n  \"costo_estimado_usd\": 99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -2073,8 +2852,13 @@
             "description": "Solo usuarios con configuracion:gestionar.",
             "url": {
               "raw": "{{base_url}}/config/ia",
-              "host": ["{{base_url}}"],
-              "path": ["config", "ia"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
             }
           }
         },
@@ -2108,13 +2892,22 @@
             "description": "Actualización parcial. Los valores iniciales son 20 por usuario y 300 globales.",
             "url": {
               "raw": "{{base_url}}/config/ia",
-              "host": ["{{base_url}}"],
-              "path": ["config", "ia"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"habilitada\": true,\n  \"limite_diario_usuario\": 20,\n  \"limite_diario_global\": 300\n}",
-              "options": {"raw": {"language": "json"}}
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
@@ -2125,19 +2918,45 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"]
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
               }
             }
           ],
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Los límites deben ser enteros positivos dentro de los rangos documentados.",
-            "url": {"raw": "{{base_url}}/config/ia", "host": ["{{base_url}}"], "path": ["config", "ia"]},
-            "body": {"mode": "raw", "raw": "{\n  \"limite_diario_usuario\": 0\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limite_diario_usuario\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -2147,19 +2966,45 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"]
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
               }
             }
           ],
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token_directivo}}", "description": "Token JWT sin configuracion:gestionar"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_directivo}}",
+                "description": "Token JWT sin configuracion:gestionar"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Un usuario autenticado sin el permiso recibe 403.",
-            "url": {"raw": "{{base_url}}/config/ia", "host": ["{{base_url}}"], "path": ["config", "ia"]},
-            "body": {"mode": "raw", "raw": "{\n  \"habilitada\": false\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habilitada\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]
@@ -2927,112 +3772,305 @@
         {
           "name": "Crear categoría dinámica (201)",
           "event": [
-            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
-              "const ahora = Date.now();",
-              "pm.collectionVariables.set('categoria_clave', 'servicios_postman_' + String(ahora).slice(-8));",
-              "let numero = ahora % 17576; let prefijo = '';",
-              "for (let i = 0; i < 3; i += 1) { prefijo = String.fromCharCode(65 + (numero % 26)) + prefijo; numero = Math.floor(numero / 26); }",
-              "pm.collectionVariables.set('categoria_prefijo', prefijo);"
-            ]}},
-            {"listen": "test", "script": {"type": "text/javascript", "exec": [
-              "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
-              "pm.test('Categoría personalizada creada', function () { const j = pm.response.json(); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); pm.expect(j.version).to.eql(1); pm.expect(j.activa).to.eql(true); pm.expect(j.sistema).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
-            ]}}
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ahora = Date.now();",
+                  "pm.collectionVariables.set('categoria_clave', 'servicios_postman_' + String(ahora).slice(-8));",
+                  "let numero = ahora % 17576; let prefijo = '';",
+                  "for (let i = 0; i < 3; i += 1) { prefijo = String.fromCharCode(65 + (numero % 26)) + prefijo; numero = Math.floor(numero / 26); }",
+                  "pm.collectionVariables.set('categoria_prefijo', prefijo);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Categoría personalizada creada', function () { const j = pm.response.json(); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); pm.expect(j.version).to.eql(1); pm.expect(j.activa).to.eql(true); pm.expect(j.sistema).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+                ]
+              }
+            }
           ],
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Crea una categoría personalizada. Requiere categorias:gestionar.",
-            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
-            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios de Postman\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"tipo_servicio\", \"etiqueta\": \"Tipo de servicio\", \"tipo\": \"lista\", \"requerido\": true, \"opciones\": [\"limpieza\", \"mobiliario\"]}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios de Postman\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"tipo_servicio\", \"etiqueta\": \"Tipo de servicio\", \"tipo\": \"lista\", \"requerido\": true, \"opciones\": [\"limpieza\", \"mobiliario\"]}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Categoría con campo inseguro (400)",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-            "pm.test('Contrato de error seguro', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('$ne'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Contrato de error seguro', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('$ne'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Rechaza un nombre de campo que podría representar un operador MongoDB.",
-            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
-            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"categoria_insegura\",\n  \"nombre\": \"Categoría insegura\",\n  \"prefijo\": \"INS\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"$ne\", \"etiqueta\": \"Campo inseguro\", \"tipo\": \"texto\", \"requerido\": true}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"categoria_insegura\",\n  \"nombre\": \"Categoría insegura\",\n  \"prefijo\": \"INS\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"$ne\", \"etiqueta\": \"Campo inseguro\", \"tipo\": \"texto\", \"requerido\": true}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Categoría duplicada (409)",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-            "pm.test('Conflicto sin datos internos', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('DuplicateKeyError'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Conflicto sin datos internos', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('DuplicateKeyError'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Repite la categoría creada anteriormente y comprueba el conflicto.",
-            "url": {"raw": "{{base_url}}/categorias", "host": ["{{base_url}}"], "path": ["categorias"]},
-            "body": {"mode": "raw", "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios duplicados\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"detalle\", \"etiqueta\": \"Detalle\", \"tipo\": \"texto\", \"requerido\": true, \"max\": 120}\n  ]\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios duplicados\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"detalle\", \"etiqueta\": \"Detalle\", \"tipo\": \"texto\", \"requerido\": true, \"max\": 120}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Editar categoría dinámica",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-            "pm.test('Edición parcial aplicada', function () { const j = pm.response.json(); pm.expect(j.nombre).to.eql('Servicios de Postman actualizados'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Edición parcial aplicada', function () { const j = pm.response.json(); pm.expect(j.nombre).to.eql('Servicios de Postman actualizados'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Edita únicamente los campos enviados; cambiar la definición incrementa version.",
-            "url": {"raw": "{{base_url}}/categorias/{{categoria_clave}}", "host": ["{{base_url}}"], "path": ["categorias", "{{categoria_clave}}"]},
-            "body": {"mode": "raw", "raw": "{\n  \"nombre\": \"Servicios de Postman actualizados\"\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/categorias/{{categoria_clave}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias",
+                "{{categoria_clave}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Servicios de Postman actualizados\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Desactivar categoría dinámica",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-            "pm.test('Categoría desactivada sin eliminarse', function () { const j = pm.response.json(); pm.expect(j.activa).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Categoría desactivada sin eliminarse', function () { const j = pm.response.json(); pm.expect(j.activa).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Desactiva lógicamente la categoría personalizada; no elimina el documento.",
-            "url": {"raw": "{{base_url}}/categorias/{{categoria_clave}}", "host": ["{{base_url}}"], "path": ["categorias", "{{categoria_clave}}"]},
-            "body": {"mode": "raw", "raw": "{\n  \"activa\": false\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/categorias/{{categoria_clave}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias",
+                "{{categoria_clave}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activa\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Proteger categoría del sistema (409)",
-          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
-            "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-            "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); });"
-          ]}}],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); });"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"},
-              {"key": "Content-Type", "value": "application/json"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "description": "Comprueba que una categoría original no puede desactivarse.",
-            "url": {"raw": "{{base_url}}/categorias/computo_redes", "host": ["{{base_url}}"], "path": ["categorias", "computo_redes"]},
-            "body": {"mode": "raw", "raw": "{\n  \"activa\": false\n}", "options": {"raw": {"language": "json"}}}
+            "url": {
+              "raw": "{{base_url}}/categorias/computo_redes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias",
+                "computo_redes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activa\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]
@@ -3075,6 +4113,42 @@
               ]
             }
           }
+        },
+        {
+          "name": "Ubicaciones para reportar (sin QR)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 y lista de ubicaciones', () => pm.response.to.have.status(200));",
+                  "pm.test('sin id_publico', () => { const d = pm.response.json(); pm.expect(d).to.be.an('array'); d.forEach(u => pm.expect(u).to.not.have.property('id_publico')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Aulas activas (edificio, piso, aula) para el selector de Reportar. Requiere incidencias:crear; nunca incluye id_publico.",
+            "url": {
+              "raw": "{{base_url}}/aulas/ubicaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas",
+                "ubicaciones"
+              ]
+            }
+          }
         }
       ]
     },
@@ -3099,17 +4173,34 @@
           "request": {
             "method": "GET",
             "header": [
-              {"key": "Authorization", "value": "Bearer {{token}}", "description": "Token JWT de administrador"}
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              }
             ],
             "description": "Lista la primera pagina de eventos de usuarios en orden estable descendente.",
             "url": {
               "raw": "{{base_url}}/auditoria?pagina=1&limite=20&recurso=usuarios",
-              "host": ["{{base_url}}"],
-              "path": ["auditoria"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auditoria"
+              ],
               "query": [
-                {"key": "pagina", "value": "1"},
-                {"key": "limite", "value": "20"},
-                {"key": "recurso", "value": "usuarios"}
+                {
+                  "key": "pagina",
+                  "value": "1"
+                },
+                {
+                  "key": "limite",
+                  "value": "20"
+                },
+                {
+                  "key": "recurso",
+                  "value": "usuarios"
+                }
               ]
             }
           }
@@ -3677,17 +4768,17 @@
       "key": "incidencia_retirar_id",
       "value": ""
     },
-        {
-            "key": "incidencia_retirar_conflicto_id",
-            "value": ""
-        },
-        {
-            "key": "coincidencia_id",
-            "value": ""
-        },
-        {
-            "key": "analisis_id",
-            "value": ""
-        }
+    {
+      "key": "incidencia_retirar_conflicto_id",
+      "value": ""
+    },
+    {
+      "key": "coincidencia_id",
+      "value": ""
+    },
+    {
+      "key": "analisis_id",
+      "value": ""
+    }
   ]
 }

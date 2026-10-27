@@ -30,6 +30,7 @@ export const claves = {
   tecnicos: (area?: string) => ['usuarios', 'tecnicos', area ?? 'todas'] as const,
   aula: (id: string) => ['aulas', id] as const,
   catalogoAulas: ['aulas', 'catalogo'] as const,
+  ubicacionesAula: ['aulas', 'ubicaciones'] as const,
   configIA: ['config', 'ia'] as const,
 }
 

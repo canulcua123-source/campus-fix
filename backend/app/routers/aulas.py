@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.db import get_db
 from app.core.security import require_permiso
 from app.core.ubicacion import resolver_ubicacion
-from app.schemas.aula import AulaResueltaOut, EdificioCatalogoOut
+from app.schemas.aula import AulaResueltaOut, EdificioCatalogoOut, UbicacionAulaOut
 
 router = APIRouter(prefix="/aulas", tags=["aulas"])
 
@@ -47,6 +47,26 @@ async def listar_catalogo(
         )
     return list(edificios.values())
 
+
+@router.get(
+    "/ubicaciones",
+    response_model=list[UbicacionAulaOut],
+    responses={
+        401: {"description": "Autenticación requerida"},
+        403: {"description": "Falta el permiso incidencias:crear"},
+    },
+)
+async def listar_ubicaciones(
+    _: Annotated[dict, Depends(require_permiso("incidencias:crear"))],
+):
+    """Aulas activas para elegir la ubicación al reportar. Sin `id_publico`: los QR no se pueden enumerar."""
+    cursor = (
+        get_db()
+        .aulas.find({"activa": True}, {"_id": 0, "edificio": 1, "piso": 1, "aula": 1})
+        .sort([("edificio", 1), ("piso", 1), ("aula", 1)])
+        .limit(MAX_AULAS_CATALOGO)
+    )
+    return [d async for d in cursor]
 
 
 @router.get(

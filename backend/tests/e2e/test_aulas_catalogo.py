@@ -60,3 +60,23 @@ async def test_ruta_detalle_no_choca_con_catalogo(api, catalogo):
     r = await api.c.get(f"/aulas/{AULAS[0][0]}", headers=api.h("reportante_a"))
     assert r.status_code == 200, r.text
     assert r.json()["ubicacion"]["aula"] == "N-201"
+
+
+async def test_ubicaciones_activas_sin_id_publico(api, catalogo):
+    r = await api.c.get("/aulas/ubicaciones", headers=api.h("reportante_a"))
+    assert r.status_code == 200, r.text
+    propias = [u for u in r.json() if u["edificio"] in EDIFICIOS]
+    assert propias == [
+        {"edificio": EDIFICIOS[0], "piso": 1, "aula": "N-102"},
+        {"edificio": EDIFICIOS[0], "piso": 2, "aula": "N-201"},
+        {"edificio": EDIFICIOS[1], "piso": 0, "aula": "S-001"},
+    ]
+    assert all("id_publico" not in u for u in r.json())
+
+
+async def test_ubicaciones_401(api, catalogo):
+    assert (await api.c.get("/aulas/ubicaciones")).status_code == 401
+
+
+async def test_ubicaciones_403_sin_permiso(api, catalogo):
+    assert (await api.c.get("/aulas/ubicaciones", headers=api.h("directivo"))).status_code == 403
