@@ -149,6 +149,10 @@ export function esImagen(tipo: TipoMimeEvidencia): boolean {
   return tipo.startsWith('image/')
 }
 
+export function esVideo(tipo: TipoMimeEvidencia): boolean {
+  return tipo.startsWith('video/')
+}
+
 const PLAZO_REAPERTURA_MS = 7 * 24 * 60 * 60 * 1000
 
 /** Pista visual del plazo de 7 días; la API es la que decide (409 si venció). */

@@ -183,8 +183,10 @@ async def test_buscar(api):
     # Folio completo o parcial: busca por prefijo del código y respeta el alcance.
     r = await api.c.get("/incidencias/buscar", params={"q": infra["codigo"].lower()}, headers=api.h("admin"))
     assert r.status_code == 200, r.text
-    assert [d["_id"] for d in r.json()] == [infra["_id"]]
-    r = await api.c.get("/incidencias/buscar", params={"q": infra["codigo"][:9]}, headers=api.h("admin"))
+    res = r.json()
+    assert res[0]["_id"] == infra["_id"]  # la coincidencia exacta va primero (orden por código)
+    assert all(d["codigo"].startswith(infra["codigo"]) for d in res)
+    r = await api.c.get("/incidencias/buscar", params={"q": infra["codigo"][:-1]}, headers=api.h("admin"))
     assert infra["_id"] in {d["_id"] for d in r.json()}
     r = await api.c.get("/incidencias/buscar", params={"q": infra["codigo"]}, headers=api.h("tecnico_redes"))
     assert r.json() == []

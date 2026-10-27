@@ -31,7 +31,7 @@ from app.schemas.incidencia import (  # noqa: E402
 CATEGORIAS = ("computo_redes", "infraestructura", "academico")
 PRIORIDADES = ("baja", "media", "alta", "critica")
 ESTADOS = ("abierta", "en_proceso", "en_espera", "resuelta", "cerrada")
-TIPOS_MIME = ("image/jpeg", "image/png", "image/webp", "application/pdf")
+TIPOS_MIME = ("image/jpeg", "image/png", "image/webp", "application/pdf", "video/mp4", "video/quicktime", "video/webm")
 PREFIJOS = {"computo_redes": "RED", "infraestructura": "INF", "academico": "ACA"}
 UBICACIONES_LOCALES = {"localhost", "127.0.0.1", "::1"}
 RE_CODIGO = re.compile(r"^INC-(\d{4})-(\d{4})-(RED|INF|ACA)-(\d{4})$")
@@ -142,7 +142,7 @@ def _evidencia_valida(evidencia: object, codigo: object, creada: object) -> bool
         and evidencia.get("tipo_mime") in TIPOS_MIME
         and not isinstance(peso, bool)
         and isinstance(peso, int | float)
-        and 0 < peso <= 10240
+        and 0 < peso <= 51200
         and isinstance(ruta, str)
         and isinstance(codigo, str)
         and ruta.startswith(f"evidencias/{codigo}/")

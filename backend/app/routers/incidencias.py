@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pymongo.errors import DuplicateKeyError
 
 from app.core.cache_categorias import modelo_detalle_cacheado, obtener_definicion_cacheada
@@ -52,8 +52,20 @@ from app.services.duplicados import actualizar_elegibilidad_huella
 router = APIRouter(prefix="/incidencias", tags=["incidencias"])
 _STORAGE_DIRECTO = get_storage()
 
-TipoMime = Literal["image/jpeg", "image/png", "image/webp", "application/pdf"]
-EXTENSIONES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf"}
+TipoMime = Literal[
+    "image/jpeg", "image/png", "image/webp", "application/pdf", "video/mp4", "video/quicktime", "video/webm"
+]
+EXTENSIONES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "application/pdf": "pdf",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+}
+TIPOS_VIDEO = ["video/mp4", "video/quicktime", "video/webm"]
+MAX_VIDEOS = 1  # un video por incidencia (además del límite general de evidencias)
 MAX_EVIDENCIAS = 10
 MAX_HISTORIAL = 200  # acota el arreglo embebido: se conservan las últimas 200 entradas ($slice)
 MAX_HORAS = 1000  # tope de horas acumuladas por incidencia (evita contaminar la analítica)
@@ -785,6 +797,7 @@ async def cambiar_prioridad(
 
 
 MAX_BYTES_EVIDENCIA = 10 * 1024 * 1024
+MAX_BYTES_VIDEO = 50 * 1024 * 1024
 
 
 class EvidenciaFirmaIn(BaseModel):
@@ -792,7 +805,14 @@ class EvidenciaFirmaIn(BaseModel):
 
     nombre_archivo: str = Field(min_length=1, max_length=120, pattern=r"^[^/\\]+$")
     tipo_mime: TipoMime
-    peso_bytes: int = Field(ge=1, le=MAX_BYTES_EVIDENCIA)
+    peso_bytes: int = Field(ge=1, le=MAX_BYTES_VIDEO)
+
+    @model_validator(mode="after")
+    def _limite_por_tipo(self):
+        # Fotos y PDF siguen en 10 MB; solo los videos llegan a 50 MB.
+        if self.tipo_mime not in TIPOS_VIDEO and self.peso_bytes > MAX_BYTES_EVIDENCIA:
+            raise ValueError("Las fotos y PDF no pueden superar 10 MB")
+        return self
 
     @field_validator("nombre_archivo")
     @classmethod
@@ -826,7 +846,12 @@ async def firmar_evidencia(
     usuario: Annotated[dict, Depends(require_permiso("evidencias:subir"))],
     almacenamiento: Annotated[StoragePort, Depends(get_storage)] = _STORAGE_DIRECTO,
 ):
-    inc = await _en_alcance(incidencia_id, usuario, {"codigo": 1, "evidencias_adjuntas.evidencia_id": 1})
+    inc = await _en_alcance(
+        incidencia_id, usuario, {"codigo": 1, "evidencias_adjuntas.evidencia_id": 1, "evidencias_adjuntas.tipo_mime": 1}
+    )
+    es_video = datos.tipo_mime in TIPOS_VIDEO
+    if es_video and sum(e.get("tipo_mime") in TIPOS_VIDEO for e in inc.get("evidencias_adjuntas", [])) >= MAX_VIDEOS:
+        raise HTTPException(409, f"Solo se permite {MAX_VIDEOS} video por incidencia")
     redis = get_redis()
     ahora = datetime.now(timezone.utc)
     clave_dia = f"firmas:usuario:{usuario['_id']}:{ahora:%Y-%m-%d}"
@@ -908,6 +933,8 @@ async def registrar_evidencia(
             "_id": inc["_id"],
             f"evidencias_adjuntas.{MAX_EVIDENCIAS - 1}": {"$exists": False},
             "evidencias_adjuntas.evidencia_id": {"$ne": evidencia_id},
+            # Un solo video: si ya hay uno registrado (p. ej. dos firmas en paralelo), no entra el segundo.
+            **({"evidencias_adjuntas.tipo_mime": {"$nin": TIPOS_VIDEO}} if pendiente["tipo_mime"] in TIPOS_VIDEO else {}),
             **filtro_alcance(usuario),
         },
         {
@@ -926,7 +953,9 @@ async def registrar_evidencia(
         },
     )
     if res.matched_count == 0:
-        raise HTTPException(409, f"Evidencia duplicada o límite de {MAX_EVIDENCIAS} alcanzado")
+        raise HTTPException(
+            409, f"Evidencia duplicada, límite de {MAX_EVIDENCIAS} evidencias o de {MAX_VIDEOS} video alcanzado"
+        )
     return {"ok": True, "evidencia_id": evidencia_id}
 
 

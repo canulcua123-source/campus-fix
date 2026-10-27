@@ -42,9 +42,16 @@ function servidorEvidencias(put: (intento: number) => Response | Promise<Respons
   return c
 }
 
-function renderSubir(cantidad = 0) {
+function renderSubir(cantidad = 0, hayVideo = false) {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={cliente}><SubirEvidencia incidenciaId={ID} cantidad={cantidad} /></QueryClientProvider>)
+  return render(<QueryClientProvider client={cliente}><SubirEvidencia incidenciaId={ID} cantidad={cantidad} hayVideo={hayVideo} /></QueryClientProvider>)
+}
+
+/** Archivo falso de `bytes` sin reservar memoria (jsdom usa `size`). */
+function archivoDe(nombre: string, tipo: string, bytes: number) {
+  const f = new File([new Uint8Array(16)], nombre, { type: tipo })
+  Object.defineProperty(f, 'size', { value: bytes })
+  return f
 }
 
 const pdf = () => new File([new Uint8Array(1500)], 'informe.pdf', { type: 'application/pdf' })
@@ -135,5 +142,29 @@ describe('SubirEvidencia (T-048)', () => {
   it('arma nombres válidos para la firma', () => {
     expect(nombreSeguro('../foto/rara.HEIC', 'jpg')).toBe('._foto_rara.jpg')
     expect(nombreSeguro(`${'a'.repeat(200)}.pdf`)).toHaveLength(120)
+  })
+
+  it('sube un video tal cual (sin procesarlo) hasta 50 MB', async () => {
+    const c = servidorEvidencias()
+    renderSubir(1)
+    await userEvent.upload(entrada(), archivoDe('falla.mp4', 'video/mp4', 40 * 1024 * 1024))
+    expect(await screen.findByText('Se adjuntó falla.mp4.')).toBeInTheDocument()
+    expect(c.firmas).toEqual([{ nombre_archivo: 'falla.mp4', tipo_mime: 'video/mp4', peso_bytes: 40 * 1024 * 1024 }])
+  })
+
+  it('rechaza un segundo video, uno de más de 50 MB y fotos de más de 10 MB sin pedir firma', async () => {
+    const c = servidorEvidencias()
+    const { unmount } = renderSubir(1, true)
+    expect(screen.getByText(/ya tiene su video/)).toBeInTheDocument()
+    await userEvent.upload(entrada(), archivoDe('otro.mov', 'video/quicktime', 1000))
+    expect(await screen.findByText('Esta incidencia ya tiene un video. Solo se permite uno.')).toBeInTheDocument()
+    unmount()
+
+    renderSubir(1)
+    await userEvent.upload(entrada(), archivoDe('largo.webm', 'video/webm', 50 * 1024 * 1024 + 1))
+    expect(await screen.findByText('El video excede 50 MB')).toBeInTheDocument()
+    await userEvent.upload(entrada(), archivoDe('scan.pdf', 'application/pdf', 10 * 1024 * 1024 + 1))
+    expect(await screen.findByText('El archivo excede 10 MB')).toBeInTheDocument()
+    expect(c.firmas).toEqual([])
   })
 })

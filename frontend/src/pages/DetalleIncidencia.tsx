@@ -239,7 +239,11 @@ export function VistaDetalleIncidencia({ id, enPanel = false }: { id: string; en
             <div className="pila">
               <GaleriaEvidencias incidenciaId={detalle._id} evidencias={detalle.evidencias_adjuntas} />
               {permisos.includes('evidencias:subir') && (
-                <SubirEvidencia incidenciaId={detalle._id} cantidad={detalle.evidencias_adjuntas.length} />
+                <SubirEvidencia
+                  incidenciaId={detalle._id}
+                  cantidad={detalle.evidencias_adjuntas.length}
+                  hayVideo={detalle.evidencias_adjuntas.some((e) => e.tipo_mime.startsWith('video/'))}
+                />
               )}
             </div>
           </Seccion>

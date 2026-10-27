@@ -1,8 +1,8 @@
-import { ExternalLink, FileText, ImageOff, Image as ImageIcon, RefreshCw } from 'lucide-react'
+import { ExternalLink, FileText, ImageOff, Image as ImageIcon, RefreshCw, Video } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useUrlEvidencia } from '../api/hooks/incidencias'
 import type { EvidenciaAdjunta } from '../schemas/incidencia'
-import { esImagen, formatearFecha } from '../lib/detalle'
+import { esImagen, esVideo, formatearFecha } from '../lib/detalle'
 import { BottomSheet, Button, EmptyState, ErrorState, Skeleton } from './ui'
 
 interface GaleriaEvidenciasProps {
@@ -17,7 +17,7 @@ export function GaleriaEvidencias({ incidenciaId, evidencias }: GaleriaEvidencia
     return (
       <EmptyState
         titulo="Sin evidencias"
-        descripcion="Aún no se han adjuntado fotos ni documentos a esta incidencia."
+        descripcion="Aún no se han adjuntado fotos, videos ni documentos a esta incidencia."
         icono={ImageOff}
       />
     )
@@ -36,7 +36,9 @@ export function GaleriaEvidencias({ incidenciaId, evidencias }: GaleriaEvidencia
             >
               {esImagen(evidencia.tipo_mime)
                 ? <ImageIcon size={26} aria-hidden className="text-brand" />
-                : <FileText size={26} aria-hidden className="text-brand" />}
+                : esVideo(evidencia.tipo_mime)
+                  ? <Video size={26} aria-hidden className="text-brand" />
+                  : <FileText size={26} aria-hidden className="text-brand" />}
               <span className="line-clamp-2 text-xs font-semibold">{evidencia.nombre_archivo}</span>
               <span className="text-xs text-muted">{evidencia.peso_kb} KB</span>
             </button>
@@ -94,6 +96,20 @@ function VisorEvidencia({ incidenciaId, evidencia }: { incidenciaId: string; evi
           src={data.url}
           alt={evidencia.nombre_archivo}
           className="max-h-[55dvh] w-full rounded-input bg-panel-2 object-contain"
+          onError={() => {
+            if (renovado) return
+            setRenovado(true)
+            void refetch()
+          }}
+        />
+      ) : esVideo(evidencia.tipo_mime) ? (
+        <video
+          src={data.url}
+          controls
+          playsInline
+          preload="metadata"
+          aria-label={evidencia.nombre_archivo}
+          className="max-h-[55dvh] w-full rounded-input bg-panel-2"
           onError={() => {
             if (renovado) return
             setRenovado(true)
