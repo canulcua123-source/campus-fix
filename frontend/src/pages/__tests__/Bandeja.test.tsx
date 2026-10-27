@@ -101,7 +101,7 @@ describe('Bandeja (T-050)', () => {
     expect(screen.queryByText('De otra Ana')).not.toBeInTheDocument()
   })
 
-  it('no muestra incidencias resueltas ni cerradas', async () => {
+  it('saca las resueltas de pendientes (van a «Resueltas») y oculta las cerradas', async () => {
     const base = INCIDENCIAS[0]
     responder([
       { ...base, _id: 'activa', codigo: 'INC-ACTIVA', titulo: 'En trabajo', estado: 'en_proceso' },
@@ -111,8 +111,35 @@ describe('Bandeja (T-050)', () => {
     renderBandeja()
 
     await screen.findByText('En trabajo')
-    expect(screen.queryByText('Ya resuelta')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Asignadas a ti' })).queryByText('Ya resuelta')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Resueltas' })).getByText('Ya resuelta')).toBeInTheDocument()
+    expect(screen.getByText(/Esperando confirmación del reportante/)).toBeInTheDocument()
     expect(screen.queryByText('Ya cerrada')).not.toBeInTheDocument()
+  })
+
+  it('filtra por título, folio o aula sin importar acentos y permite limpiar', async () => {
+    responder(INCIDENCIAS)
+    renderBandeja()
+    const usuario = userEvent.setup()
+    await screen.findByText('Crítica asignada')
+    const buscador = screen.getByRole('searchbox', { name: 'Buscar en la bandeja' })
+
+    await usuario.type(buscador, 'CRITICA')
+    expect(screen.getByText('Crítica asignada')).toBeInTheDocument()
+    expect(screen.queryByText('Alta antigua')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pendiente de asignación')).not.toBeInTheDocument()
+
+    await usuario.clear(buscador)
+    await usuario.type(buscador, 'INC-SIN')
+    expect(within(screen.getByRole('list', { name: 'Por aceptar' })).getByText('Pendiente de asignación')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Asignadas a ti' })).not.toBeInTheDocument()
+
+    await usuario.clear(buscador)
+    await usuario.type(buscador, 'no existe nada')
+    expect(screen.getByText('Sin coincidencias')).toBeInTheDocument()
+    await usuario.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }))
+    expect(buscador).toHaveValue('')
+    expect(screen.getByText('Alta antigua')).toBeInTheDocument()
   })
 
   it('muestra un error con reintento si la bandeja no carga', async () => {

@@ -1,4 +1,4 @@
-import { CircleCheck, Hand, Hourglass, Inbox, RefreshCw, Search, SearchX } from 'lucide-react'
+import { CheckCheck, CircleCheck, Hand, Hourglass, Inbox, RefreshCw, Search, SearchX } from 'lucide-react'
 import { useState } from 'react'
 import { useMe } from '../api/hooks/auth'
 import { mensajeDeError } from '../api/client'
@@ -7,7 +7,7 @@ import { useAuth } from '../auth/store'
 import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
 import { Button, EmptyState, ErrorState, Input, PageHeader, SkeletonLista } from '../components/ui'
-import { antiguedad, filtrarBandeja, ordenarBandeja } from '../lib/bandeja'
+import { antiguedad, esMia, filtrarBandeja, ordenarBandeja } from '../lib/bandeja'
 import type { IncidenciaListaItem } from '../schemas/incidencia'
 
 /** Sin acentos ni mayúsculas, para comparar «aire» con «Aire acondicionado». */
@@ -42,18 +42,24 @@ export default function Bandeja() {
   const [consulta, setConsulta] = useState('')
   const propias = ordenarBandeja(filtrarBandeja(data ?? [], 'mias', me.data?._id))
   const porAceptar = ordenarBandeja(filtrarBandeja(data ?? [], 'sin_asignar', me.data?._id))
-  const visibles = { propias: propias.filter((t) => coincide(t, consulta)), porAceptar: porAceptar.filter((t) => coincide(t, consulta)) }
-  const hayAlgo = propias.length + porAceptar.length > 0
-  const sinCoincidencias = consulta.trim() !== '' && hayAlgo && visibles.propias.length + visibles.porAceptar.length === 0
+  // Resueltas por mí: salen de pendientes pero se muestran aparte hasta que el reportante confirme.
+  const resueltas = (data ?? []).filter((t) => t.estado === 'resuelta' && esMia(t, me.data?._id))
+  const visibles = { resueltas: resueltas.filter((t) => coincide(t, consulta)), propias: propias.filter((t) => coincide(t, consulta)), porAceptar: porAceptar.filter((t) => coincide(t, consulta)) }
+  const hayAlgo = propias.length + porAceptar.length + resueltas.length > 0
+  const sinCoincidencias = consulta.trim() !== '' && hayAlgo && visibles.propias.length + visibles.porAceptar.length + visibles.resueltas.length === 0
   const listo = !isPending && !isError
 
-  const tarjeta = (t: IncidenciaListaItem, aceptada: boolean) => (
+  const tarjeta = (t: IncidenciaListaItem, aceptada: boolean | 'resuelta') => (
     <li key={t._id}>
       <TarjetaIncidencia
         incidencia={t}
         onAbrir={abrir}
         tonoTiempo={antiguedad(t.fecha_creacion).nivel}
-        accion={aceptada ? (
+        accion={aceptada === 'resuelta' ? (
+          <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-muted">
+            <Hourglass size={16} aria-hidden /> Esperando confirmación del reportante
+          </p>
+        ) : aceptada ? (
           <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-ok">
             <CircleCheck size={16} aria-hidden /> Aceptada por ti
           </p>
@@ -177,6 +183,18 @@ export default function Bandeja() {
             {visibles.porAceptar.map((t) => tarjeta(t, false))}
           </ul>
         </section>
+      )}
+      {listo && !sinCoincidencias && visibles.resueltas.length > 0 && (
+        <details className="pila pila--sm" open={consulta.trim() !== ''}>
+          <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-base font-semibold">
+            <CheckCheck size={18} aria-hidden className="text-muted" /> Resueltas
+            <span className="rounded-full bg-panel-2 px-2 text-sm font-medium text-muted">{visibles.resueltas.length}</span>
+            <span className="text-sm font-normal text-muted">· esperan que el reportante confirme (7 días)</span>
+          </summary>
+          <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Resueltas">
+            {visibles.resueltas.map((t) => tarjeta(t, 'resuelta'))}
+          </ul>
+        </details>
       )}
       {panel}
     </div>

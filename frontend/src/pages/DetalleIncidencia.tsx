@@ -21,6 +21,14 @@ import {
   datosDetalle, esSoloLectura, formatearFecha, formatearHoras, mensajeErrorDetalle, textoUbicacion,
 } from '../lib/detalle'
 
+/** Qué pasa después de cada cambio de estado (se muestra tras guardar el seguimiento). */
+const AVISO_TRAS_SEGUIMIENTO: Partial<Record<string, string>> = {
+  en_proceso: 'Listo: ahora está En proceso. El reportante ve que ya la estás atendiendo.',
+  en_espera: 'Listo: quedó En espera. El reportante puede agregar lo que falta; cuando lo tengas, regrésala a En proceso.',
+  resuelta: 'Listo: la marcaste como Resuelta. El reportante tiene 7 días para confirmarla o reabrirla. Sale de tus pendientes y la verás en «Resueltas» de tu bandeja.',
+  cerrada: 'Listo: incidencia cerrada. Ya no admite cambios.',
+}
+
 export default function DetalleIncidencia() {
   const { id = '' } = useParams<{ id: string }>()
   return <VistaDetalleIncidencia id={id} />
@@ -209,7 +217,10 @@ export function VistaDetalleIncidencia({ id, enPanel = false }: { id: string; en
               estadoActual={detalle.estado}
               puedeRegistrar
               puedeCerrar={puedeCerrar}
-              onSeguimientoGuardado={() => void refetch()}
+              onSeguimientoGuardado={(estado) => {
+                setAviso(AVISO_TRAS_SEGUIMIENTO[estado] ?? 'Seguimiento registrado.')
+                void refetch()
+              }}
             />
           )}
         </div>
