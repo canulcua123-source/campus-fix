@@ -64,7 +64,7 @@ export function TendenciaCategorias({ datos }: { datos: TendenciaMensual[] }) {
         </ResponsiveContainer>
       </div>
       <details>
-        <summary className="cursor-pointer text-sm font-semibold text-ink">Ver tabla de tendencia</summary>
+        <summary className="cursor-pointer py-3 text-sm font-semibold text-ink">Ver tabla de tendencia</summary>
         <Tabla etiqueta="Incidencias creadas por mes y categoría" densa className="mt-2">
           <thead>
             <tr>

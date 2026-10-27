@@ -16,7 +16,7 @@ export function TopTags({ datos }: { datos: AnaliticaTag[] }) {
           <BarChart data={datos} layout="vertical" margin={{ top: 0, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={rejilla} strokeDasharray="3 3" horizontal={false} />
             <XAxis type="number" allowDecimals={false} tick={ejeTick} axisLine={ejeLinea} tickLine={false} />
-            <YAxis type="category" dataKey="tag" width={100} tick={ejeTick} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="tag" width={132} tick={ejeTick} axisLine={false} tickLine={false} />
             <Tooltip
               cursor={cursorBarra}
               formatter={(valor) => [numero.format(Number(valor)), 'Incidencias']}
@@ -28,7 +28,7 @@ export function TopTags({ datos }: { datos: AnaliticaTag[] }) {
         </ResponsiveContainer>
       </div>
       <details>
-        <summary className="cursor-pointer text-sm font-semibold text-ink">Ver tabla de etiquetas</summary>
+        <summary className="cursor-pointer py-3 text-sm font-semibold text-ink">Ver tabla de etiquetas</summary>
         <Tabla etiqueta="Diez etiquetas más frecuentes, en orden del backend" densa className="mt-2">
           <thead>
             <tr><th scope="col" className={claseNumerica}>Posición</th><th scope="col">Etiqueta</th><th scope="col" className={claseNumerica}>Incidencias</th></tr>

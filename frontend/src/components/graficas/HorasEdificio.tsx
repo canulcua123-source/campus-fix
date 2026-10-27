@@ -17,7 +17,7 @@ export function HorasEdificio({ datos }: { datos: AnaliticaEdificio[] }) {
           <BarChart data={datos} margin={{ top: 8, right: 8, left: -8, bottom: 0 }} barGap={2}>
             <CartesianGrid stroke={rejilla} strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="edificio" tick={ejeTick} axisLine={ejeLinea} tickLine={false} interval={0} />
-            <YAxis tick={ejeTick} axisLine={false} tickLine={false} allowDecimals width={44} unit=" h" />
+            <YAxis tick={ejeTick} axisLine={false} tickLine={false} allowDecimals width={56} unit=" h" />
             <Tooltip
               cursor={cursorBarra}
               formatter={(valor, nombre) => [`${numero.format(Number(valor))} h`, String(nombre)]}
@@ -32,7 +32,7 @@ export function HorasEdificio({ datos }: { datos: AnaliticaEdificio[] }) {
         </ResponsiveContainer>
       </div>
       <details>
-        <summary className="cursor-pointer text-sm font-semibold text-ink">Ver tabla de horas por edificio</summary>
+        <summary className="cursor-pointer py-3 text-sm font-semibold text-ink">Ver tabla de horas por edificio</summary>
         <Tabla etiqueta="Totales y promedios de incidencias resueltas por edificio" densa className="mt-2">
           <thead>
             <tr>

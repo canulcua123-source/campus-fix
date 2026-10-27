@@ -128,7 +128,7 @@ export default function Incidencias() {
           descripcion={`${lista.length} de ${todas.length} ${todas.length === 1 ? 'incidencia' : 'incidencias'}${todas.length >= LIMITE ? ` · se muestran las ${LIMITE} más recientes; usa los filtros para acotar` : ''}`}
           sinPadding
         >
-          <Tabla etiqueta="Incidencias" apilada densa>
+          <Tabla etiqueta="Incidencias" apilada densa className="ui-tabla--apilada-md">
             <thead>
               <tr>
                 <th scope="col">Incidencia</th>
@@ -154,7 +154,7 @@ export default function Incidencias() {
                             e.preventDefault()
                             abrir(t._id)
                           }}
-                          className="line-clamp-2 font-semibold text-ink"
+                          className="line-clamp-2 font-semibold text-ink max-lg:py-3"
                         >
                           {t.titulo}
                         </Link>

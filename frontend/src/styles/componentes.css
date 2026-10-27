@@ -281,7 +281,8 @@
     padding: 0 10px;
     font-size: 13px;
   }
-  @media (pointer: coarse) {
+  /* Táctil o barra inferior (< 1024 px): objetivo de 44 px. */
+  @media (pointer: coarse), (max-width: 1023px) {
     .ui-segmentado__opcion,
     .ui-segmentado--sm .ui-segmentado__opcion {
       min-height: var(--tap-min);
@@ -562,9 +563,11 @@
     font-weight: 600;
     line-height: 1.3;
     color: var(--color-text-muted);
+    /* Hasta 2 líneas: en móvil (2 tiles por fila) la etiqueta no se corta con «…». */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .ui-stat__icono {
     display: inline-flex;
@@ -717,6 +720,9 @@
     .ui-tabla--apilada tbody tr:hover td {
       background: transparent;
     }
+    .ui-tabla--apilada td:empty {
+      display: none;
+    }
     .ui-tabla--apilada td:last-child {
       border-bottom: 0;
     }
@@ -730,6 +736,74 @@
       font-weight: 600;
       color: var(--color-text-muted);
       text-align: left;
+    }
+  }
+  /* Tablas anchas (6+ columnas): también apiladas en tableta, en dos columnas de tarjetas. */
+  @media (max-width: 1023px) {
+    .ui-tabla--apilada-md {
+      background: transparent;
+      border: 0;
+      overflow: visible;
+    }
+    .ui-tabla--apilada-md thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    .ui-tabla--apilada-md table,
+    .ui-tabla--apilada-md tbody,
+    .ui-tabla--apilada-md tr,
+    .ui-tabla--apilada-md td {
+      display: block;
+    }
+    .ui-tabla--apilada-md tr {
+      margin-bottom: 8px;
+      padding: 8px 14px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-card);
+    }
+    .ui-tabla--apilada-md td,
+    .ui-tabla--apilada-md.ui-tabla--densa td {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--color-border);
+      text-align: right;
+    }
+    .ui-tabla--apilada-md tbody tr:hover td {
+      background: transparent;
+    }
+    .ui-tabla--apilada-md td:empty {
+      display: none;
+    }
+    .ui-tabla--apilada-md td:last-child {
+      border-bottom: 0;
+    }
+    .ui-seccion__cuerpo--sin-padding > .ui-tabla--apilada-md {
+      padding: 0 12px 4px;
+      border-top: 0;
+    }
+    .ui-tabla--apilada-md td[data-label]::before {
+      content: attr(data-label);
+      flex-shrink: 0;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      text-align: left;
+    }
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .ui-tabla--apilada-md tbody {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .ui-tabla--apilada-md tr {
+      margin-bottom: 0;
     }
   }
 

@@ -26,7 +26,7 @@ export function CompuertasIA({ datos }: { datos: Compuerta[] }) {
         </ResponsiveContainer>
       </div>
       <details>
-        <summary className="cursor-pointer text-sm font-semibold text-ink">Ver tabla de compuertas fallidas</summary>
+        <summary className="cursor-pointer py-3 text-sm font-semibold text-ink">Ver tabla de compuertas fallidas</summary>
         <Tabla etiqueta="Frecuencia por identificador oficial G1–G9" densa className="mt-2">
           <thead><tr><th scope="col">Compuerta</th><th scope="col" className={claseNumerica}>Fallos</th></tr></thead>
           <tbody>{datos.map((fila) => (

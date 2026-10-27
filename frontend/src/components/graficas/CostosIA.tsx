@@ -31,7 +31,7 @@ export function CostosIA({ datos }: { datos: CostoDiario[] }) {
         </ResponsiveContainer>
       </div>
       <details>
-        <summary className="cursor-pointer text-sm font-semibold text-ink">Ver tabla de costos diarios</summary>
+        <summary className="cursor-pointer py-3 text-sm font-semibold text-ink">Ver tabla de costos diarios</summary>
         <Tabla etiqueta="Costo estimado, no facturado, por día" densa className="mt-2">
           <thead><tr><th scope="col">Fecha</th><th scope="col" className={claseNumerica}>Llamadas</th><th scope="col" className={claseNumerica}>Costo estimado</th></tr></thead>
           <tbody>{datos.map((fila) => (

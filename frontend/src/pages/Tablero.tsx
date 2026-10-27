@@ -141,7 +141,7 @@ export default function Tablero() {
           descripcion={`${data.length} ${data.length === 1 ? 'resultado' : 'resultados'}`}
           sinPadding
         >
-          <Tabla etiqueta="Incidencias del tablero" apilada densa>
+          <Tabla etiqueta="Incidencias del tablero" apilada densa className="ui-tabla--apilada-md">
             <thead>
               <tr>
                 <th scope="col">Incidencia</th>
@@ -164,7 +164,7 @@ export default function Tablero() {
                           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                           e.preventDefault()
                           abrir(t._id)
-                        }} className="line-clamp-2 font-semibold text-ink">
+                        }} className="line-clamp-2 font-semibold text-ink max-lg:py-3">
                           {t.titulo}
                         </Link>
                         <span className="flex flex-wrap items-center gap-x-2 text-xs">

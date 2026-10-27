@@ -272,7 +272,7 @@ export default function AdminUsuarios() {
                         <Seccion titulo="Cuentas" descripcion={<span role="status">{listado.length === total ? `${total} usuarios` : `${listado.length} de ${total} usuarios`}</span>} sinPadding>
                             {listado.length === 0 ? <div className="p-4"><EmptyState compacto icono={Search} titulo="Ningún usuario coincide"
                                 descripcion="Prueba con otro nombre o quita filtros." accion={<Button variante="secundario" tamano="sm" onClick={limpiarFiltros}>Limpiar filtros</Button>} /></div> :
-                                <Tabla etiqueta="Usuarios" apilada>
+                                <Tabla etiqueta="Usuarios" apilada className="ui-tabla--apilada-md">
                                     <thead><tr>
                                         <th scope="col">Usuario</th><th scope="col">Rol</th><th scope="col">Alcance</th>
                                         <th scope="col">Estado</th><th scope="col"><span className="sr-only">Acciones</span></th>
