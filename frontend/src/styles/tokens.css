@@ -19,6 +19,8 @@
   --color-surface-2: #f8fafc;
   --color-border: #e5e7eb;
   --color-border-strong: #64748b;
+  /* Borde de campos: más ligero que border-strong pero ≥ 3:1 sobre surface y surface-2 (WCAG 1.4.11) */
+  --color-border-input: #868e9c;
   --color-text: #0f172a;
   /* #475569: 6.8:1 sobre bg y 7.2:1 sobre surface-2 (el anterior #64748b no llegaba a 4.5 sobre bg) */
   --color-text-muted: #475569;
@@ -119,6 +121,7 @@
     --color-surface-2: #1e2633;
     --color-border: #2a3342;
     --color-border-strong: #64748b;
+    --color-border-input: #64748b;
     --color-text: #f1f5f9;
     --color-text-muted: #94a3b8;
     --color-focus: #93c5fd;
@@ -185,6 +188,7 @@
   --color-surface-2: #1e2633;
   --color-border: #2a3342;
   --color-border-strong: #64748b;
+  --color-border-input: #64748b;
   --color-text: #f1f5f9;
   --color-text-muted: #94a3b8;
   --color-focus: #93c5fd;
