@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTecnicos } from '../api/hooks/admin'
+import { ubicacionesAulaQuery } from '../api/aulas'
 import { ESTADOS, PRIORIDADES, type FiltrosIncidencias } from '../schemas/incidencia'
 import { Building, X } from 'lucide-react'
-import { BarraFiltros, Button, ETIQUETAS, Input, Select } from './ui'
+import { BarraFiltros, Button, ETIQUETAS, Select } from './ui'
 
 export type FiltrosTableroValor = Pick<FiltrosIncidencias, 'estado' | 'prioridad' | 'edificio' | 'tecnico'>
 type Campo = keyof FiltrosTableroValor
@@ -11,19 +12,20 @@ interface FiltrosTableroProps {
   filtros: FiltrosTableroValor
   onCambiar: (campo: Campo, valor: string | undefined) => void
   onLimpiar: () => void
+  /** Edificios vistos en las incidencias cargadas (pueden no estar en el catálogo de aulas). */
+  edificiosExtra?: readonly string[]
 }
 
 /** Filtros combinables del tablero; el valor vive en la URL y se manda al backend (no se filtra en cliente). */
-export function FiltrosTablero({ filtros, onCambiar, onLimpiar }: FiltrosTableroProps) {
+export function FiltrosTablero({ filtros, onCambiar, onLimpiar, edificiosExtra = [] }: FiltrosTableroProps) {
   const tecnicos = useTecnicos()
-  // El edificio se aplica al salir del campo o con Enter, no en cada tecla.
-  const [edificio, setEdificio] = useState(filtros.edificio ?? '')
-  const [edificioUrl, setEdificioUrl] = useState(filtros.edificio)
-  if (edificioUrl !== filtros.edificio) {
-    setEdificioUrl(filtros.edificio)
-    setEdificio(filtros.edificio ?? '')
-  }
-  const aplicarEdificio = () => onCambiar('edificio', edificio.trim() || undefined)
+  const catalogo = useQuery({ ...ubicacionesAulaQuery(), retry: false })
+  // Catálogo de aulas + edificios presentes en las incidencias + el valor actual de la URL, sin repetir.
+  const edificios = [...new Set([
+    ...(catalogo.data ?? []).map((u) => u.edificio),
+    ...edificiosExtra,
+    ...(filtros.edificio ? [filtros.edificio] : []),
+  ].filter(Boolean))].sort((x, y) => x.localeCompare(y, 'es', { numeric: true }))
   const activos = Object.values(filtros).filter(Boolean).length
 
   return (
@@ -50,18 +52,14 @@ export function FiltrosTablero({ filtros, onCambiar, onLimpiar }: FiltrosTablero
         opciones={PRIORIDADES.map((p) => ({ valor: p, texto: ETIQUETAS.prioridad[p] }))}
         onChange={(e) => onCambiar('prioridad', e.target.value || undefined)}
       />
-      <Input
+      <Select
         tamano="sm"
         etiqueta="Edificio"
         icono={<Building size={16} />}
-        placeholder="Ej. Edificio A"
-        maxLength={60}
-        value={edificio}
-        onChange={(e) => setEdificio(e.target.value)}
-        onBlur={aplicarEdificio}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') aplicarEdificio()
-        }}
+        placeholder="Todos"
+        value={filtros.edificio ?? ''}
+        opciones={edificios.map((e) => ({ valor: e, texto: e.length <= 2 ? `Edificio ${e}` : e }))}
+        onChange={(e) => onCambiar('edificio', e.target.value || undefined)}
       />
       <Select
         tamano="sm"

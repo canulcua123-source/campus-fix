@@ -60,6 +60,7 @@ function simular(lista: IncidenciaListaItem[] = [INC]) {
 describe('Tablero (T-054)', () => {
   it('aplica filtros en query', async () => {
     const { consultas } = simular()
+    servidor.use(http.get(`${BASE}/aulas/ubicaciones`, () => HttpResponse.json([{ edificio: 'C', piso: 1, aula: '101' }])))
     renderTablero(`/tablero?estado=abierta&prioridad=alta&edificio=Edificio%20A&tecnico=${LUIS}&otro=x`)
 
     await screen.findByText('Fuga en el baño')
@@ -74,10 +75,12 @@ describe('Tablero (T-054)', () => {
     await usuario.selectOptions(screen.getByLabelText('Técnico'), 'sin_asignar')
     await waitFor(() => expect(consultas.at(-1)?.get('tecnico')).toBe('sin_asignar'))
 
-    const edificio = screen.getByLabelText('Edificio')
-    await usuario.clear(edificio)
-    await usuario.type(edificio, 'Edificio C{Enter}')
-    await waitFor(() => expect(consultas.at(-1)?.get('edificio')).toBe('Edificio C'))
+    // Lista: catálogo de aulas + edificios de las incidencias + el valor de la URL.
+    const edificio = await screen.findByRole('combobox', { name: 'Edificio' })
+    await waitFor(() => expect(within(edificio).getByRole('option', { name: 'Edificio C' })).toBeInTheDocument())
+    expect(within(edificio).getByRole('option', { name: 'Edificio A' })).toBeInTheDocument()
+    await usuario.selectOptions(edificio, 'C')
+    await waitFor(() => expect(consultas.at(-1)?.get('edificio')).toBe('C'))
 
     await usuario.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
     await waitFor(() => expect([...consultas.at(-1)!.keys()]).toEqual([]))

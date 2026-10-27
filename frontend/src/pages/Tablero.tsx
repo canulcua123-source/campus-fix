@@ -106,7 +106,7 @@ export default function Tablero() {
         </StatGrid>
       )}
 
-      <FiltrosTablero filtros={filtros} onCambiar={cambiar} onLimpiar={limpiar} />
+      <FiltrosTablero filtros={filtros} onCambiar={cambiar} onLimpiar={limpiar} edificiosExtra={(data ?? []).map((t) => t.ubicacion.edificio)} />
 
       {aviso && (
         <p role="status" className="m-0 flex items-center gap-2 rounded-input border border-ok bg-panel p-3 text-sm text-ok">
