@@ -1,42 +1,41 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pymongo.errors import DuplicateKeyError, WriteError
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from starlette.responses import Response
 
 from app.core import db
 from app.core.config import settings
+from app.core.errores import registrar_manejadores_errores, respuesta_error
 from app.core.limiter import limite_general, limiter
-from app.routers import analitica, auth, categorias, ia, incidencias, roles, usuarios
+from app.routers import analitica, auditoria, aulas, auth, categorias, config, ia, incidencias, roles, usuarios
+
+
+logger = logging.getLogger(__name__)
+
+
+def _avisar_si_falta_llave_ia() -> None:
+    """Aviso al arrancar si la IA está habilitada pero el proveedor elegido no tiene llave (#132)."""
+    llave = settings.gemini_api_key if settings.ia_proveedor == "gemini" else settings.anthropic_api_key
+    if settings.ia_habilitada and not llave:
+        logger.warning(
+            "IA habilitada sin llave para el proveedor %s: el análisis de fotos responderá 503 hasta configurarla",
+            settings.ia_proveedor,
+        )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.abrir()  # los clientes conectan de forma perezosa
+    _avisar_si_falta_llave_ia()
     yield
     await db.cerrar()
 
 
 app = FastAPI(title="UTM Desk API", version="0.1.0", lifespan=lifespan, dependencies=[Depends(limite_general)])
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-# CORS explícito: solo el dominio del frontend, solo los métodos y cabeceras que usa la PWA.
-# Sin credenciales: la sesión viaja en el header Authorization, no en cookies.
-# (CORS solo protege a los navegadores; curl o un script no lo respetan: la protección real es el JWT + límites.)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_lista,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
-    max_age=600,
-)
-
+registrar_manejadores_errores(app)
 RUTAS_DOCS = ("/docs", "/redoc", "/openapi.json")
 CABECERAS_SEGURIDAD = {
     "X-Content-Type-Options": "nosniff",
@@ -48,17 +47,18 @@ CABECERAS_SEGURIDAD = {
 }
 
 
-@app.middleware("http")
-async def _cabeceras_seguridad(request: Request, call_next):
-    respuesta = await call_next(request)
+def _agregar_cabeceras_seguridad(request: Request, respuesta: Response) -> Response:
     for nombre, valor in CABECERAS_SEGURIDAD.items():
         respuesta.headers.setdefault(nombre, valor)
     if not request.url.path.startswith(RUTAS_DOCS):
-        # La API solo devuelve JSON: nada que ejecutar ni incrustar. /docs carga Swagger desde un CDN.
         respuesta.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-        # Respuestas con datos de usuarios: ni el navegador, ni el service worker, ni un proxy deben guardarlas.
         respuesta.headers["Cache-Control"] = "no-store"
     return respuesta
+
+
+@app.middleware("http")
+async def _cabeceras_seguridad(request: Request, call_next):
+    return _agregar_cabeceras_seguridad(request, await call_next(request))
 
 
 MAX_BODY = {"/ia/analizar-imagen": 6 * 1024 * 1024}
@@ -72,33 +72,24 @@ async def _limitar_body(request: Request, call_next):
         limite = MAX_BODY.get(request.url.path, MAX_BODY_DEFECTO)
         largo = request.headers.get("content-length")
         if largo is None and request.headers.get("transfer-encoding"):
-            return JSONResponse(status_code=411, content={"error": "longitud_requerida"})
+            respuesta = respuesta_error(411, "longitud_requerida", "Se requiere la cabecera Content-Length")
+            return _agregar_cabeceras_seguridad(request, respuesta)
         if largo is not None and (not largo.isdigit() or int(largo) > limite):
-            return JSONResponse(status_code=413, content={"error": "cuerpo_demasiado_grande"})
+            respuesta = respuesta_error(413, "cuerpo_demasiado_grande", "El cuerpo de la solicitud es demasiado grande")
+            return _agregar_cabeceras_seguridad(request, respuesta)
     return await call_next(request)
 
 
-@app.exception_handler(RequestValidationError)
-async def _validacion(_: Request, exc: RequestValidationError):
-    # Sin "input" ni "ctx": no se reflejan valores enviados (p. ej. contraseñas) en la respuesta.
-    errores = [{k: v for k, v in e.items() if k not in ("input", "ctx", "url")} for e in exc.errors()]
-    detalle = jsonable_encoder(errores, custom_encoder={Exception: str})
-    return JSONResponse(status_code=400, content={"error": "validacion", "detalle": detalle})
-
-
-@app.exception_handler(WriteError)
-async def _write_error(_: Request, exc: WriteError):
-    if exc.code == 121:  # falla de $jsonSchema en MongoDB
-        return JSONResponse(
-            status_code=400,
-            content={"error": "validacion", "detalle": [{"msg": "El documento no cumple el esquema de la base de datos"}]},
-        )
-    return JSONResponse(status_code=500, content={"error": "interno"})
-
-
-@app.exception_handler(DuplicateKeyError)
-async def _duplicado(_: Request, exc: DuplicateKeyError):
-    return JSONResponse(status_code=409, content={"error": "duplicado", "detalle": "Registro duplicado"})
+# CORS explícito queda por fuera de los middlewares HTTP para cubrir también los rechazos 411/413.
+# Credenciales habilitadas solo para orígenes exactos: permiten la cookie HttpOnly de refresh.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_lista,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+    max_age=600,
+)
 
 
 @app.get("/health")
@@ -106,5 +97,5 @@ async def health():
     return {"status": "ok"}
 
 
-for r in (auth, incidencias, ia, roles, categorias, analitica, usuarios):
+for r in (auth, incidencias, ia, roles, categorias, analitica, usuarios, auditoria, aulas, config):
     app.include_router(r.router)

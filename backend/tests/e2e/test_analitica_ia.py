@@ -1,23 +1,59 @@
-import pytest
+import asyncio
+import hashlib
+import uuid
+import json
+from datetime import datetime, timedelta, timezone
+from io import BytesIO
+from types import SimpleNamespace
 
+import pytest
+import pytest_asyncio
+from bson import ObjectId
+from PIL import Image
+from pymongo.errors import WriteError
+from redis.exceptions import RedisError
+
+import app.routers.analitica as analitica_router
 import app.routers.ia as ia_router
+import app.services.config_ia as config_ia_service
+import app.services.ia as ia_service
+import app.services.vision as vision
+from app.core import cache as cache_core
+from app.core.db import get_redis
 from app.core.config import settings
-from app.schemas.ia import AnalisisImagen
+from app.schemas.ia import AnalisisImagen, RespuestaIA
+from app.services.vision.analisis_temporal import ANALISIS_TTL, clave_analisis
+from app.services.vision.claude import ProveedorClaude
+from app.services.vision.puerto import ErrorProveedor, error_http
+
+from .helpers import cuerpo
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 FILTRO_RESUELTAS = {"estado": {"$in": ["resuelta", "cerrada"]}, "fecha_resolucion": {"$type": "date"}}
 
 
+async def _limpiar_cache_analitica():
+    redis = get_redis()
+    claves = [clave async for clave in redis.scan_iter(match="analitica:v1:*")]
+    if claves:
+        await redis.delete(*claves)
+
+
 async def _preparar(api):
     # Garantiza datos resueltos en ambas categorías y edificios distintos
-    await api.crear_en("resuelta", "reportante_a", "infraestructura", edificio="Edificio A", tags=["analitica_tag", "luz"])
+    await api.crear_en(
+        "resuelta", "reportante_a", "infraestructura", edificio="Edificio A", tags=["analitica_tag", "luz"]
+    )
     await api.crear_en("cerrada", "reportante_a", "infraestructura", edificio="Edificio B", tags=["analitica_tag"])
-    await api.crear_en("resuelta", "reportante_a", "computo_redes", edificio="Edificio C", tags=["analitica_tag", "red"])
+    await api.crear_en(
+        "resuelta", "reportante_a", "computo_redes", edificio="Edificio C", tags=["analitica_tag", "red"]
+    )
 
 
 async def test_analitica_edificios(api):
     await _preparar(api)
+    await _limpiar_cache_analitica()
     r = await api.c.get("/analitica/edificios", headers=api.h("directivo"))
     assert r.status_code == 200, r.text
     filas = r.json()
@@ -41,6 +77,7 @@ async def test_analitica_edificios(api):
 
 async def test_analitica_tags(api):
     await _preparar(api)
+    await _limpiar_cache_analitica()
     r = await api.c.get("/analitica/tags", headers=api.h("admin"))
     assert r.status_code == 200, r.text
     filas = r.json()
@@ -57,24 +94,361 @@ async def test_analitica_tags(api):
         assert tags_c["analitica_tag"] == n
 
 
-@pytest.mark.parametrize("quien,esperado", [
-    ("reportante_a", 403), ("tecnico_infra", 403), ("jefe_a", 403),
-    ("coordinador_infra", 200), ("directivo", 200), ("admin", 200),
-])
+@pytest.mark.parametrize(
+    "quien,esperado",
+    [
+        ("reportante_a", 403),
+        ("tecnico_infra", 403),
+        ("jefe_a", 403),
+        ("coordinador_infra", 200),
+        ("directivo", 200),
+        ("admin", 200),
+    ],
+)
 async def test_analitica_permisos(api, quien, esperado):
-    for ruta in ("/analitica/edificios", "/analitica/tags"):
+    for ruta in ("/analitica/edificios", "/analitica/tags", "/analitica/resumen"):
         assert (await api.c.get(ruta, headers=api.h(quien))).status_code == esperado, ruta
-    assert (await api.c.get("/analitica/tags")).status_code == 401
+    assert (await api.c.get("/analitica/resumen")).status_code == 401
+
+
+async def test_resumen_cuenta_por_estado(api):
+    await _limpiar_cache_analitica()
+    antes = (await api.c.get("/analitica/resumen", headers=api.h("directivo"))).json()
+
+    await api.crear(prioridad="critica")
+    en_proceso = await api.crear()
+    await api.a_estado(en_proceso["_id"], "en_proceso")
+    await api.crear_en("resuelta", prioridad="critica")
+    await _limpiar_cache_analitica()
+
+    r = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+    assert r.status_code == 200, r.text
+    despues = r.json()
+    assert despues["abiertas"] == antes["abiertas"] + 1
+    assert despues["en_proceso"] == antes["en_proceso"] + 1
+    assert despues["criticas"] == antes["criticas"] + 2
+    assert despues["resueltas_periodo"] == antes["resueltas_periodo"] + 1
+    assert all(isinstance(valor, int) and valor >= 0 for valor in despues.values())
+
+
+async def test_resumen_filtra_periodo(api):
+    hoy = datetime.now(timezone.utc).date()
+    manana = hoy + timedelta(days=1)
+    parametros_hoy = {"desde": hoy.isoformat(), "hasta": hoy.isoformat(), "categoria": "infraestructura"}
+    parametros_manana = {
+        "desde": manana.isoformat(),
+        "hasta": manana.isoformat(),
+        "categoria": "infraestructura",
+    }
+    await _limpiar_cache_analitica()
+    antes_hoy = (await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))).json()
+    antes_manana = (await api.c.get("/analitica/resumen", params=parametros_manana, headers=api.h("directivo"))).json()
+
+    await api.crear_en("resuelta")
+    await _limpiar_cache_analitica()
+
+    despues_hoy = (await api.c.get("/analitica/resumen", params=parametros_hoy, headers=api.h("directivo"))).json()
+    despues_manana = (
+        await api.c.get("/analitica/resumen", params=parametros_manana, headers=api.h("directivo"))
+    ).json()
+    assert despues_hoy["resueltas_periodo"] == antes_hoy["resueltas_periodo"] + 1
+    assert despues_manana["resueltas_periodo"] == antes_manana["resueltas_periodo"]
+
+
+async def test_resumen_alcance_coordinador(api):
+    await api.crear(categoria="computo_redes", prioridad="critica")
+    await _limpiar_cache_analitica()
+    parametros = {"categoria": "computo_redes"}
+
+    global_ = await api.c.get("/analitica/resumen", params=parametros, headers=api.h("directivo"))
+    coordinador = await api.c.get(
+        "/analitica/resumen",
+        params=parametros,
+        headers=api.h("coordinador_infra"),
+    )
+
+    assert global_.status_code == coordinador.status_code == 200
+    assert global_.json()["abiertas"] > 0
+    assert global_.json()["criticas"] > 0
+    assert coordinador.json() == {
+        "abiertas": 0,
+        "en_proceso": 0,
+        "criticas": 0,
+        "resueltas_periodo": 0,
+    }
+
+
+async def test_cache_separada_por_alcance(api):
+    await _limpiar_cache_analitica()
+
+    assert (await api.c.get("/analitica/resumen", headers=api.h("directivo"))).status_code == 200
+    assert (await api.c.get("/analitica/resumen", headers=api.h("coordinador_infra"))).status_code == 200
+
+    claves = [clave async for clave in get_redis().scan_iter(match="analitica:v1:*")]
+    assert len(claves) == 2
+    assert claves[0] != claves[1]
+
+
+@pytest.mark.parametrize(
+    "parametros",
+    [
+        {"desde": "2026-02-30"},
+        {"desde": "22-10-2026"},
+        {"desde": "2026-10-22T00:00:00Z"},
+        {"desde": "2026-10-23", "hasta": "2026-10-22"},
+        {"categoria": "otra"},
+        [("categoria", "academico"), ("categoria", "infraestructura")],
+        {"otro": "valor"},
+    ],
+    ids=["inexistente", "formato", "instante", "invertido", "categoria", "duplicado", "inesperado"],
+)
+async def test_filtro_fecha_invalida_400(api, parametros):
+    r = await api.c.get("/analitica/resumen", params=parametros, headers=api.h("directivo"))
+    assert r.status_code == 400, r.text
+    assert r.json()["error"] == "validacion"
+    assert isinstance(r.json()["detalle"], str | list)
+
+
+async def test_analitica_cache_hit(api, monkeypatch):
+    await _limpiar_cache_analitica()
+    llamadas = 0
+
+    async def agregar_falso(_pipeline):
+        nonlocal llamadas
+        llamadas += 1
+        return [{"abiertas": 7, "en_proceso": 2, "criticas": 1, "resueltas_periodo": 4}]
+
+    monkeypatch.setattr(analitica_router, "_agregar", agregar_falso)
+    primera = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+    segunda = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json() == segunda.json()
+    assert llamadas == 1
+    claves = [clave async for clave in get_redis().scan_iter(match="analitica:v1:*")]
+    assert len(claves) == 1
+    clave = claves[0]
+    ttl = await get_redis().ttl(clave)
+    assert 0 < ttl <= 300
+
+
+async def test_analitica_sin_redis_responde(api, monkeypatch):
+    await _limpiar_cache_analitica()
+
+    class RedisCaido:
+        async def get(self, _clave):
+            raise RedisError("fallo simulado")
+
+        async def set(self, _clave, _contenido, *, ex):
+            raise RedisError("fallo simulado")
+
+    monkeypatch.setattr(cache_core, "get_redis", lambda: RedisCaido())
+    r = await api.c.get("/analitica/resumen", headers=api.h("directivo"))
+    assert r.status_code == 200, r.text
+    assert set(r.json()) == {"abiertas", "en_proceso", "criticas", "resueltas_periodo"}
+
+
+async def test_aulas_cronicas_detecta_3_en_30_dias(api):
+    ubicacion_cronica = {"edificio": "T011 Crónico", "piso": 1, "aula": "101"}
+    ubicacion_dos = {"edificio": "T011 Solo Dos", "piso": 1, "aula": "101"}
+    ubicacion_otro_piso = {"edificio": "T011 Crónico", "piso": 2, "aula": "101"}
+    ubicacion_otra_area = {"edificio": "T011 Redes", "piso": 1, "aula": "101"}
+
+    for _ in range(3):
+        await api.crear(ubicacion=ubicacion_cronica)
+    for _ in range(2):
+        await api.crear(ubicacion=ubicacion_dos)
+        await api.crear(ubicacion=ubicacion_otro_piso)
+    for _ in range(3):
+        await api.crear(categoria="computo_redes", ubicacion=ubicacion_otra_area)
+
+    antigua = await api.crear(ubicacion=ubicacion_cronica)
+    futura = await api.crear(ubicacion=ubicacion_cronica)
+    ahora = datetime.now(timezone.utc)
+    await api.db.incidencias_campus.update_one(
+        {"_id": ObjectId(antigua["_id"])},
+        {"$set": {"fecha_creacion": ahora - timedelta(days=31)}},
+    )
+    await api.db.incidencias_campus.update_one(
+        {"_id": ObjectId(futura["_id"])},
+        {"$set": {"fecha_creacion": ahora + timedelta(days=1)}},
+    )
+
+    await _limpiar_cache_analitica()
+    respuesta = await api.c.get("/analitica/aulas-cronicas", headers=api.h("directivo"))
+
+    assert respuesta.status_code == 200, respuesta.text
+    filas = respuesta.json()
+    cronica = next(
+        fila for fila in filas if (fila["edificio"], fila.get("piso"), fila["aula"]) == ("T011 Crónico", 1, "101")
+    )
+    assert cronica["total"] == 3
+    assert not any(fila["edificio"] == "T011 Solo Dos" for fila in filas)
+    assert not any(fila["edificio"] == "T011 Crónico" and fila.get("piso") == 2 for fila in filas)
+
+    coordinador = await api.c.get(
+        "/analitica/aulas-cronicas",
+        headers=api.h("coordinador_infra"),
+    )
+    assert coordinador.status_code == 200, coordinador.text
+    assert "T011 Redes" not in {fila["edificio"] for fila in coordinador.json()}
+
+
+async def test_carga_tecnicos_suma_horas(api):
+    tecnico_id = str(api.oid("tecnico_infra"))
+    tecnico_redes_id = str(api.oid("tecnico_redes"))
+
+    await _limpiar_cache_analitica()
+    antes = await api.c.get("/analitica/carga-tecnicos", headers=api.h("coordinador_infra"))
+    assert antes.status_code == 200, antes.text
+    fila_antes = next(
+        (fila for fila in antes.json() if fila["tecnico_id"] == tecnico_id),
+        {"incidencias_activas": 0, "horas_acumuladas": 0.0},
+    )
+
+    primera = await api.crear()
+    segunda = await api.crear()
+    for incidencia in (primera, segunda):
+        asignacion = await api.c.patch(
+            f"/incidencias/{incidencia['_id']}/asignacion",
+            json={"tecnico_id": tecnico_id},
+            headers=api.h("coordinador_infra"),
+        )
+        assert asignacion.status_code == 200, asignacion.text
+    assert (await api.seguimiento(primera["_id"], "en_proceso", horas=1.25)).status_code == 200
+    assert (await api.seguimiento(segunda["_id"], "en_espera", horas=2.5)).status_code == 200
+
+    sin_asignar = await api.crear()
+    assert (await api.seguimiento(sin_asignar["_id"], "en_proceso", horas=4)).status_code == 200
+
+    terminal = await api.crear()
+    asignacion_terminal = await api.c.patch(
+        f"/incidencias/{terminal['_id']}/asignacion",
+        json={"tecnico_id": tecnico_id},
+        headers=api.h("coordinador_infra"),
+    )
+    assert asignacion_terminal.status_code == 200
+    await api.a_estado(terminal["_id"], "cerrada")
+
+    redes = await api.crear(categoria="computo_redes")
+    asignacion_redes = await api.c.patch(
+        f"/incidencias/{redes['_id']}/asignacion",
+        json={"tecnico_id": tecnico_redes_id},
+        headers=api.h("admin"),
+    )
+    assert asignacion_redes.status_code == 200
+
+    await _limpiar_cache_analitica()
+    despues = await api.c.get("/analitica/carga-tecnicos", headers=api.h("coordinador_infra"))
+
+    assert despues.status_code == 200, despues.text
+    fila_despues = next(fila for fila in despues.json() if fila["tecnico_id"] == tecnico_id)
+    assert fila_despues["incidencias_activas"] == fila_antes["incidencias_activas"] + 2
+    assert fila_despues["horas_acumuladas"] == pytest.approx(fila_antes["horas_acumuladas"] + 3.75)
+    assert tecnico_redes_id not in {fila["tecnico_id"] for fila in despues.json()}
+
+
+async def test_tendencia_por_mes(api):
+    datos = [
+        ("infraestructura", datetime(2024, 1, 15, tzinfo=timezone.utc)),
+        ("computo_redes", datetime(2024, 1, 20, tzinfo=timezone.utc)),
+        ("infraestructura", datetime(2025, 1, 10, tzinfo=timezone.utc)),
+        ("academico", datetime(2025, 2, 5, tzinfo=timezone.utc)),
+    ]
+    for categoria, fecha in datos:
+        incidencia = await api.crear(categoria=categoria)
+        await api.db.incidencias_campus.update_one(
+            {"_id": ObjectId(incidencia["_id"])},
+            {"$set": {"fecha_creacion": fecha}},
+        )
+
+    await _limpiar_cache_analitica()
+    parametros = {"desde": "2024-01-01", "hasta": "2025-02-28"}
+    respuesta = await api.c.get(
+        "/analitica/tendencia",
+        params=parametros,
+        headers=api.h("directivo"),
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    filas = respuesta.json()
+    assert [(fila["periodo"], fila["categoria"]) for fila in filas] == sorted(
+        (fila["periodo"], fila["categoria"]) for fila in filas
+    )
+    assert {(fila["periodo"], fila["categoria"], fila["total"]) for fila in filas} == {
+        ("2024-01", "computo_redes", 1),
+        ("2024-01", "infraestructura", 1),
+        ("2025-01", "infraestructura", 1),
+        ("2025-02", "academico", 1),
+    }
+
+    infra = await api.c.get(
+        "/analitica/tendencia",
+        params={**parametros, "categoria": "infraestructura"},
+        headers=api.h("coordinador_infra"),
+    )
+    fuera_de_alcance = await api.c.get(
+        "/analitica/tendencia",
+        params={**parametros, "categoria": "computo_redes"},
+        headers=api.h("coordinador_infra"),
+    )
+    assert {(fila["periodo"], fila["total"]) for fila in infra.json()} == {
+        ("2024-01", 1),
+        ("2025-01", 1),
+    }
+    assert fuera_de_alcance.json() == []
+
+
+async def test_analitica_f2_403_reportante(api):
+    for ruta in (
+        "/analitica/aulas-cronicas",
+        "/analitica/carga-tecnicos",
+        "/analitica/tendencia",
+    ):
+        respuesta = await api.c.get(ruta, headers=api.h("reportante_a"))
+        assert respuesta.status_code == 403, (ruta, respuesta.text)
+        assert respuesta.json()["error"] == "sin_permiso"
+
+
+async def test_reportante_no_ve_analitica_403(api):
+    r = await api.c.get("/analitica/edificios", headers=api.h("reportante_a"))
+    assert r.status_code == 403
+    assert "horas_invertidas" not in r.text
+    assert "horas_resolucion_prom" not in r.text
+    assert (await api.c.get("/incidencias", headers=api.h("reportante_a"))).status_code == 200
 
 
 # ---------- IA ----------
 
 ANALISIS = AnalisisImagen(
-    es_incidencia_valida=True, categoria="infraestructura", titulo="Luminaria fundida",
-    descripcion="Se observa una luminaria apagada", prioridad_sugerida="baja", tags=["luminaria"],
-    campos_detectados=[{"nombre": "tipo", "valor": "luminaria"}], confianza=0.9, advertencias=[],
+    es_incidencia_valida=True,
+    categoria="infraestructura",
+    titulo="Luminaria fundida",
+    descripcion="Se observa una luminaria apagada",
+    prioridad_sugerida="baja",
+    tags=["luminaria"],
+    campos_detectados=[{"nombre": "tipo", "valor": "luminaria"}],
+    confianza=0.9,
+    advertencias=[],
+    detalle_infra={"tipo_dano": "luminaria", "riesgo_seguridad": "bajo"},
 )
-PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+
+def _imagen_png(ancho=200, alto=200):
+    salida = BytesIO()
+    Image.new("RGB", (ancho, alto), "white").save(salida, format="PNG")
+    return salida.getvalue()
+
+
+PNG = _imagen_png()
+
+
+@pytest_asyncio.fixture(autouse=True, loop_scope="session")
+async def limpiar_estado_ia(api):
+    redis = get_redis()
+    claves = [clave async for clave in redis.scan_iter(match="ia:*")]
+    if claves:
+        await redis.delete(*claves)
 
 
 @pytest.fixture
@@ -89,18 +463,133 @@ def ia_falsa(monkeypatch):
     return llamadas
 
 
-async def _post(api, quien="reportante_a", nombre="foto.png", datos=PNG, mime="image/png", contexto=None):
-    data = {"contexto": contexto} if contexto else None
-    return await api.c.post("/ia/analizar-imagen", files={"imagen": (nombre, datos, mime)}, data=data,
-                            headers=api.h(quien))
+@pytest.fixture
+def reintentos_rapidos(monkeypatch):
+    esperas = []
+
+    async def esperar(segundos):
+        esperas.append(segundos)
+
+    monkeypatch.setattr(ia_service, "IA_TIMEOUT_SEGUNDOS", 0.01)
+    monkeypatch.setattr(ia_service, "_esperar", esperar)
+    monkeypatch.setattr(ia_service, "_aleatorio_uniforme", lambda minimo, maximo: maximo)
+    return esperas
+
+
+def _error_http(status):
+    # Así llega al router un 4xx/429/5xx ya traducido por el adaptador del proveedor.
+    return error_http(status)
+
+
+async def _post(
+    api,
+    quien="reportante_a",
+    nombre="foto.png",
+    datos=PNG,
+    mime="image/png",
+    contexto=None,
+    extra=None,
+):
+    data = {**({"contexto": contexto} if contexto else {}), **(extra or {})} or None
+    return await api.c.post(
+        "/ia/analizar-imagen", files={"imagen": (nombre, datos, mime)}, data=data, headers=api.h(quien)
+    )
 
 
 async def test_ia_ok(api, ia_falsa):
     r = await _post(api, contexto="pasillo del edificio A")
     assert r.status_code == 200, r.text
-    assert r.json()["categoria"] == "infraestructura"
-    AnalisisImagen.model_validate(r.json())
+    assert r.json()["accion"] == "formulario"
+    assert r.json()["accion_asistida"] == "autollenar"
+    assert r.json()["motivos"]
+    assert r.json()["mensaje"]
+    assert r.json()["analisis"]["categoria"] == "infraestructura"
+    assert r.json()["cache"] is False
+    RespuestaIA.model_validate(r.json())
     assert ia_falsa == [(len(PNG), "image/png", "pasillo del edificio A")]
+
+
+async def test_ia_cache_conserva_decision(api, ia_falsa):
+    primera = await _post(api, contexto="pasillo norte")
+    segunda = await _post(api, contexto="pasillo norte")
+
+    assert primera.json()["cache"] is False
+    assert segunda.json()["cache"] is True
+    assert segunda.json()["accion_asistida"] == primera.json()["accion_asistida"] == "autollenar"
+    assert segunda.json()["analisis_id"] != primera.json()["analisis_id"]
+    assert len(ia_falsa) == 1
+
+
+async def test_ia_cache_hit_no_consume_cupo(api, ia_falsa):
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+
+    primera = await _post(api, contexto="  pasillo   del edificio A ")
+    cupos_tras_miss = await redis.mget(*claves_cupo)
+    segunda = await _post(api, contexto="pasillo del edificio A")
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json()["cache"] is False
+    assert segunda.json()["cache"] is True
+    assert ia_falsa == [(len(PNG), "image/png", "pasillo del edificio A")]
+    assert cupos_tras_miss == await redis.mget(*claves_cupo) == ["1", "1"]
+    claves_cache = [clave async for clave in redis.scan_iter(match="ia:cache:*")]
+    assert len(claves_cache) == 1
+    assert 0 < await redis.ttl(claves_cache[0]) <= ia_router.CACHE_TTL
+
+
+async def test_ia_cache_distinta_por_pistas(api, ia_falsa):
+    primera = await _post(api, contexto="pasillo norte")
+    segunda = await _post(api, contexto="laboratorio de redes")
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json()["cache"] is segunda.json()["cache"] is False
+    assert len(ia_falsa) == 2
+
+
+async def test_ia_clave_cache_varia_con_prompt_y_proveedor():
+    def clave(**cambios):
+        valores = {"usuario_id": "u1", "prompt_version": "v1", "proveedor": "anthropic", "modelo": "modelo"} | cambios
+        return ia_router._clave_cache(PNG, "pasillo", **valores)
+
+    claves = {clave(), clave(prompt_version="v2"), clave(proveedor="otro"), clave(usuario_id="u2")}
+    assert len(claves) == 4
+
+
+async def test_ia_cache_no_se_comparte_entre_usuarios(api, ia_falsa):
+    primera = await _post(api, quien="reportante_a")
+    segunda = await _post(api, quien="tecnico_infra")
+
+    assert primera.status_code == segunda.status_code == 200
+    assert primera.json()["cache"] is segunda.json()["cache"] is False
+    assert len(ia_falsa) == 2
+
+
+async def test_ia_rechaza_falso_jpeg_415(api, ia_falsa):
+    r = await _post(api, nombre="programa.jpg", datos=b"MZ" + b"\0" * 100, mime="image/jpeg")
+    assert r.status_code == 415, r.text
+    assert "JPEG, PNG o WebP" in r.json()["detalle"]
+    assert ia_falsa == []
+
+
+async def test_ia_png_renombrado_ok(api, ia_falsa):
+    r = await _post(api, nombre="foto.jpg", datos=PNG, mime="image/jpeg")
+    assert r.status_code == 200, r.text
+    assert ia_falsa == [(len(PNG), "image/png", None)]
+
+
+async def test_ia_imagen_pequena_400(api, ia_falsa):
+    r = await _post(api, datos=_imagen_png(100, 100))
+    assert r.status_code == 400, r.text
+    assert "200–2600 px" in r.json()["detalle"]
+    assert ia_falsa == []
+
+
+async def test_ia_imagen_grande_413(api, ia_falsa):
+    r = await _post(api, datos=b"\x89PNG\r\n\x1a\n" + b"0" * (5 * 1024 * 1024))
+    assert r.status_code == 413, r.text
+    assert "5 MB" in r.json()["detalle"]
+    assert ia_falsa == []
 
 
 @pytest.mark.parametrize("quien,esperado", [("directivo", 403), ("jefe_a", 403), ("tecnico_infra", 200)])
@@ -108,14 +597,17 @@ async def test_ia_permisos(api, ia_falsa, quien, esperado):
     assert (await _post(api, quien=quien)).status_code == esperado
 
 
-@pytest.mark.parametrize("nombre,mime,datos", [
-    ("a.txt", "text/plain", b"hola"),
-    ("a.gif", "image/gif", b"GIF89a"),
-    ("grande.png", "image/png", b"0" * (5 * 1024 * 1024 + 1)),
-], ids=["texto", "gif", "mayor_5mb"])
-async def test_ia_archivo_invalido(api, ia_falsa, nombre, mime, datos):
+@pytest.mark.parametrize(
+    "nombre,mime,datos",
+    [
+        ("a.txt", "text/plain", b"hola"),
+        ("a.gif", "image/gif", b"GIF89a"),
+    ],
+    ids=["texto", "gif"],
+)
+async def test_ia_formato_no_permitido(api, ia_falsa, nombre, mime, datos):
     r = await _post(api, nombre=nombre, datos=datos, mime=mime)
-    assert r.status_code == 400, r.text
+    assert r.status_code == 415, r.text
     assert ia_falsa == []
 
 
@@ -124,17 +616,382 @@ async def test_ia_sin_imagen(api, ia_falsa):
     assert r.status_code == 400
 
 
-async def test_ia_deshabilitada(api, ia_falsa, monkeypatch):
-    monkeypatch.setattr(settings, "ia_habilitada", False)
-    assert (await _post(api)).status_code == 503
-    assert ia_falsa == []
+async def test_ia_apagada_503(api, ia_falsa):
+    apagada = await api.c.patch("/config/ia", json={"habilitada": False}, headers=api.h("admin"))
+    assert apagada.status_code == 200, apagada.text
+    try:
+        assert (await _post(api)).status_code == 503
+        assert ia_falsa == []
+    finally:
+        restaurada = await api.c.patch("/config/ia", json={"habilitada": True}, headers=api.h("admin"))
+        assert restaurada.status_code == 200, restaurada.text
 
 
-async def test_ia_error_proveedor(api, monkeypatch):
+async def test_ia_fallo_devuelve_cupo(api, monkeypatch):
     async def falla(*a, **k):
         raise RuntimeError("anthropic caído")
 
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+    await redis.mset({claves_cupo[0]: 4, claves_cupo[1]: 7})
     monkeypatch.setattr(ia_router, "analizar_imagen", falla)
     r = await _post(api)
+
     assert r.status_code == 503
     assert "anthropic" not in r.text.lower()
+    assert await redis.mget(*claves_cupo) == ["4", "7"]
+
+
+async def test_ia_sin_redis_falla_cerrado(api, ia_falsa, monkeypatch):
+    def redis_caido():
+        raise RuntimeError("redis caído")
+
+    monkeypatch.setattr(ia_router, "get_redis", redis_caido)
+    r = await _post(api, contexto="pasillo")
+
+    # Sin Redis no se puede contabilizar el cupo: no se llama al proveedor (costo acotado).
+    assert r.status_code == 503, r.text
+    assert ia_falsa == []
+
+
+async def test_ia_timeout_reintenta_y_503(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def proveedor_lento(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", proveedor_lento)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert r.json()["detalle"] == "No fue posible analizar la imagen; llena el formulario manualmente"
+    assert intentos == 2
+    assert reintentos_rapidos == [ia_service.BACKOFF_MAX_SEGUNDOS]
+    assert "secreto" not in r.text.lower()
+
+
+async def test_ia_429_reintenta_una_vez(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def limitado(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(429)
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", limitado)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 2
+    assert len(reintentos_rapidos) == 1
+    assert "credencial-secreta" not in r.text
+
+
+async def test_ia_5xx_reintenta_una_vez(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def no_disponible(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(500)
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", no_disponible)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 2
+    assert len(reintentos_rapidos) == 1
+
+
+async def test_ia_4xx_sin_reintento(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def solicitud_invalida(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(400)
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", solicitud_invalida)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 1
+    assert reintentos_rapidos == []
+
+
+async def test_ia_reintento_devuelve_cupo_una_sola_vez(api, monkeypatch, reintentos_rapidos):
+    intentos = 0
+
+    async def limitado(*args, **kwargs):
+        nonlocal intentos
+        intentos += 1
+        raise _error_http(429)
+
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+    await redis.mset({claves_cupo[0]: 4, claves_cupo[1]: 7})
+    monkeypatch.setattr(ia_router, "analizar_imagen", limitado)
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert intentos == 2
+    assert await redis.mget(*claves_cupo) == ["4", "7"]
+
+
+async def test_ia_presupuesto_total_menor_al_timeout_del_cliente():
+    # El cliente (frontend/src/api/client.ts, TIMEOUT_IA_MS) aborta a los 30 s.
+    peor_caso = ia_service.IA_INTENTOS_MAXIMOS * ia_service.IA_TIMEOUT_SEGUNDOS + ia_service.BACKOFF_MAX_SEGUNDOS
+    assert ia_service.IA_DEADLINE_TOTAL_SEGUNDOS <= 28
+    assert peor_caso <= ia_service.IA_DEADLINE_TOTAL_SEGUNDOS
+
+
+async def test_crear_incidencia_con_ia_caida(api, monkeypatch):
+    async def falla(*_a, **_k):
+        raise RuntimeError("proveedor caído")
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", falla)
+    assert (await _post(api)).status_code == 503
+    creada = await api.c.post("/incidencias", json=cuerpo(), headers=api.h("reportante_a"))
+    assert creada.status_code == 201, creada.text
+    assert "ia_sugerencia" not in await api.doc(creada.json()["_id"])
+
+
+async def test_payload_ia_sin_datos_personales(api, monkeypatch):
+    capturado = {}
+
+    class Mensajes:
+        async def create(self, **kwargs):
+            capturado.update(kwargs)
+            return SimpleNamespace(
+                stop_reason="end_turn",
+                content=[SimpleNamespace(type="text", text=ANALISIS.model_dump_json())],
+            )
+
+    cliente = SimpleNamespace(beta=SimpleNamespace(messages=Mensajes()))
+    monkeypatch.setattr(settings, "ia_proveedor", "claude")
+    adaptador = ProveedorClaude(api_key="", modelo=settings.ia_modelo, cliente=cliente)
+    monkeypatch.setitem(vision._instancias, ("claude", settings.ia_modelo), adaptador)
+    usuario = api.u["reportante_a"]
+    contexto = f"Reportó {usuario['nombre']} ({usuario['correo']}) en el pasillo"
+    r = await _post(api, contexto=contexto)
+    assert r.status_code == 200, r.text
+    payload = json.dumps(capturado, default=str)
+    assert usuario["nombre"] not in payload
+    assert usuario["correo"] not in payload
+    assert "[dato omitido]" in payload
+
+
+# ---------- Configuración de IA ----------
+
+
+async def test_config_ia_lectura_actualizacion_persistencia_y_cache(api):
+    inicial = await api.c.get("/config/ia", headers=api.h("admin"))
+    assert inicial.status_code == 200, inicial.text
+    try:
+        r = await api.c.patch(
+            "/config/ia",
+            json={"habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301},
+            headers=api.h("admin"),
+        )
+        assert r.status_code == 200, r.text
+        esperado = {**inicial.json(), "habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301}
+        assert r.json() == esperado
+        doc = await api.db.configuracion_ia.find_one({"_id": "ia"})
+        assert {k: doc[k] for k in esperado} == esperado
+        cache = await config_ia_service.get_redis().get(config_ia_service.CLAVE_CACHE)
+        assert json.loads(cache) == esperado
+        ttl = await config_ia_service.get_redis().ttl(config_ia_service.CLAVE_CACHE)
+        assert 0 < ttl <= 60
+        assert (await api.c.get("/config/ia", headers=api.h("admin"))).json() == esperado
+    finally:
+        restaurada = await api.c.patch("/config/ia", json=inicial.json(), headers=api.h("admin"))
+        assert restaurada.status_code == 200, restaurada.text
+
+
+async def test_config_ia_403_no_admin(api):
+    for metodo in ("get", "patch"):
+        kwargs = {"json": {"habilitada": False}} if metodo == "patch" else {}
+        r = await getattr(api.c, metodo)("/config/ia", headers=api.h("directivo"), **kwargs)
+        assert r.status_code == 403, r.text
+
+
+async def test_config_ia_401(api):
+    assert (await api.c.get("/config/ia")).status_code == 401
+    assert (await api.c.patch("/config/ia", json={"habilitada": False})).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"habilitada": None},
+        {"limite_diario_usuario": 0},
+        {"limite_diario_usuario": 1001},
+        {"limite_diario_global": 0},
+        {"limite_diario_global": 100001},
+        {"extra": True},
+    ],
+)
+async def test_config_ia_400_limites_invalidos(api, body):
+    assert (await api.c.patch("/config/ia", json=body, headers=api.h("admin"))).status_code == 400
+
+
+async def test_config_ia_sin_redis_usa_mongo(api, monkeypatch):
+    class RedisCaido:
+        async def get(self, *_a, **_k):
+            raise RedisError("caído")
+
+        async def set(self, *_a, **_k):
+            raise RedisError("caído")
+
+    inicial = await api.db.configuracion_ia.find_one({"_id": "ia"})
+    monkeypatch.setattr(config_ia_service, "get_redis", lambda: RedisCaido())
+    try:
+        r = await api.c.get("/config/ia", headers=api.h("admin"))
+        assert r.status_code == 200, r.text
+        nuevo_limite = inicial["limite_diario_usuario"] + 1
+        cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": nuevo_limite}, headers=api.h("admin"))
+        assert cambio.status_code == 200, cambio.text
+        doc = await api.db.configuracion_ia.find_one({"_id": "ia"})
+        assert doc["limite_diario_usuario"] == nuevo_limite
+    finally:
+        restaurada = await api.c.patch(
+            "/config/ia",
+            json={k: inicial[k] for k in ("habilitada", "limite_diario_usuario", "limite_diario_global")},
+            headers=api.h("admin"),
+        )
+        assert restaurada.status_code == 200, restaurada.text
+
+
+async def test_bd_valida_configuracion_ia(api):
+    with pytest.raises(WriteError) as exc:
+        await api.db.configuracion_ia.update_one({"_id": "ia"}, {"$set": {"limite_diario_usuario": 0}})
+    assert exc.value.code == 121
+
+
+async def test_ia_usa_proveedor_configurado(api, monkeypatch):
+    llamadas = []
+
+    class ProveedorFalso:
+        nombre = "gemini"
+        modelo = "modelo-falso"
+
+        async def analizar(self, imagen, media_type, pistas):
+            llamadas.append((media_type, pistas))
+            return ANALISIS
+
+    monkeypatch.setattr(settings, "ia_proveedor", "gemini")
+    monkeypatch.setattr(settings, "gemini_modelo", "modelo-falso")
+    monkeypatch.setitem(vision._instancias, ("gemini", "modelo-falso"), ProveedorFalso())
+    r = await _post(api, contexto="pasillo")
+
+    assert r.status_code == 200, r.text
+    assert llamadas == [("image/png", "pasillo")]
+    claves = [clave async for clave in get_redis().scan_iter(match="ia:cache:*")]
+    esperada = ia_router._clave_cache(
+        PNG,
+        "pasillo",
+        usuario_id=api.oid("reportante_a"),
+        prompt_version=ia_service.PROMPT_VERSION,
+        proveedor="gemini",
+        modelo="modelo-falso",
+    )
+    assert claves == [esperada]
+
+
+async def test_ia_capa_gratuita_bloqueada_devuelve_503_y_cupo(api, monkeypatch):
+    monkeypatch.setattr(settings, "ia_proveedor", "gemini")
+    monkeypatch.setattr(settings, "gemini_capa", "gratuita")
+    monkeypatch.setattr(settings, "ia_permitir_capa_gratuita", False)
+    monkeypatch.setattr(settings, "gemini_modelo", "modelo-bloqueado")
+    redis = get_redis()
+    claves_cupo = ia_router._claves_cupo(api.oid("reportante_a"), datetime.now(timezone.utc))
+    r = await _post(api)
+
+    assert r.status_code == 503
+    assert await redis.mget(*claves_cupo) == ["0", "0"]
+    assert isinstance(ErrorProveedor("x"), ia_service.IAError)
+
+
+# ---------- Compuertas G1–G9 y analisis_id (T-033) ----------
+
+
+async def test_cliente_no_puede_forzar_agentico(api, ia_falsa):
+    r = await _post(api, extra={"accion": "agentico", "accion_asistida": "autollenar"})
+    assert r.status_code == 200, r.text
+    assert r.json()["accion"] == "formulario"
+
+
+async def test_analisis_id_otro_usuario_404(api, ia_falsa):
+    creado = await _post(api)
+    assert creado.status_code == 200, creado.text
+    analisis_id = creado.json()["analisis_id"]
+    ruta = f"/ia/analisis/{analisis_id}"
+
+    propio = await api.c.get(ruta, headers=api.h("reportante_a"))
+    assert propio.status_code == 200
+    assert propio.json() == creado.json()
+    assert (await api.c.get(ruta)).status_code == 401
+    assert (await api.c.get(ruta, headers=api.h("directivo"))).status_code == 403
+    assert (await api.c.get("/ia/analisis/no-es-uuid", headers=api.h("reportante_a"))).status_code == 400
+
+    ajeno = await api.c.get(ruta, headers=api.h("reportante_b"))
+    inexistente = await api.c.get(f"/ia/analisis/{uuid.uuid4()}", headers=api.h("reportante_b"))
+    assert (ajeno.status_code, ajeno.json()) == (404, inexistente.json())
+
+    await get_redis().expire(clave_analisis(analisis_id), 0)
+    expirado = await api.c.get(ruta, headers=api.h("reportante_a"))
+    assert (expirado.status_code, expirado.json()) == (404, inexistente.json())
+
+
+async def test_analisis_redis_ttl_propietario_hash_y_lectura_sin_renovar(api, ia_falsa):
+    r = await _post(api)
+    analisis_id = r.json()["analisis_id"]
+    clave = clave_analisis(analisis_id)
+    redis = get_redis()
+    ttl_antes = await redis.ttl(clave)
+    crudo = await redis.get(clave)
+    registro = json.loads(crudo)
+
+    assert 0 < ttl_antes <= ANALISIS_TTL
+    assert registro["usuario_id"] == str(api.oid("reportante_a"))
+    assert registro["imagen_sha256"] == hashlib.sha256(PNG).hexdigest()
+    assert registro["prompt_version"] == ia_service.PROMPT_VERSION
+    assert len(registro["compuertas"]) == 9
+    assert registro["imagen_sha256"] not in analisis_id
+    assert PNG.hex() not in crudo
+
+    consultado = await api.c.get(f"/ia/analisis/{analisis_id}", headers=api.h("reportante_a"))
+    assert consultado.status_code == 200
+    assert 0 < await redis.ttl(clave) <= ttl_antes
+
+
+async def test_cache_hit_emite_analisis_id_nuevo(api, ia_falsa):
+    primero = (await _post(api)).json()
+    segundo = (await _post(api)).json()
+
+    assert segundo["cache"] is True
+    assert primero["analisis_id"] != segundo["analisis_id"]
+    assert len(ia_falsa) == 1
+
+
+async def test_analisis_temporal_sin_redis_503(api, ia_falsa, monkeypatch):
+    async def guardar_falla(*_a, **_k):
+        raise RedisError("sin conexión")
+
+    monkeypatch.setattr(ia_router, "guardar_analisis", guardar_falla)
+    assert (await _post(api)).status_code == 503
+
+    def redis_caido():
+        raise RuntimeError("redis caído")
+
+    monkeypatch.setattr(ia_router, "get_redis", redis_caido)
+    consulta = await api.c.get(f"/ia/analisis/{uuid.uuid4()}", headers=api.h("reportante_a"))
+    assert consulta.status_code == 503
+
+
+async def test_openapi_expone_solo_las_tres_acciones(api):
+    esquema = (await api.c.get("/openapi.json")).json()["components"]["schemas"]["RespuestaIA"]
+    assert esquema["properties"]["accion"]["enum"] == ["agentico", "formulario", "duplicado"]

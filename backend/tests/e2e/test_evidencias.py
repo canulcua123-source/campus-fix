@@ -9,7 +9,15 @@ from app.core.config import settings
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
-EXT = {"image/jpeg": {"jpg", "jpeg"}, "image/png": {"png"}, "image/webp": {"webp"}, "application/pdf": {"pdf"}}
+EXT = {
+    "image/jpeg": {"jpg", "jpeg"},
+    "image/png": {"png"},
+    "image/webp": {"webp"},
+    "application/pdf": {"pdf"},
+    "video/mp4": {"mp4"},
+    "video/quicktime": {"mov"},
+    "video/webm": {"webm"},
+}
 
 
 def _meta(mime="image/jpeg", nombre="foto.jpg", peso=500_000):
@@ -21,7 +29,9 @@ async def _firma(api, inc_id, quien="reportante_a", **kw):
 
 
 async def _registrar(api, inc_id, evidencia_id: str, quien="reportante_a"):
-    return await api.c.post(f"/incidencias/{inc_id}/evidencias", json={"evidencia_id": evidencia_id}, headers=api.h(quien))
+    return await api.c.post(
+        f"/incidencias/{inc_id}/evidencias", json={"evidencia_id": evidencia_id}, headers=api.h(quien)
+    )
 
 
 @pytest.mark.parametrize("mime", list(EXT))
@@ -39,10 +49,23 @@ async def test_firma_ok(api, mime):
     assert "content-length" in f["upload_url"].lower() and "content-type" in f["upload_url"].lower()
 
 
-@pytest.mark.parametrize("kw", [
-    {"mime": "image/gif"}, {"mime": "text/html"}, {"peso": 0}, {"peso": 10 * 1024 * 1024 + 1},
-    {"nombre": "../../etc/passwd"}, {"nombre": "a/b.jpg"}, {"nombre": "a\\b.jpg"}, {"nombre": "..jpg"}, {"nombre": ""},
-], ids=["gif", "html", "peso0", "peso_grande", "traversal", "slash", "backslash", "dotdot", "vacio"])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"mime": "image/gif"},
+        {"mime": "text/html"},
+        {"peso": 0},
+        {"peso": 10 * 1024 * 1024 + 1},
+        {"mime": "video/mp4", "nombre": "v.mp4", "peso": 50 * 1024 * 1024 + 1},
+        {"mime": "video/x-msvideo", "nombre": "v.avi"},
+        {"nombre": "../../etc/passwd"},
+        {"nombre": "a/b.jpg"},
+        {"nombre": "a\\b.jpg"},
+        {"nombre": "..jpg"},
+        {"nombre": ""},
+    ],
+    ids=["gif", "html", "peso0", "peso_grande", "video_grande", "avi", "traversal", "slash", "backslash", "dotdot", "vacio"],
+)
 async def test_firma_invalida_400(api, kw):
     inc = await api.crear()
     r = await _firma(api, inc["_id"], **kw)
@@ -139,3 +162,21 @@ async def test_firmas_pendientes_limitadas(api):
         for i in range(5):
             assert (await _firma(api, inc["_id"], quien=quien, nombre=f"p{i}.jpg")).status_code == 200
     assert (await _firma(api, inc["_id"], quien="coordinador_infra", nombre="p10.jpg")).status_code == 409
+
+
+async def test_video_hasta_50mb_y_solo_uno_por_incidencia(api):
+    inc = await api.crear()
+    r = await _firma(api, inc["_id"], mime="video/mp4", nombre="falla.mp4", peso=45 * 1024 * 1024)
+    assert r.status_code == 200, r.text
+    assert r.json()["url_storage"].endswith(".mp4")
+    # Dos firmas de video en paralelo: solo la primera que se registre entra.
+    r2 = await _firma(api, inc["_id"], mime="video/webm", nombre="otra.webm", peso=1_000_000)
+    assert r2.status_code == 200, r2.text
+    assert (await _registrar(api, inc["_id"], r.json()["evidencia_id"])).status_code == 201
+    assert (await _registrar(api, inc["_id"], r2.json()["evidencia_id"])).status_code == 409
+    # Con un video ya registrado no se firma otro, pero sí fotos.
+    assert (await _firma(api, inc["_id"], mime="video/quicktime", nombre="c.mov")).status_code == 409
+    assert (await _firma(api, inc["_id"])).status_code == 200
+    doc = await api.db.incidencias_campus.find_one({"_id": ObjectId(inc["_id"])})
+    assert [e["tipo_mime"] for e in doc["evidencias_adjuntas"]] == ["video/mp4"]
+    assert doc["evidencias_adjuntas"][0]["peso_kb"] == 45 * 1024

@@ -4,6 +4,24 @@
     "description": "Banco formal de pruebas de la API UTM Desk. Ejecutar en orden con el environment UTM-Desk.local.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response.code === 429) {",
+          "  pm.test('Contrato del 429', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('limite'); pm.expect(j.detalle).to.be.a('string'); });",
+          "  const retryAfter = pm.response.headers.get('Retry-After');",
+          "  if (retryAfter !== undefined && retryAfter !== null) {",
+          "    pm.test('Retry-After numérico cuando está presente', function () { pm.expect(retryAfter).to.match(/^\\d+$/); });",
+          "  }",
+          "  pm.test('El 429 no refleja credenciales', function () { const texto = pm.response.text(); const correo = pm.variables.get('correo'); const password = pm.variables.get('password'); if (correo) pm.expect(texto).not.to.include(correo); if (password) pm.expect(texto).not.to.include(password); });",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
       "name": "Auth",
@@ -18,7 +36,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Devuelve access_token y usuario', function () { const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.expect(j.usuario).to.have.property('rol'); pm.expect(j.usuario.permisos).to.be.an('array'); pm.environment.set('token', j.access_token); });"
+                  "pm.test('Devuelve access_token y usuario sin refresh en JSON', function () { const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.expect(j.usuario).to.have.property('rol'); pm.expect(j.usuario.permisos).to.be.an('array'); pm.expect(j).not.to.have.property('refresh_token'); pm.environment.set('token', j.access_token); });",
+                  "pm.test('Cookie refresh HttpOnly con atributos seguros', function () { const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('HttpOnly'); pm.expect(c).to.include('Path=/auth'); pm.expect(c.toLowerCase()).to.match(/samesite=(lax|none)/); });"
                 ]
               }
             }
@@ -50,6 +69,36 @@
                   "language": "json"
                 }
               }
+            }
+          }
+        },
+        {
+          "name": "Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rota cookie y devuelve solo access token', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('access_token', 'token_type'); pm.expect(j.access_token).to.be.a('string'); pm.expect(j.token_type).to.eql('bearer'); pm.environment.set('token', j.access_token); const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('HttpOnly'); pm.expect(c).to.include('Path=/auth'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Lee el refresh exclusivamente de la cookie HttpOnly, lo rota y actualiza {{token}} con el nuevo access token.",
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
             }
           }
         },
@@ -90,6 +139,36 @@
           }
         },
         {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 204 sin cuerpo', function () { pm.response.to.have.status(204); pm.expect(pm.response.text()).to.eql(''); });",
+                  "pm.test('Expira la cookie refresh', function () { const c = pm.response.headers.get('Set-Cookie') || ''; pm.expect(c).to.include('refresh_token='); pm.expect(c).to.include('Max-Age=0'); pm.expect(c).to.include('Path=/auth'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Revoca la familia de refresh actual y elimina la cookie. Es idempotente si no existe una sesion vigente.",
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        },
+        {
           "name": "Health check",
           "event": [
             {
@@ -115,6 +194,276 @@
               "path": [
                 "health"
               ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Revisión de alcance T-069",
+      "description": "Casos ficticios de BOLA, permisos y no enumeración. Requieren preparar los identificadores y tokens indicados en el entorno local.",
+      "item": [
+        {
+          "name": "Alcance REP: incidencia ajena oculta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de alcance responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('No revela datos de la incidencia', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('codigo', 'titulo', 'reportante', 'ubicacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
+            "description": "Un reportante no distingue una incidencia ajena de una inexistente.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_ajena_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_ajena_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Alcance TEC: incidencia de otra área oculta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de área responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('No revela el recurso', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('_id', 'codigo', 'categoria', 'ubicacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}"
+              }
+            ],
+            "description": "Un técnico de área no puede consultar una incidencia de otra área.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_fuera_area_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Alcance COO: actualización fuera de área oculta",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de área responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('No devuelve estado ni asignación', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('estado', 'tecnico_asignado'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Un coordinador no puede asignar una incidencia de otra área.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/asignacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_fuera_area_id}}",
+                "asignacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tecnico_id\": \"{{tecnico_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Permiso DIR: escritura rechazada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sin capacidad de escritura responde 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('No devuelve el recurso', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('_id', 'codigo', 'tags'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_directivo}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "El alcance global de DIR no concede tags:gestionar; la falta de capacidad general responde 403.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/tags",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "tags"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tags\": [\"no_autorizado\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Gestor delegado: usuario no gestionable oculto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Usuario no gestionable responde 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('Cuerpo no revelador', function () { const j = pm.response.json(); pm.expect(j).to.eql({detail: 'Usuario no encontrado'}); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_gestor_delegado}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Un gestor delegado recibe la misma respuesta que para un usuario inexistente.",
+            "url": {
+              "raw": "{{base_url}}/usuarios/{{usuario_no_gestionable_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "{{usuario_no_gestionable_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Nombre ficticio\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Límite ADM: no amplía su propio alcance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Autoedición de alcance responde 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('No devuelve el usuario', function () { const j = pm.response.json(); pm.expect(j).to.not.have.any.keys('_id', 'correo', 'rol', 'areas', 'edificios'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Ni ADM puede modificar su propio rol, áreas, edificios o desactivarse.",
+            "url": {
+              "raw": "{{base_url}}/usuarios/{{admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "{{admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"areas\": [\"infraestructura\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         }
@@ -199,7 +548,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Crea una incidencia con detalle de infraestructura.",
+            "description": "Crea una incidencia con detalle de infraestructura y persiste ia_sugerencia solo porque el cliente la envía explícitamente.",
             "url": {
               "raw": "{{base_url}}/incidencias",
               "host": [
@@ -211,7 +560,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"titulo\": \"Filtración de agua en el techo\",\n  \"descripcion\": \"Hay una filtración constante de agua en el techo del salón durante lluvias.\",\n  \"prioridad\": \"media\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio B\",\n    \"piso\": 1,\n    \"aula\": \"Aula 105\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"infraestructura\",\n    \"tipo_dano\": \"filtracion\",\n    \"riesgo_seguridad\": \"medio\",\n    \"requiere_insumos\": true,\n    \"insumos\": [\n      \"sellador\"\n    ],\n    \"requiere_contratista\": false\n  },\n  \"tags\": [\n    \"filtracion\"\n  ]\n}",
+              "raw": "{\n  \"titulo\": \"Filtración de agua en el techo\",\n  \"descripcion\": \"Hay una filtración constante de agua en el techo del salón durante lluvias.\",\n  \"prioridad\": \"media\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio B\",\n    \"piso\": 1,\n    \"aula\": \"Aula 105\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"infraestructura\",\n    \"tipo_dano\": \"filtracion\",\n    \"riesgo_seguridad\": \"medio\",\n    \"requiere_insumos\": true,\n    \"insumos\": [\n      \"sellador\"\n    ],\n    \"requiere_contratista\": false\n  },\n  \"tags\": [\n    \"filtracion\"\n  ],\n  \"ia_sugerencia\": {\n    \"modo\": \"asistido\",\n    \"modelo\": \"claude-opus-5-5\",\n    \"version_prompt\": \"v1\",\n    \"confianza\": 0.91,\n    \"accion\": \"autollenar\",\n    \"campos_autollenados\": [\"titulo\", \"descripcion\", \"tags\"]\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -315,6 +664,94 @@
           }
         },
         {
+          "name": "Mis reportes (propias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
+            "description": "Mis reportes (T-045): solo las incidencias reportadas por el usuario en sesión; se combina con el alcance y con los demás filtros.",
+            "url": {
+              "raw": "{{base_url}}/incidencias?propias=true&estado=abierta",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "propias",
+                  "value": "true"
+                },
+                {
+                  "key": "estado",
+                  "value": "abierta"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tablero: sin asignar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { pm.expect(pm.response.json()).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              }
+            ],
+            "description": "Tablero del coordinador (T-054): `tecnico` acepta el id del técnico asignado o `sin_asignar`; se combina con el alcance.",
+            "url": {
+              "raw": "{{base_url}}/incidencias?tecnico=sin_asignar&prioridad=alta",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "tecnico",
+                  "value": "sin_asignar"
+                },
+                {
+                  "key": "prioridad",
+                  "value": "alta"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Detalle de incidencia",
           "event": [
             {
@@ -337,7 +774,7 @@
                 "description": "Token JWT"
               }
             ],
-            "description": "Obtiene una incidencia por su ObjectId.",
+            "description": "Obtiene una incidencia por su ObjectId.\nEl historial incluye autor_nombre opcional (nombre actual del usuario). No se persiste ni incluye otros datos del directorio.",
             "url": {
               "raw": "{{base_url}}/incidencias/{{incidencia_id}}",
               "host": [
@@ -415,7 +852,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-                  "pm.test('Mensaje de error presente', function () { const j = pm.response.json(); pm.expect(j.detail || j.error || j.message).to.exist; });"
+                  "pm.test('Contrato de error 409', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -559,6 +996,366 @@
       ]
     },
     {
+      "name": "Acciones F2 (T-021)",
+      "description": "Confirmación/reapertura del reportante, comentarios en espera y autoasignación atómica. Preparar los ids indicados en cada solicitud.",
+      "item": [
+        {
+          "name": "Confirmar resolución",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de cierre válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('cerrada'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Requiere {{incidencia_resuelta_id}} en estado resuelta y propiedad del reportante. Conserva fecha_resolucion.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_resuelta_id}}/confirmacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_resuelta_id}}",
+                "confirmacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accion\": \"confirmar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reabrir incidencia dentro de siete días",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de reapertura válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('abierta'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Requiere {{incidencia_reabrir_id}} resuelta hace no más de siete días. Elimina fecha_resolucion.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_reabrir_id}}/confirmacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_reabrir_id}}",
+                "confirmacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa después de la reparación\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Comentario del reportante en espera",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Conserva estado en_espera', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('en_espera'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Requiere {{incidencia_espera_id}} en estado en_espera; solo agrega historial y actualiza la fecha.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_espera_id}}/comentarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_espera_id}}",
+                "comentarios"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comentario\": \"El problema presenta ahora información adicional\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Tomar incidencia disponible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Devuelve técnico asignado', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado', 'tecnico_asignado'); pm.expect(j.ok).to.eql(true); pm.expect(j.tecnico_asignado.usuario_id).to.be.a('string'); pm.expect(j.tecnico_asignado.nombre).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}",
+                "description": "Token de un técnico del área"
+              }
+            ],
+            "description": "Autoasigna atómicamente {{incidencia_disponible_id}} si está en el área, no es terminal y carece de técnico.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_disponible_id}}/tomar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_disponible_id}}",
+                "tomar"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reapertura fuera de plazo (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Requiere {{incidencia_resuelta_vencida_id}} con fecha_resolucion anterior a siete días; no debe escribir historial.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_resuelta_vencida_id}}/confirmacion",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_resuelta_vencida_id}}",
+                "confirmacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accion\": \"reabrir\",\n  \"comentario\": \"La falla continúa fuera del plazo permitido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Autoasignación duplicada (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_tecnico}}",
+                "description": "Token de técnico"
+              }
+            ],
+            "description": "Requiere {{incidencia_tomada_id}} ya asignada; el segundo intento no debe duplicar historial.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_tomada_id}}/tomar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_tomada_id}}",
+                "tomar"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retirar mi reporte (T-023)",
+      "description": "Retiro atómico por el reportante original dentro de los primeros 15 minutos, únicamente si la incidencia sigue abierta y sin técnico asignado.",
+      "item": [
+        {
+          "name": "Retirar reporte elegible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta de retiro válida', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('ok', 'estado'); pm.expect(j.ok).to.eql(true); pm.expect(j.estado).to.eql('retirada'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              }
+            ],
+            "description": "Requiere {{incidencia_retirar_id}} propia, abierta, sin técnico y creada hace 15 minutos o menos.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_retirar_id}}/retirar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_retirar_id}}",
+                "retirar"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Retiro no elegible (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token del reportante propietario"
+              }
+            ],
+            "description": "Requiere {{incidencia_retirar_conflicto_id}} vencida, asignada o en estado distinto de abierta.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_retirar_conflicto_id}}/retirar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_retirar_conflicto_id}}",
+                "retirar"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Asignación",
       "description": "Asignación de incidencias a técnicos.",
       "item": [
@@ -604,6 +1401,199 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"tecnico_id\": \"{{tecnico_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cambiar prioridad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ok y prioridad', function () { const j = pm.response.json(); pm.expect(j).to.eql({ok: true, prioridad: 'alta'}); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "El coordinador cambia la prioridad de una incidencia de su área; queda en la bitácora como tipo 'prioridad'.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"alta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cambiar prioridad: valor inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Prioridad fuera del catálogo responde 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Solo acepta baja, media, alta o critica.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"urgente\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cambiar prioridad: sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sin incidencias:asignar responde 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_directivo}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "DIR no tiene incidencias:asignar.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"alta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cambiar prioridad: fuera de alcance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Fuera de alcance responde 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Un coordinador no puede cambiar la prioridad de una incidencia de otra área.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_fuera_area_id}}/prioridad",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_fuera_area_id}}",
+                "prioridad"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prioridad\": \"alta\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -661,6 +1651,57 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre_archivo\": \"foto-switch.png\",\n  \"tipo_mime\": \"image/png\",\n  \"peso_bytes\": 20480\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Firma de evidencia: video MP4 (≤ 50 MB, 1 por incidencia)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 o 409 si ya hay video', () => pm.expect([200, 409]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.test('clave .mp4', () => pm.expect(pm.response.json().url_storage).to.match(/\\\\.mp4$/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Videos MP4, MOV o WebM hasta 50 MB; solo uno por incidencia (409 si ya hay uno). Fotos y PDF siguen en 10 MB.",
+            "url": {
+              "raw": "{{base_url}}/incidencias/{{incidencia_id}}/evidencias/firma",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias",
+                "{{incidencia_id}}",
+                "evidencias",
+                "firma"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_archivo\": \"falla.mp4\",\n  \"tipo_mime\": \"video/mp4\",\n  \"peso_bytes\": 20971520\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -859,7 +1900,7 @@
       "description": "Indicadores agregados.",
       "item": [
         {
-          "name": "Analítica por edificio",
+          "name": "Edificios",
           "event": [
             {
               "listen": "test",
@@ -890,12 +1931,29 @@
               "path": [
                 "analitica",
                 "edificios"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
               ]
             }
           }
         },
         {
-          "name": "Analítica de tags",
+          "name": "Etiquetas",
           "event": [
             {
               "listen": "test",
@@ -926,6 +1984,547 @@
               "path": [
                 "analitica",
                 "tags"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de KPIs', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('abiertas', 'en_proceso', 'criticas', 'resueltas_periodo'); Object.values(j).forEach(v => { pm.expect(v).to.be.a('number'); pm.expect(v).to.be.at.least(0); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "KPIs sin filtros. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - periodo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Ejemplo con periodo UTC inclusivo por fechas calendario.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - categoría",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Ejemplo filtrado por una categoría válida.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?categoria=infraestructura",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
+              "query": [
+                {
+                  "key": "categoria",
+                  "value": "infraestructura"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - filtros combinados",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Ejemplo con periodo y categoría; los filtros nunca amplían el alcance autorizado.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-01-01&hasta=2026-12-31&categoria=infraestructura",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31"
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - filtro inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Fecha inexistente: debe responder 400 con el contrato común.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen?desde=2026-02-30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-02-30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - sin autenticación",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Solicitud sin JWT: debe responder 401.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen - sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
+            "description": "Reportante sin analitica:ver: debe responder 403.",
+            "url": {
+              "raw": "{{base_url}}/analitica/resumen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "resumen"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Aulas crónicas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de aulas crónicas', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.property('edificio').that.is.a('string'); pm.expect(f).to.have.property('aula').that.is.a('string'); pm.expect(f).to.have.property('total').that.is.a('number').and.at.least(3); if (Object.prototype.hasOwnProperty.call(f, 'piso')) pm.expect(f.piso).to.be.a('number'); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Ubicaciones con al menos tres incidencias creadas en la ventana UTC de los últimos 30 días. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/aulas-cronicas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "aulas-cronicas"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Carga de técnicos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de carga por técnico', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.all.keys('tecnico_id', 'incidencias_activas', 'horas_acumuladas'); pm.expect(f.tecnico_id).to.match(/^[0-9a-f]{24}$/); pm.expect(f.incidencias_activas).to.be.a('number').and.at.least(1); pm.expect(f.horas_acumuladas).to.be.a('number').and.at.least(0); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Incidencias activas asignadas y horas persistidas acumuladas por técnico. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/carga-tecnicos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "carga-tecnicos"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tendencia mensual",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura de tendencia mensual', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(f => { pm.expect(f).to.have.all.keys('periodo', 'categoria', 'total'); pm.expect(f.periodo).to.match(/^\\d{4}-(0[1-9]|1[0-2])$/); pm.expect(['computo_redes', 'infraestructura', 'academico']).to.include(f.categoria); pm.expect(f.total).to.be.a('number').and.at.least(1); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Conteo mensual por categoría usando fecha_creacion en UTC. Requiere analitica:ver.",
+            "url": {
+              "raw": "{{base_url}}/analitica/tendencia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "tendencia"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Métricas de IA (solo admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Agregados de IA sin eventos crudos', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('periodo', 'totales', 'tasa_deshacer', 'tasa_edicion', 'correccion_tecnica_72h', 'cobertura_agentica', 'tiempo_toque_folio', 'compuertas_fallidas', 'latencia_ia', 'errores_ia', 'timeouts_ia', 'costos', 'semanal'); pm.expect(j).not.to.have.any.keys('actor_clave', 'correo', 'nombre'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Tablero agregado exclusivo del rol admin. Filtros opcionales, periodo máximo de 180 días.",
+            "url": {
+              "raw": "{{base_url}}/analitica/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "ia"
+              ],
+              "query": [
+                {
+                  "key": "desde",
+                  "value": "2026-10-01",
+                  "disabled": true
+                },
+                {
+                  "key": "hasta",
+                  "value": "2026-10-31",
+                  "disabled": true
+                },
+                {
+                  "key": "categoria",
+                  "value": "infraestructura",
+                  "disabled": true
+                },
+                {
+                  "key": "proveedor",
+                  "value": "claude",
+                  "disabled": true
+                },
+                {
+                  "key": "modelo",
+                  "value": "claude-opus-5-5",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Métricas IA - no administrador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
+            "description": "Un usuario que no es admin recibe 403 aunque esté autenticado.",
+            "url": {
+              "raw": "{{base_url}}/analitica/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analitica",
+                "ia"
               ]
             }
           }
@@ -945,7 +2544,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Estructura de análisis', function () { const j = pm.response.json(); pm.expect(j.es_incidencia_valida).to.be.a('boolean'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.titulo).to.be.a('string'); pm.expect(j.prioridad_sugerida).to.be.a('string'); pm.expect(j.tags).to.be.an('array'); pm.expect(j.confianza).to.be.within(0,1); });"
+                  "pm.test('Decisión, compuertas y análisis tipados', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['agentico','formulario','duplicado']); pm.expect(j.accion_asistida).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.motivos).to.be.an('array'); pm.expect(j.analisis_id).to.be.a('string'); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.confianza).to.be.within(0,1); if (j.analisis.categoria === 'infraestructura') { pm.expect(['bajo','medio','alto']).to.include(j.analisis.detalle_infra.riesgo_seguridad); } else { pm.expect(j.analisis).not.to.have.property('detalle_infra'); } pm.environment.set('analisis_id', j.analisis_id); });"
                 ]
               }
             }
@@ -959,7 +2558,7 @@
                 "description": "Token JWT"
               }
             ],
-            "description": "Multipart: campo imagen (archivo) y contexto (opcional). Adjunta un archivo antes de enviar.",
+            "description": "Multipart: campo imagen (archivo), contexto (opcional) y calidad_cliente (opcional). Adjunta un archivo antes de enviar. La respuesta indica con cache si el análisis se reutilizó.",
             "url": {
               "raw": "{{base_url}}/ia/analizar-imagen",
               "host": [
@@ -984,8 +2583,478 @@
                   "value": "Foto de un switch apagado en el laboratorio",
                   "type": "text",
                   "description": "Texto opcional (máx. 500)"
+                },
+                {
+                  "key": "calidad_cliente",
+                  "value": "borrosa",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Opcional: pistas del control de calidad del cliente separadas por coma (borrosa, oscura, sobreexpuesta). Con cualquier pista la compuerta G4 no pasa."
                 }
               ]
+            }
+          }
+        },
+        {
+          "name": "Consultar análisis temporal propio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Conserva el identificador', function () { pm.expect(pm.response.json().analisis_id).to.eql(pm.environment.get('analisis_id')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Debe pertenecer al propietario; otro usuario recibe 404"
+              }
+            ],
+            "description": "Consulta sin renovar el TTL. Un ID ajeno, inexistente o expirado responde 404 con el mismo cuerpo.",
+            "url": {
+              "raw": "{{base_url}}/ia/analisis/{{analisis_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "analisis",
+                "{{analisis_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Confirmar adhesión a duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta pública de adhesión', function () { const j = pm.response.json(); pm.expect(j.ok).to.eql(true); pm.expect(j.codigo).to.be.a('string'); pm.expect(j.categoria).to.be.a('string'); pm.expect(j.adhesiones).to.be.at.least(1); pm.expect(j.registrada).to.be.a('boolean'); pm.expect(j).not.to.have.any.keys('usuario_id', 'reportante', 'correo', 'nombre'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Confirma una coincidencia opaca emitida por G8. Es idempotente por usuario y no crea otra incidencia. T-033 aún debe integrar la emisión de coincidencia_id.",
+            "url": {
+              "raw": "{{base_url}}/ia/duplicados/adhesiones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "duplicados",
+                "adhesiones"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"coincidencia_id\": \"{{coincidencia_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar evento de oferta IA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta idempotente y mínima', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('analisis_id', 'evento', 'registrado', 'es_final'); pm.expect(j).not.to.have.any.keys('costo_estimado_usd', 'tokens_entrada', 'actor_clave'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Requiere un analisis_id emitido y ligado al mismo usuario por el backend agéntico. T-033/T-036 aún deben proporcionar esa oferta.",
+            "url": {
+              "raw": "{{base_url}}/ia/eventos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "eventos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analisis_id\": \"{{analisis_id}}\",\n  \"evento\": \"editado\",\n  \"motivo\": \"usuario_edito\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Evento IA - oferta inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/ia/eventos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "eventos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"deshecho\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Evento IA - costo falsificado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "El navegador no puede declarar costo, tokens ni latencia.",
+            "url": {
+              "raw": "{{base_url}}/ia/eventos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "eventos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analisis_id\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"evento\": \"editado\",\n  \"costo_estimado_usd\": 99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "archivo falso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 415', function () { pm.response.to.have.status(415); });",
+                  "pm.test('Mensaje de formato no permitido', function () { const j = pm.response.json(); pm.expect(j.detalle).to.include('JPEG, PNG o WebP'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Envía contenido que no es una imagen bajo un nombre y Content-Type JPEG; debe responder 415.",
+            "url": {
+              "raw": "{{base_url}}/ia/analizar-imagen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ia",
+                "analizar-imagen"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagen",
+                  "type": "file",
+                  "src": "postman/fixtures/no-es-imagen.jpg",
+                  "contentType": "image/jpeg",
+                  "description": "Fixture de texto que simula un JPEG por nombre y Content-Type"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Configuración",
+      "description": "Configuración administrable de IA. MongoDB es la fuente de verdad; Redis conserva una copia por máximo 60 segundos.",
+      "item": [
+        {
+          "name": "Consultar configuración de IA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Límites y estado configurables', function () { const j = pm.response.json(); pm.expect(j.habilitada).to.be.a('boolean'); pm.expect(j.limite_diario_usuario).to.be.a('number'); pm.expect(j.limite_diario_global).to.be.a('number'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              }
+            ],
+            "description": "Solo usuarios con configuracion:gestionar.",
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Modificar configuración de IA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Actualización parcial', function () { const j = pm.response.json(); pm.expect(j.limite_diario_usuario).to.eql(20); pm.expect(j.limite_diario_global).to.eql(300); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Actualización parcial. Los valores iniciales son 20 por usuario y 300 globales.",
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habilitada\": true,\n  \"limite_diario_usuario\": 20,\n  \"limite_diario_global\": 300\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Configuración con límite inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Los límites deben ser enteros positivos dentro de los rangos documentados.",
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limite_diario_usuario\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Configuración sin permiso de administrador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_directivo}}",
+                "description": "Token JWT sin configuracion:gestionar"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Un usuario autenticado sin el permiso recibe 403.",
+            "url": {
+              "raw": "{{base_url}}/config/ia",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "config",
+                "ia"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habilitada\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         }
@@ -1005,7 +3074,7 @@
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
                   "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });",
-                  "pm.test('Roles con clave y permisos', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('clave'); pm.expect(j[0].permisos).to.be.an('array'); } });"
+                  "pm.test('Roles con clave y permisos', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('clave'); pm.expect(j[0].permisos).to.be.an('array'); } const base = j.find((r) => r.clave === 'reportante'); pm.expect(base.sistema).to.eql(true); pm.collectionVariables.set('rol_base_id', base._id); });"
                 ]
               }
             }
@@ -1050,7 +3119,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
-                  "pm.test('Rol creado con _id y clave', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('rol_clave')); pm.expect(j.sistema).to.eql(false); });"
+                  "pm.test('Rol creado con _id y clave', function () { const j = pm.response.json(); pm.expect(j._id).to.be.a('string'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('rol_clave')); pm.expect(j.sistema).to.eql(false); pm.collectionVariables.set('rol_id', j._id); });"
                 ]
               }
             }
@@ -1098,7 +3167,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
-                  "pm.test('Detalle de conflicto', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 409', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('conflicto'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1134,6 +3203,388 @@
                   "language": "json"
                 }
               }
+            }
+          }
+        },
+        {
+          "name": "Editar rol personalizado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rol actualizado', function () { const j = pm.response.json(); pm.expect(j.nombre).to.eql('Rol de prueba editado'); pm.expect(j.sistema).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Edita un rol personalizado; los roles con sistema=true responden 409.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Rol de prueba editado\",\n  \"permisos\": [\n    \"incidencias:ver\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar rol personalizado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rol eliminado', function () { pm.expect(pm.response.json()).to.eql({ok: true}); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Elimina un rol personalizado sin usuarios asignados; roles base o asignados responden 409.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "No editar rol base",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Un administrador no puede modificar un rol con sistema=true.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_base_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_base_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Nombre prohibido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "No eliminar rol base",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Un administrador no puede eliminar un rol con sistema=true.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_base_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_base_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar rol - id inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "El identificador no es un ObjectId válido: 400.",
+            "url": {
+              "raw": "{{base_url}}/roles/no-es-id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "no-es-id"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Nombre prohibido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Editar rol - sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Un reportante no tiene roles:gestionar: 403.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_base_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_base_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Nombre prohibido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Editar rol - no existe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Rol inexistente: 404.",
+            "url": {
+              "raw": "{{base_url}}/roles/0123456789abcdef01234567",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "0123456789abcdef01234567"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Nombre prohibido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar rol - sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Un reportante no tiene roles:gestionar: 403.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_base_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_base_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Eliminar rol - no existe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Rol inexistente: 404.",
+            "url": {
+              "raw": "{{base_url}}/roles/0123456789abcdef01234567",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "0123456789abcdef01234567"
+              ]
             }
           }
         }
@@ -1237,6 +3688,48 @@
           }
         },
         {
+          "name": "Técnicos asignables (coordinador)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respuesta es un arreglo', function () { pm.expect(pm.response.json()).to.be.an('array'); });",
+                  "pm.test('Sin correo ni password_hash', function () { pm.response.json().forEach(function (t) { pm.expect(t).to.not.have.property('correo'); pm.expect(t).to.not.have.property('password_hash'); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              }
+            ],
+            "description": "Técnicos activos (rol con seguimiento:registrar y sin incidencias:asignar) dentro del alcance del coordinador, opcionalmente de un área. Requiere incidencias:asignar.",
+            "url": {
+              "raw": "{{base_url}}/usuarios/tecnicos?area=infraestructura",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "tecnicos"
+              ],
+              "query": [
+                {
+                  "key": "area",
+                  "value": "infraestructura"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Editar usuario",
           "event": [
             {
@@ -1326,12 +3819,448 @@
               ]
             }
           }
+        },
+        {
+          "name": "Crear categoría dinámica (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ahora = Date.now();",
+                  "pm.collectionVariables.set('categoria_clave', 'servicios_postman_' + String(ahora).slice(-8));",
+                  "let numero = ahora % 17576; let prefijo = '';",
+                  "for (let i = 0; i < 3; i += 1) { prefijo = String.fromCharCode(65 + (numero % 26)) + prefijo; numero = Math.floor(numero / 26); }",
+                  "pm.collectionVariables.set('categoria_prefijo', prefijo);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Categoría personalizada creada', function () { const j = pm.response.json(); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); pm.expect(j.version).to.eql(1); pm.expect(j.activa).to.eql(true); pm.expect(j.sistema).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Crea una categoría personalizada. Requiere categorias:gestionar.",
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios de Postman\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"tipo_servicio\", \"etiqueta\": \"Tipo de servicio\", \"tipo\": \"lista\", \"requerido\": true, \"opciones\": [\"limpieza\", \"mobiliario\"]}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Categoría con campo inseguro (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Contrato de error seguro', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('$ne'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Rechaza un nombre de campo que podría representar un operador MongoDB.",
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"categoria_insegura\",\n  \"nombre\": \"Categoría insegura\",\n  \"prefijo\": \"INS\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"$ne\", \"etiqueta\": \"Campo inseguro\", \"tipo\": \"texto\", \"requerido\": true}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Categoría duplicada (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Conflicto sin datos internos', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); pm.expect(pm.response.text()).to.not.include('DuplicateKeyError'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Repite la categoría creada anteriormente y comprueba el conflicto.",
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clave\": \"{{categoria_clave}}\",\n  \"nombre\": \"Servicios duplicados\",\n  \"prefijo\": \"{{categoria_prefijo}}\",\n  \"area_responsable\": \"Servicios Generales\",\n  \"campos\": [\n    {\"nombre\": \"detalle\", \"etiqueta\": \"Detalle\", \"tipo\": \"texto\", \"requerido\": true, \"max\": 120}\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Editar categoría dinámica",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Edición parcial aplicada', function () { const j = pm.response.json(); pm.expect(j.nombre).to.eql('Servicios de Postman actualizados'); pm.expect(j.clave).to.eql(pm.collectionVariables.get('categoria_clave')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Edita únicamente los campos enviados; cambiar la definición incrementa version.",
+            "url": {
+              "raw": "{{base_url}}/categorias/{{categoria_clave}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias",
+                "{{categoria_clave}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Servicios de Postman actualizados\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Desactivar categoría dinámica",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Categoría desactivada sin eliminarse', function () { const j = pm.response.json(); pm.expect(j.activa).to.eql(false); pm.expect(j._id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Desactiva lógicamente la categoría personalizada; no elimina el documento.",
+            "url": {
+              "raw": "{{base_url}}/categorias/{{categoria_clave}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias",
+                "{{categoria_clave}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activa\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Proteger categoría del sistema (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Contrato de conflicto', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('conflicto'); pm.expect(j).to.have.property('detalle'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Comprueba que una categoría original no puede desactivarse.",
+            "url": {
+              "raw": "{{base_url}}/categorias/computo_redes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categorias",
+                "computo_redes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activa\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Aulas",
+      "description": "Catálogo de aulas agrupado por edificio (solo lectura).",
+      "item": [
+        {
+          "name": "Catálogo de aulas por edificio (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Edificios con aulas agrupadas', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); j.forEach(e => { pm.expect(e.edificio).to.be.a('string'); pm.expect(e.total_aulas).to.equal(e.aulas.length); pm.expect(e.activas).to.be.at.most(e.total_aulas); pm.expect(e.pisos).to.be.an('array'); e.aulas.forEach(a => { pm.expect(a.id_publico).to.match(/^[A-Za-z0-9_-]{22}$/); pm.expect(a.piso).to.be.a('number'); pm.expect(a.aula).to.be.a('string'); pm.expect(a.activa).to.be.a('boolean'); }); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Catálogo de aulas agrupado por edificio. Requiere usuarios:gestionar (401 sin sesión, 403 sin permiso).",
+            "url": {
+              "raw": "{{base_url}}/aulas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ubicaciones para reportar (sin QR)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 y lista de ubicaciones', () => pm.response.to.have.status(200));",
+                  "pm.test('sin id_publico', () => { const d = pm.response.json(); pm.expect(d).to.be.an('array'); d.forEach(u => pm.expect(u).to.not.have.property('id_publico')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              }
+            ],
+            "description": "Aulas activas (edificio, piso, aula) para el selector de Reportar. Requiere incidencias:crear; nunca incluye id_publico.",
+            "url": {
+              "raw": "{{base_url}}/aulas/ubicaciones",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas",
+                "ubicaciones"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auditoria administrativa",
+      "description": "Consulta paginada de T-022, exclusiva del administrador.",
+      "item": [
+        {
+          "name": "Listar auditoria por recurso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Pagina de auditoria segura', function () { const j = pm.response.json(); pm.expect(j.pagina).to.eql(1); pm.expect(j.limite).to.eql(20); pm.expect(j.total).to.be.a('number'); pm.expect(j.resultados).to.be.an('array'); pm.expect(pm.response.text()).to.not.include('password_hash'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              }
+            ],
+            "description": "Lista la primera pagina de eventos de usuarios en orden estable descendente.",
+            "url": {
+              "raw": "{{base_url}}/auditoria?pagina=1&limite=20&recurso=usuarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auditoria"
+              ],
+              "query": [
+                {
+                  "key": "pagina",
+                  "value": "1"
+                },
+                {
+                  "key": "limite",
+                  "value": "20"
+                },
+                {
+                  "key": "recurso",
+                  "value": "usuarios"
+                }
+              ]
+            }
+          }
         }
       ]
     },
     {
       "name": "Pruebas negativas",
-      "description": "Casos de error esperados: validación, autenticación, permisos y no encontrado.",
+      "description": "Casos de error esperados: validación, autenticación, permisos, no encontrado y conflictos; todos verifican {error, detalle}.",
       "item": [
         {
           "name": "Detalle de otra categoría",
@@ -1342,7 +4271,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1390,7 +4319,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1438,7 +4367,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('error de validación', function () { const j = pm.response.json(); pm.expect(j.error).to.eql('validacion'); });"
+                  "pm.test('Contrato de validación', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.an('array'); });"
                 ]
               }
             }
@@ -1486,7 +4415,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 401', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_autenticado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1515,7 +4444,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 401', function () { pm.response.to.have.status(401); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 401', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_autenticado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1549,7 +4478,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 403', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('sin_permiso'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1577,6 +4506,154 @@
           }
         },
         {
+          "name": "Filtro propias inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidencias?propias=quizas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "propias",
+                  "value": "quizas"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Técnicos asignables - área inválida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_coordinador}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/usuarios/tecnicos?area=Infra",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "tecnicos"
+              ],
+              "query": [
+                {
+                  "key": "area",
+                  "value": "Infra"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Técnicos asignables - sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/usuarios/tecnicos",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "usuarios",
+                "tecnicos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtro técnico inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidencias?tecnico=malo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ],
+              "query": [
+                {
+                  "key": "tecnico",
+                  "value": "malo"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Incidencia inexistente",
           "event": [
             {
@@ -1585,7 +4662,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 404', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('no_encontrado'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1621,7 +4698,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 400', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('validacion'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1657,7 +4734,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });",
-                  "pm.test('Mensaje de error', function () { const j = pm.response.json(); pm.expect(j.detail || j.error).to.exist; });"
+                  "pm.test('Contrato de error 403', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('error', 'detalle'); pm.expect(j.error).to.eql('sin_permiso'); pm.expect(j.detalle).to.be.a('string'); });"
                 ]
               }
             }
@@ -1712,6 +4789,46 @@
     },
     {
       "key": "correo_nuevo",
+      "value": ""
+    },
+    {
+      "key": "incidencia_resuelta_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_reabrir_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_espera_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_disponible_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_resuelta_vencida_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_tomada_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_retirar_id",
+      "value": ""
+    },
+    {
+      "key": "incidencia_retirar_conflicto_id",
+      "value": ""
+    },
+    {
+      "key": "coincidencia_id",
+      "value": ""
+    },
+    {
+      "key": "analisis_id",
       "value": ""
     }
   ]

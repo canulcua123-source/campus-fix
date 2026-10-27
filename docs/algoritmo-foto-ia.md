@@ -23,9 +23,37 @@
 |---|---|---|---|
 | `infraestructura` | `tipo_dano`, `riesgo_seguridad`, `requiere_insumos`, `requiere_contratista` | `tipo_dano`: sí (enum visual). `riesgo_seguridad`: sugerencia (y `alto` nunca solo). `requiere_*`: no; lo decide el técnico ⇒ default `false`. | **Apta para modo agéntico (fase 1).** |
 | `computo_redes` | `ip`, `vlan`, `puerto_uplink`, `equipos_afectados` | **No.** Un alumno no conoce la IP, la VLAN ni el uplink, y la foto casi nunca los muestra. | No apta hasta que (a) el catálogo de aulas traiga los datos de red del aula (se llenan desde el QR) o (b) negocio acepte que esos campos queden "pendientes de triage". **Cualquiera de las dos es un cambio de regla de negocio y requiere aprobación del PO.** |
-| `academico` | `plataforma`, `codigo_curso` (`^[A-Z]{2,4}-\d{3}$`), `periodo`, `estudiantes_impactados`, `horas` | Solo parcialmente: el código del curso podría leerse de una captura, pero ese texto es manipulable (inyección). | Queda en modo asistido. **Bug aparte:** `detalleVacio('academico')` en `Reportar.tsx:24` no incluye `horas`, que el backend exige ⇒ el formulario académico manual probablemente responde 422. |
+| `academico` | `plataforma`, `codigo_curso` (`^[A-Z]{2,4}-\d{3}$`), `periodo`, `estudiantes_impactados` | Solo parcialmente: el código del curso podría leerse de una captura, pero ese texto es manipulable (inyección). | Queda en modo asistido. (`horas` no pertenece a `DetalleAcademico`: es parte de `SeguimientoIn`; el supuesto bug de `detalleVacio('academico')` se descartó en #43.) |
 
 Además, `AnalisisImagen` no trae campos estructurados del detalle (solo `campos_detectados` libres). Para la fase 1 hay que añadir un bloque `detalle_infra: {tipo_dano, riesgo_seguridad}` con enums cerrados, para que el mapeo a `IncidenciaIn` sea determinista y no dependa de texto libre.
+
+#### Contrato v3 y mapeo de infraestructura (T16)
+
+`PROMPT_VERSION = "v3"` identifica el contrato que añade `detalle_infra` sobre las reglas de seguridad de v2 (T-030). El bloque es obligatorio cuando
+`categoria = "infraestructura"` y se omite para las demás categorías; un bloque con una categoría distinta se
+rechaza. En categorías no infraestructura el campo se omite: la respuesta HTTP usa `response_model_exclude_none` y el
+espejo Zod lo declara `.optional()` sin `.nullable()` (nunca `null`). Los enums se serializan como cadenas tanto en OpenAPI como ante el proveedor y se comparten con
+`DetalleInfra`:
+
+- `tipo_dano`: `filtracion`, `electrico`, `climatizacion`, `cerrajeria`, `luminaria`, `otro`.
+- `riesgo_seguridad`: `bajo`, `medio`, `alto`.
+
+`construir_incidencia` aplica estas tablas antes de validar un `IncidenciaIn` real:
+
+| Entrada | Salida automática |
+|---|---|
+| Cada `tipo_dano` cerrado | El mismo `tipo_dano` |
+| Riesgo `bajo` | Riesgo `bajo` |
+| Riesgo `medio` | Riesgo `medio` |
+| Riesgo `alto` | Riesgo `medio` (requiere confirmación humana para elevarlo) |
+| Prioridad `baja`, `media` o `alta` | La misma prioridad |
+| Prioridad `critica` | Prioridad `alta` (requiere confirmación humana para elevarla) |
+| Cualquier combinación | `requiere_insumos = false` y `requiere_contratista = false` |
+
+La ubicación se revalida y copia sin inferir datos de la foto. Título y descripción usan respaldos por tipo de
+daño si no alcanzan los mínimos de `IncidenciaIn`; los tags se normalizan, deduplican y acotan. El mapeo no muta
+sus entradas. La clave de la caché de análisis (T-025) incluye `PROMPT_VERSION`, por lo que una entrada `v2` no
+se reutiliza como `v3`; además, una respuesta de infraestructura sin `detalle_infra` falla la validación del contrato.
 
 ### A.1 Flujo de un toque "Reportar con IA"
 
@@ -88,6 +116,42 @@ Decisiones de UX y su fundamento:
 | G7 | Esquema completo | El mapeo determinista `AnalisisImagen → IncidenciaIn` valida con Pydantic (título ≥ 5, descripción ≥ 10, enums) | Formulario prellenado |
 | G8 | Sin duplicado probable | No existe incidencia en `abierta / en_proceso / en_espera` con el mismo `edificio + aula + categoria` en las últimas 24 h **y** (mismo SHA-256 **o** dHash con Hamming ≤ 10 **o** mismo `tipo_dano`) | "¿Ya se reportó esto?" ⇒ **Sí:** no se crea ticket; se registra una *adhesión* (+1 reportante) · **No:** reenvía con `confirmar_no_duplicado=true` (ver nota de alcance abajo) |
 | G9 | Permisos y cupos | `ia:usar` **+** `incidencias:crear` **+** `evidencias:subir`; cupo agéntico diario disponible; *kill switch* `ia_modo_agentico_habilitado` | Formulario (o mensaje de cupo) |
+
+#### A.2.1 Contrato implementado por T19
+
+`evaluar_compuertas()` recibe únicamente estado validado por el servidor y devuelve los nueve resultados en orden
+`G1` → `G9`. Cada resultado conserva el identificador, si pasó y un motivo estable en español. La respuesta pública
+expone solo los motivos de las compuertas fallidas, en ese mismo orden y sin IDs internos, hashes ni datos del
+proveedor.
+
+La precedencia es única y explícita:
+
+1. Si G8 tiene evidencia `probable`, la acción es `duplicado`, incluso si fallan otras compuertas. El usuario debe
+   confirmar posteriormente que se trata de la misma incidencia; el servidor no crea ni adhiere nada en este paso.
+2. `agentico` exige que G1–G9 pasen. No hay promoción por confianza parcial ni por un campo enviado por el cliente.
+3. Cualquier otro fallo, dato ausente, validación fallida o estado `no_verificable` produce `formulario`.
+
+La decisión asistida de T-030 (`autollenar|sugerir|preguntar|rechazar`) no se sobrescribe: se devuelve por separado
+como `accion_asistida`. `accion` queda reservada al nuevo nivel de orquestación
+`agentico|formulario|duplicado`. Mientras T17/T18, T20 y T22 no aporten ubicación verificada, cupos/*kill switch* y
+evidencia de duplicados, respectivamente, el adaptador HTTP marca esos estados como no verificables y degrada de
+forma segura a `formulario`.
+
+G4 exige además que `calidad_cliente` llegue vacío. G7 se calcula con `mapeo_valido()`, que intenta el mapeo
+determinista de T-032 (`construir_incidencia`) con la ubicación verificada; sin ubicación (T17/T18 pendientes) es
+falso. La decisión asistida reutiliza `decidir()` de T-030. **Mientras no existan ubicación verificada, cupos/kill
+switch (T20) y duplicados (T22), `agentico` es inalcanzable a propósito.**
+
+Cada `POST /ia/analizar-imagen` (también en un *hit* de caché) genera un UUID v4 nuevo y guarda `ia:analisis:v1:<uuid>` en Redis con `SET ... EX
+1800`; por tanto, el valor y su expiración se escriben atómicamente. El registro contiene el usuario autenticado, el
+SHA-256 de los bytes exactos del archivo que recibe el proveedor de visión, la respuesta, los resultados G1–G9,
+`PROMPT_VERSION` y la fecha UTC. No guarda la imagen. Dos cargas idénticas tienen el mismo hash, pero IDs públicos
+distintos, de modo que el identificador no revela ni permite correlacionar el hash o al usuario.
+
+`GET /ia/analisis/{analisis_id}` comprueba el propietario usando exclusivamente la sesión autenticada y no renueva
+el TTL. Un ID ajeno, inexistente, expirado o un registro inválido responde el mismo `404` y cuerpo. Si Redis no está
+disponible, tanto la creación como la consulta fallan cerradas con `503`; nunca se concede acceso ni se devuelve una
+decisión sin poder guardar su contexto temporal.
 
 **Nota de alcance para G8 (choca con `AGENTS.md`, regla 6).** Toda consulta a `incidencias_campus` debe llevar `filtro_alcance(usuario)`, y un alumno tiene alcance `propio`. Buscar duplicados de **otros** usuarios en esa colección violaría la regla y filtraría datos ajenos.
 
@@ -411,6 +475,8 @@ async function subirEvidencia(id: string, blob: Blob) {
 Notas de compatibilidad:
 
 - **Orientación**: `createImageBitmap(blob, { imageOrientation: 'from-image' })` aplica EXIF (es el default según MDN) y CSS `image-orientation: from-image` es el default desde 2020 en todos los navegadores. Al dibujar el bitmap en un canvas, la orientación ya queda "horneada" y la recodificación descarta el EXIF (incluido GPS). La librería actual `browser-image-compression` también lo hace (`preserveExif` default `false`).
+- **Implementado (T-047)** en `frontend/src/lib/imagen.ts` (`procesarFoto`, `CONFIG_FOTO`, `ACCEPT_FOTO`) y `imagen.worker.ts`, lanzado por `fotoEnSegundoPlano.ts` (Worker solo si hay `OffscreenCanvas`; si no, hilo principal). Se reemplazó `browser-image-compression` en `Reportar.tsx`, con lo que el bug de `initialQuality` deja de aplicar: cada derivado se codifica directo con su calidad fija (0.85 / 0.80 / 0.70). Como respaldo para navegadores que entreguen el mapa de bits sin rotar, el módulo lee la orientación EXIF y las dimensiones del SOF: si la foto es vertical (orientaciones 5–8) y el mapa llegó con las dimensiones crudas, aplica la rotación al dibujar (sin rotar dos veces). Pruebas: `imagen.test.ts` con fixtures en `src/lib/__fixtures__/jpeg.ts`.
+- **Control de calidad implementado (T-051)** en `frontend/src/lib/calidad.ts` (`medirCalidad`, `pistasCalidad`) y medido dentro de `procesarFoto` sobre una copia gris de `CONFIG_FOTO.ladoAnalisisCalidad` (512 px). Umbrales en `CONFIG_FOTO` (estimados, calibrar con el set de evaluación): `umbralNitidez: 60` (varianza del Laplaciano), `umbralOscuro: 45` y `umbralSobreexpuesto: 225` (brillo medio 0–255). Si alguno falla, `Reportar.tsx` muestra `AvisoCalidad` («Repetir» / «Usar de todos modos») sin bloquear el formulario y no llama a la IA hasta la decisión; al usarla se envía `calidad_cliente=borrosa,oscura,…` en `POST /ia/analizar-imagen`, que el servidor pasa a la compuerta G4 (cualquier pista ⇒ G4 no pasa ⇒ nunca modo agéntico). Valores fuera de `borrosa|oscura|sobreexpuesta` ⇒ 400.
 - **HEIC (iPhone)**: Safari iOS transcodifica a JPEG al subir por selector de archivos; WebKit documenta que transcodifica al **primer** tipo del `accept`. Usar `accept="image/jpeg,image/png,image/webp"` (JPEG primero) y **nunca** `image/*,image/heic`. Si aun así llega `image/heic` y `createImageBitmap` falla → mensaje "Formato no soportado, toma la foto desde la cámara". Probar en iOS 17/18/26 (ver tarea T1).
 - **Memoria en iOS**: decodificar con `createImageBitmap` y dibujar directo al tamaño destino; no crear un canvas al tamaño original (fotos de 24–48 MP pueden exceder el límite de área de canvas de iOS — dato comunitario, no oficial).
 - **Costo del control de calidad**: 512×384 ≈ 197 k píxeles × (conversión a gris + convolución 3×3) ≈ 2 M operaciones → ~5–30 ms en un teléfono medio (estimado); despreciable frente a la red.
@@ -611,7 +677,7 @@ En producción: registrar `accion` decidida vs categoría final guardada por el 
 
 | ID | Tarea | Criterios de aceptación | Pruebas obligatorias |
 |---|---|---|---|
-| T15 | Corregir `detalleVacio('academico')` (falta `horas`) en `Reportar.tsx`. | El formulario académico manual crea el ticket sin 422. | Test e2e/integración del formulario académico. |
+| T15 | ~~Corregir `detalleVacio('academico')` (falta `horas`)~~ Descartada (#43 cerrado): `horas` pertenece a `SeguimientoIn`, no a `DetalleAcademico`. | — | — |
 | T16 | Extender `AnalisisImagen` con `detalle_infra {tipo_dano, riesgo_seguridad}` (enums) + `PROMPT_VERSION=v2`; mapeo determinista `construir_incidencia(a, ubic) → IncidenciaIn`. | Para cualquier `AnalisisImagen` válido de infraestructura el mapeo produce un `IncidenciaIn` válido; `requiere_*` = `false`; `critica` y riesgo `alto` jamás salen del mapeo. | Tests de tabla del mapeo; *property test* (hypothesis) con salidas aleatorias válidas del esquema. |
 | T17 ⚑ | Catálogo `aulas` (id opaco, edificio, piso, aula) + generador de QR + ruta `/reportar?aula=` en la PWA. | Escanear el QR abre "Reportar con IA" con la ubicación fijada; id inexistente ⇒ selector; colección creada en `init_db.py`. | Pytest de `resolver_ubicacion`; test de la ruta con id válido/inválido. |
 | T18 | Recordar y confirmar ubicación (localStorage, vigencia de 4 h) + selector de una sola vez. | G5 pasa solo con QR o confirmación ≤ 4 h; el texto de la placa leído por la IA solo precarga. | Tests unitarios de la regla de vigencia; test de que `ubicacion_fuente="ia"` no satisface G5. |

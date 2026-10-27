@@ -2,7 +2,29 @@
 
 Objetivo: que UTM Desk se sienta como app nativa en iPhone y Android, y como aplicación de escritorio en computadora, con un solo código. Base: sección 6 y 7 de la documentación del proyecto, RNF-05 a RNF-10 y el mockup `docs/mockup-pwa.html` (ábrelo en el navegador antes de diseñar una pantalla nueva: ahí están "Mis reportes", "Nuevo reporte", "Detalle", "Bandeja" y "Dashboard").
 
-Archivos clave: `frontend/src/styles/tokens.css` (tokens), `frontend/src/index.css` (utilidades Tailwind y clases base `.card`, `.btn`, `.etiqueta`, `.campo-error`, `.tabbar`, `.topbar`), `frontend/src/lib/platform.ts` (pone `data-platform="ios|android|desktop"` en `<html>`), `frontend/src/components/AppShell.tsx` (barra inferior + sidebar), `frontend/src/components/Badge.tsx`.
+Archivos clave: `frontend/src/styles/tokens.css` (tokens), `frontend/src/styles/componentes.css` (estilos de `components/ui` y del `AppShell`), `frontend/src/index.css` (utilidades Tailwind y clases heredadas `.card`, `.btn`, `.etiqueta`, `.campo-error`, `.topbar`), `frontend/src/lib/platform.ts` (pone `data-platform="ios|android|desktop"` en `<html>`), `frontend/src/components/AppShell.tsx` (barra inferior + sidebar) con su configuración por rol en `frontend/src/components/navegacion.ts`, y los componentes base de **`frontend/src/components/ui/`**.
+
+**Guía visual:** con `npm run dev`, abre **`/_estilos`** (solo existe en desarrollo). Muestra cada componente en todos sus estados, con selector de tema (claro/oscuro/sistema) y de plataforma (iOS/Android/escritorio), y la navegación de los 5 roles. Parámetros útiles para capturas: `?tema=oscuro`, `?plataforma=android`, `?hoja=abierta`.
+
+**Componentes base (`import { ... } from '../components/ui'`):** no crees otro botón, campo o insignia "parecido".
+
+| Componente | Uso |
+|---|---|
+| `Button` | `variante="primario|secundario|peligro|fantasma"`, `tamano="md|lg"` (44/52 px), `cargando` + `textoCargando`, `icono`, `bloque`. Solo ícono: sin `children` y con `aria-label`. |
+| `Input`, `Select`, `Textarea` | `etiqueta` (obligatoria), `ayuda`, `error`. Ponen `aria-invalid` y `aria-describedby` solos; aceptan `{...register('campo')}`. `Select` recibe `opciones={[{ valor, texto }]}`. |
+| `Card` | Superficie base (`como="section|article|li"`). Tarjeta que navega: `<Link className={claseCardInteractiva}>`. |
+| `Badge` | `tipo="estado|prioridad|categoria"` + `valor` del enum, o `tipo="ia"` + `confianza` (0–1). `ETIQUETAS`/`etiquetaDe()` dan el texto en español para `<option>`. |
+| `Skeleton`, `SkeletonLista` | Estado de carga con la forma del contenido. |
+| `EmptyState` | Estado vacío con `titulo`, `descripcion` y `accion`; `compacto` dentro de tarjetas. |
+| `ErrorState` | Estado de error con botón "Reintentar" (`onReintentar`). |
+| `BottomSheet` | Hoja inferior en móvil / diálogo en escritorio (`<dialog>` nativo: foco atrapado, Escape cierra). |
+| `PageHeader` | Título de pantalla: 34 px en iOS, 22 px en Android, 26 px en escritorio; `subtitulo`, `atras`, `acciones`. |
+| `Spinner` | Solo dentro de botones o zonas pequeñas (nunca a pantalla completa). |
+| `BarraFiltros` | Fila compacta de filtros con acciones alineadas al final; en < 768 px se pliega tras «Filtros (n)». Dentro usa campos `tamano="sm"`. |
+| `RangoFechas` | Periodo con atajos (7/30/90 días) y «Personalizado»; fechas `YYYY-MM-DD` en America/Mexico_City (`lib/fechas.ts`). |
+| `StatTile`, `StatGrid` | Indicador compacto (etiqueta, valor, ícono, `tono`, `delta`, `pista`) y su rejilla. Sustituye tarjetas KPI hechas a mano. |
+| `Seccion` | Tarjeta con encabezado (título, descripción, acciones) y cuerpo; `sinPadding` para tablas a sangre. |
+| `Tabla` | Tabla con encabezado fijo y divisores; `apilada` la convierte en tarjetas en < 640 px (cada `<td>` con `data-label`); números con `claseNumerica`. |
 
 ---
 
@@ -24,7 +46,7 @@ Archivos clave: `frontend/src/styles/tokens.css` (tokens), `frontend/src/index.c
 <div className="fixed bottom-4 inset-x-4" />
 ```
 
-**UX-03 · Navegación por tamaño.** Menos de 1024 px: barra inferior (`.tabbar`) con "Reportar" como botón central. 1024 px o más: sidebar (`<aside>` en `AppShell.tsx`, clase `lg:block`) y la barra inferior se oculta. No crees otra navegación: agrega la ruta a `IZQUIERDA`, `DERECHA` o `ADMIN` en `AppShell.tsx` con su `permiso`. Máximo 5 elementos en la barra inferior.
+**UX-03 · Navegación por tamaño.** Menos de 1024 px: barra inferior (`.tabbar`) con "Reportar" como botón central. 1024 px o más: sidebar (`<aside>` en `AppShell.tsx`, clase `lg:block`) y la barra inferior se oculta. No crees otra navegación: agrega la ruta en `NAVEGACION` de `components/navegacion.ts` (lista `movil` y/o `lateral` del perfil) con su `permiso`. El perfil (reportante, técnico, coordinador, directivo, admin) se deduce de los permisos del usuario y cada pestaña se filtra además por su permiso. Máximo 5 elementos en la barra inferior.
 
 **UX-04 · Ajustes por plataforma solo con `data-platform`.** iOS: título grande 34 px (`.titulo-pagina`), barra translúcida con `backdrop-filter`. Android: `.topbar` sólida elevada y botón Reportar tipo FAB. Escribe estilos con el selector `:root[data-platform='ios'] ...`; nunca detectes el navegador dentro de un componente.
 
@@ -55,7 +77,7 @@ if (/iPhone/.test(navigator.userAgent)) { ... }
 
 ## 2. Tokens y color
 
-**UX-10 · Prohibidos los colores sueltos.** Todo color sale de `tokens.css`, ya sea con las utilidades Tailwind de `@theme inline` (`bg-brand`, `text-on-brand`, `bg-canvas`, `bg-panel`, `bg-panel-2`, `border-line`, `text-ink`, `text-muted`, `bg-ok`, `bg-warn`, `bg-bad`, `text-note`) o con `var(--token)`. Prohibido: hex, `rgb()` con valores fijos y la paleta de Tailwind (`bg-blue-600`, `text-gray-500`).
+**UX-10 · Prohibidos los colores sueltos.** Todo color sale de `tokens.css`, ya sea con las utilidades Tailwind de `@theme inline` (`bg-brand`, `text-on-brand`, `bg-accent`, `bg-canvas`, `bg-panel`, `bg-panel-2`, `border-line`, `border-line-strong`, `text-ink`, `text-muted`, `outline-focus`, `bg-ok`/`text-on-ok`, `bg-warn`/`text-on-warn`, `bg-bad`/`text-on-bad`, `text-note`) o con `var(--token)`. Prohibido: hex, `rgb()` con valores fijos y la paleta de Tailwind (`bg-blue-600`, `text-gray-500`).
 
 ```tsx
 // ✅
@@ -70,7 +92,7 @@ if (/iPhone/.test(navigator.userAgent)) { ... }
 
 **UX-11 · Token nuevo = en claro y oscuro.** Un token se agrega en `:root`, en el bloque `@media (prefers-color-scheme: dark)` y en `:root[data-theme='dark']` de `tokens.css`; si se usará como utilidad, también en `@theme inline` de `index.css`. Nombres en español y por significado (`--color-danger`), no por apariencia (`--rojo`).
 
-**UX-12 · Color con significado + texto.** Estado, prioridad y categoría se muestran **siempre** con `<Badge tipo valor />`, que usa `--estado-*`, `--prioridad-*`, `--categoria-*` y el texto legible de `ETIQUETAS`. El color nunca es la única señal (daltonismo). Un valor nuevo de enum = token nuevo + etiqueta en `Badge.tsx`.
+**UX-12 · Color con significado + texto.** Estado, prioridad y categoría se muestran **siempre** con `<Badge tipo valor />`, que usa los pares `--estado-*-bg`/`--estado-*-text` (igual para `--prioridad-*`, `--categoria-*` e `--ia-*`) y el texto legible de `ETIQUETAS`. El color nunca es la única señal (daltonismo). Un valor nuevo de enum = par de tokens nuevo (claro y oscuro, ≥ 4.5:1) + etiqueta en `components/ui/etiquetas.ts`. Los tokens sólidos `--estado-*` (sin sufijo) son solo para barras y gráficas, nunca para texto.
 
 ```tsx
 // ✅
@@ -129,7 +151,7 @@ Base: React Hook Form + `zodResolver` + schemas de `frontend/src/schemas/`. Secc
 
 ## 5. Accesibilidad (WCAG 2.1 AA, RNF-08)
 
-**UX-21 · Contraste 4.5:1** para texto normal y 3:1 para texto ≥ 18.66 px negrita o íconos. Compruébalo con DevTools (Lighthouse Accesibilidad ≥ 90). Ojo: varios tokens de significado (ámbar `--estado-en-proceso`, `--color-warning`) no llegan a 4.5:1 sobre blanco; no los uses como color de texto pequeño sin oscurecerlos.
+**UX-21 · Contraste 4.5:1** para texto normal y 3:1 para texto ≥ 18.66 px negrita o íconos. Compruébalo con DevTools (Lighthouse Accesibilidad ≥ 90). Todos los pares de insignia y los colores de retroalimentación (`--color-success|warning|danger|info`) cumplen ≥ 4.5:1 en claro y oscuro; `--color-text-muted` (#475569) cumple también sobre `--color-bg`. Los tokens sólidos `--estado-*`/`--prioridad-*`/`--categoria-*` (p. ej. el ámbar de en proceso) **no** son para texto.
 
 **UX-22 · Todo input tiene `<label>`** asociado con `htmlFor`/`id` (o envolviendo el input). El `placeholder` es ejemplo, no etiqueta.
 
@@ -140,7 +162,7 @@ Base: React Hook Form + `zodResolver` + schemas de `frontend/src/schemas/`. Secc
 // ❌ <button><X /></button>
 ```
 
-**UX-24 · Foco visible.** Nunca `outline: none` sin reemplazo. Usa `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`. El orden de tabulación sigue el orden visual.
+**UX-24 · Foco visible.** Nunca `outline: none` sin reemplazo. `index.css` ya pone a todo elemento `:focus-visible` un anillo de `--focus-ring-width` con `--color-focus`; no lo quites. Si necesitas otro, usa `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus`. El orden de tabulación sigue el orden visual.
 
 **UX-25 · Movimiento reducido.** `index.css` ya anula animaciones con `prefers-reduced-motion: reduce`; no lo evites con `!important` propios. Animaciones de JS (View Transitions, Recharts) se desactivan si `matchMedia('(prefers-reduced-motion: reduce)').matches`.
 
@@ -188,7 +210,7 @@ Probar en los tres entornos. Para el celular usa el despliegue o un túnel HTTPS
 - [ ] Ícono maskable se ve bien en el lanzador.
 
 ### Escritorio (Chrome, Edge, Safari, Firefox)
-- [ ] ≥ 1024 px: sidebar visible, barra inferior oculta, contenido máx. 960 px centrado.
+- [ ] ≥ 1024 px: sidebar visible, barra inferior oculta, contenido máx. 1200 px centrado (formularios en `.contenido-estrecho`, 720 px).
 - [ ] Todo se puede usar solo con teclado; el foco siempre es visible.
 - [ ] Tablas/gráficas legibles; nada se estira a todo el ancho de un monitor grande.
 

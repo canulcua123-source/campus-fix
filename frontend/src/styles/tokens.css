@@ -1,39 +1,108 @@
+/*
+ * Tokens de diseño de UTM Desk: única fuente de verdad de color, radios y medidas.
+ * Regla UX-11: todo token de color existe en claro (:root), en oscuro por sistema
+ * (@media prefers-color-scheme) y en oscuro forzado (:root[data-theme='dark']).
+ * Las insignias usan pares fondo + texto con contraste ≥ 4.5:1 (WCAG AA) en ambos temas.
+ * Los colores "sólidos" (--estado-*, --prioridad-*, --categoria-*) son para barras y gráficas,
+ * nunca para texto pequeño: para texto usa el par *-bg / *-text.
+ */
 :root {
+  color-scheme: light;
+
+  /* Base */
   --color-primary: #1d4ed8;
   --color-on-primary: #ffffff;
   --color-secondary: #0f766e;
+  --color-on-secondary: #ffffff;
   --color-bg: #f2f2f7;
   --color-surface: #ffffff;
   --color-surface-2: #f8fafc;
   --color-border: #e5e7eb;
+  --color-border-strong: #64748b;
+  /* Borde de campos: más ligero que border-strong pero ≥ 3:1 sobre surface y surface-2 (WCAG 1.4.11) */
+  --color-border-input: #868e9c;
   --color-text: #0f172a;
-  --color-text-muted: #64748b;
+  /* #475569: 6.8:1 sobre bg y 7.2:1 sobre surface-2 (el anterior #64748b no llegaba a 4.5 sobre bg) */
+  --color-text-muted: #475569;
+  --color-focus: #1d4ed8;
 
+  /* Retroalimentación (texto ≥ 4.5:1 sobre bg y surface) */
+  --color-success: #166534;
+  --color-on-success: #ffffff;
+  --color-warning: #92400e;
+  --color-on-warning: #ffffff;
+  --color-danger: #b91c1c;
+  --color-on-danger: #ffffff;
+  --color-info: #0369a1;
+  --color-on-info: #ffffff;
+
+  /* Estado: sólido + par de insignia */
   --estado-abierta: #2563eb;
+  --estado-abierta-bg: #dbeafe;
+  --estado-abierta-text: #1d4ed8;
   --estado-en-proceso: #d97706;
+  --estado-en-proceso-bg: #fef3c7;
+  --estado-en-proceso-text: #92400e;
   --estado-en-espera: #7c3aed;
+  --estado-en-espera-bg: #ede9fe;
+  --estado-en-espera-text: #5b21b6;
   --estado-resuelta: #16a34a;
+  --estado-resuelta-bg: #dcfce7;
+  --estado-resuelta-text: #166534;
   --estado-cerrada: #64748b;
+  --estado-cerrada-bg: #e2e8f0;
+  --estado-cerrada-text: #334155;
+  --estado-retirada: #475569;
+  --estado-retirada-bg: #f1f5f9;
+  --estado-retirada-text: #334155;
 
+  /* Prioridad */
   --prioridad-baja: #64748b;
+  --prioridad-baja-bg: #e2e8f0;
+  --prioridad-baja-text: #334155;
   --prioridad-media: #0284c7;
+  --prioridad-media-bg: #e0f2fe;
+  --prioridad-media-text: #075985;
   --prioridad-alta: #ea580c;
+  --prioridad-alta-bg: #ffedd5;
+  --prioridad-alta-text: #9a3412;
   --prioridad-critica: #dc2626;
+  --prioridad-critica-bg: #fee2e2;
+  --prioridad-critica-text: #b91c1c;
 
+  /* Categoría */
   --categoria-computo-redes: #0891b2;
+  --categoria-computo-redes-bg: #cffafe;
+  --categoria-computo-redes-text: #155e75;
   --categoria-infraestructura: #b45309;
+  --categoria-infraestructura-bg: #fef3c7;
+  --categoria-infraestructura-text: #92400e;
   --categoria-academico: #db2777;
+  --categoria-academico-bg: #fce7f3;
+  --categoria-academico-text: #9d174d;
 
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-  --color-info: #0284c7;
+  /* IA ("Sugerido por IA") */
+  --ia-bg: #ccfbf1;
+  --ia-text: #115e59;
 
+  /* Tipografía */
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Roboto, 'Segoe UI', system-ui, sans-serif;
+  --font-size-input: 16px;
+
+  /* Radios */
   --radius-card: 14px;
   --radius-input: 10px;
-  --tap-min: 44px;
+  --radius-sheet: 20px;
+  --radius-pill: 999px;
 
+  /* Medidas */
+  --tap-min: 44px;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --tabbar-height: 60px;
+  --duracion: 200ms;
+
+  /* Zonas seguras (notch, isla dinámica, barra de gestos) */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -42,26 +111,134 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
+    color-scheme: dark;
     --color-primary: #60a5fa;
     --color-on-primary: #0b1220;
     --color-secondary: #2dd4bf;
+    --color-on-secondary: #0b1220;
     --color-bg: #0b0f17;
     --color-surface: #151b26;
     --color-surface-2: #1e2633;
     --color-border: #2a3342;
+    --color-border-strong: #64748b;
+    --color-border-input: #64748b;
     --color-text: #f1f5f9;
     --color-text-muted: #94a3b8;
+    --color-focus: #93c5fd;
+    --color-success: #4ade80;
+    --color-on-success: #0b1220;
+    --color-warning: #fbbf24;
+    --color-on-warning: #0b1220;
+    --color-danger: #f87171;
+    --color-on-danger: #0b1220;
+    --color-info: #38bdf8;
+    --color-on-info: #0b1220;
+    --estado-abierta: #60a5fa;
+    --estado-abierta-bg: #1e3a8a;
+    --estado-abierta-text: #bfdbfe;
+    --estado-en-proceso: #fbbf24;
+    --estado-en-proceso-bg: #78350f;
+    --estado-en-proceso-text: #fde68a;
+    --estado-en-espera: #a78bfa;
+    --estado-en-espera-bg: #4c1d95;
+    --estado-en-espera-text: #ddd6fe;
+    --estado-resuelta: #4ade80;
+    --estado-resuelta-bg: #14532d;
+    --estado-resuelta-text: #bbf7d0;
+    --estado-cerrada: #94a3b8;
+    --estado-cerrada-bg: #334155;
+    --estado-cerrada-text: #e2e8f0;
+    --estado-retirada: #cbd5e1;
+    --estado-retirada-bg: #1e293b;
+    --estado-retirada-text: #e2e8f0;
+    --prioridad-baja: #94a3b8;
+    --prioridad-baja-bg: #334155;
+    --prioridad-baja-text: #e2e8f0;
+    --prioridad-media: #38bdf8;
+    --prioridad-media-bg: #0c4a6e;
+    --prioridad-media-text: #bae6fd;
+    --prioridad-alta: #fb923c;
+    --prioridad-alta-bg: #7c2d12;
+    --prioridad-alta-text: #fed7aa;
+    --prioridad-critica: #f87171;
+    --prioridad-critica-bg: #7f1d1d;
+    --prioridad-critica-text: #fecaca;
+    --categoria-computo-redes: #22d3ee;
+    --categoria-computo-redes-bg: #164e63;
+    --categoria-computo-redes-text: #a5f3fc;
+    --categoria-infraestructura: #fbbf24;
+    --categoria-infraestructura-bg: #78350f;
+    --categoria-infraestructura-text: #fde68a;
+    --categoria-academico: #f472b6;
+    --categoria-academico-bg: #831843;
+    --categoria-academico-text: #fbcfe8;
+    --ia-bg: #134e4a;
+    --ia-text: #99f6e4;
   }
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --color-primary: #60a5fa;
   --color-on-primary: #0b1220;
   --color-secondary: #2dd4bf;
+  --color-on-secondary: #0b1220;
   --color-bg: #0b0f17;
   --color-surface: #151b26;
   --color-surface-2: #1e2633;
   --color-border: #2a3342;
+  --color-border-strong: #64748b;
+  --color-border-input: #64748b;
   --color-text: #f1f5f9;
   --color-text-muted: #94a3b8;
+  --color-focus: #93c5fd;
+  --color-success: #4ade80;
+  --color-on-success: #0b1220;
+  --color-warning: #fbbf24;
+  --color-on-warning: #0b1220;
+  --color-danger: #f87171;
+  --color-on-danger: #0b1220;
+  --color-info: #38bdf8;
+  --color-on-info: #0b1220;
+  --estado-abierta: #60a5fa;
+  --estado-abierta-bg: #1e3a8a;
+  --estado-abierta-text: #bfdbfe;
+  --estado-en-proceso: #fbbf24;
+  --estado-en-proceso-bg: #78350f;
+  --estado-en-proceso-text: #fde68a;
+  --estado-en-espera: #a78bfa;
+  --estado-en-espera-bg: #4c1d95;
+  --estado-en-espera-text: #ddd6fe;
+  --estado-resuelta: #4ade80;
+  --estado-resuelta-bg: #14532d;
+  --estado-resuelta-text: #bbf7d0;
+  --estado-cerrada: #94a3b8;
+  --estado-cerrada-bg: #334155;
+  --estado-cerrada-text: #e2e8f0;
+  --estado-retirada: #cbd5e1;
+  --estado-retirada-bg: #1e293b;
+  --estado-retirada-text: #e2e8f0;
+  --prioridad-baja: #94a3b8;
+  --prioridad-baja-bg: #334155;
+  --prioridad-baja-text: #e2e8f0;
+  --prioridad-media: #38bdf8;
+  --prioridad-media-bg: #0c4a6e;
+  --prioridad-media-text: #bae6fd;
+  --prioridad-alta: #fb923c;
+  --prioridad-alta-bg: #7c2d12;
+  --prioridad-alta-text: #fed7aa;
+  --prioridad-critica: #f87171;
+  --prioridad-critica-bg: #7f1d1d;
+  --prioridad-critica-text: #fecaca;
+  --categoria-computo-redes: #22d3ee;
+  --categoria-computo-redes-bg: #164e63;
+  --categoria-computo-redes-text: #a5f3fc;
+  --categoria-infraestructura: #fbbf24;
+  --categoria-infraestructura-bg: #78350f;
+  --categoria-infraestructura-text: #fde68a;
+  --categoria-academico: #f472b6;
+  --categoria-academico-bg: #831843;
+  --categoria-academico-text: #fbcfe8;
+  --ia-bg: #134e4a;
+  --ia-text: #99f6e4;
 }

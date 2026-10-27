@@ -1,63 +1,101 @@
-import base64
+"""Fachada de IA: delega en el proveedor configurado (puerto ProveedorVision) y concentra los reintentos."""
 
-import anthropic
+import asyncio
+import random
+from collections.abc import Awaitable, Callable
 
 from app.core.config import settings
 from app.schemas.ia import AnalisisImagen
+from app.services.vision import obtener_proveedor
+from app.services.vision.prompt import PROMPT_VERSION
+from app.services.vision.puerto import TIMEOUT_PROVEEDOR_SEGUNDOS, ErrorProveedor
+
+# Presupuesto: 2 intentos de 13.5 s + backoff (≤ 0.5 s) caben en el deadline total de 28 s,
+# por debajo del abort del cliente (TIMEOUT_IA_MS = 30 s) para que el reintento sí llegue al usuario.
+IA_TIMEOUT_SEGUNDOS = TIMEOUT_PROVEEDOR_SEGUNDOS
+IA_DEADLINE_TOTAL_SEGUNDOS = 28.0
+IA_INTENTOS_MAXIMOS = 2
+BACKOFF_BASE_SEGUNDOS = 0.25
+BACKOFF_JITTER_SEGUNDOS = 0.25
+BACKOFF_MAX_SEGUNDOS = 0.5
+
+# Compatibilidad: el error de la fachada es el error normalizado del puerto.
+IAError = ErrorProveedor
+
+_esperar = asyncio.sleep
+_aleatorio_uniforme = random.uniform
+
+__all__ = [
+    "PROMPT_VERSION",
+    "IAError",
+    "analizar_imagen",
+    "con_reintento_transitorio",
+    "identidad_proveedor",
+]
 
 
-class IAError(Exception):
-    pass
+def identidad_proveedor() -> tuple[str, str]:
+    """(proveedor, modelo) configurados; forman parte de la clave de caché del análisis."""
+    if settings.ia_proveedor == "gemini":
+        return "gemini", settings.gemini_modelo
+    return "claude", settings.ia_modelo
 
 
-PROMPT_SISTEMA = """Eres un asistente de la mesa de ayuda del campus universitario UTM Desk.
-Recibes la foto de una posible incidencia y debes clasificarla en una de estas categorías:
-- computo_redes: fallas de cómputo y redes (switches, access points, cableado, equipos de laboratorio, servidores, impresoras de red).
-- infraestructura: daños físicos del edificio (filtraciones, electricidad, climatización, cerrajería, luminarias, mobiliario).
-- academico: problemas con plataformas académicas (LMS, portal de calificaciones, correo institucional), por ejemplo capturas de errores.
-Si no puedes determinarla usa "no_determinada".
-
-Instrucciones:
-- Propón un título corto (máximo 80 caracteres) y una descripción clara y objetiva de lo que se ve.
-- Prioridad: "critica" solo si hay riesgo de seguridad o un servicio caído que afecta a muchas personas; en otro caso baja, media o alta.
-- Sugiere de 3 a 6 tags en snake_case (minúsculas, sin acentos).
-- Extrae los campos técnicos visibles en "campos_detectados" (por ejemplo: luminaria fundida, modelo de switch, texto del error del LMS) como pares nombre/valor.
-- Indica tu confianza entre 0 y 1 y las advertencias relevantes (foto borrosa, falta contexto, etc.).
-- Si la foto NO es una incidencia (selfie, meme, captura irrelevante) pon es_incidencia_valida en false.
-- Nunca identifiques personas; ignora los rostros.
-Responde únicamente con el JSON que cumple el esquema."""
+async def analizar_imagen(imagen_bytes: bytes, media_type: str, contexto: str | None = None) -> AnalisisImagen:
+    return await obtener_proveedor().analizar(imagen_bytes, media_type, contexto)
 
 
-async def analizar_imagen(
-    imagen_bytes: bytes, media_type: str, contexto: str | None = None
-) -> AnalisisImagen:
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key or None)
-    b64 = base64.standard_b64encode(imagen_bytes).decode()
-    # Con extra="forbid" cada objeto del schema trae additionalProperties: false y,
-    # al no haber defaults, todas las propiedades quedan en `required`.
-    schema = AnalisisImagen.model_json_schema()
-    resp = await client.beta.messages.create(
-        model=settings.ia_modelo,  # "claude-opus-5-5"
-        max_tokens=4096,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-        output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
-        system=PROMPT_SISTEMA,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
-                    {
-                        "type": "text",
-                        "text": "Analiza la foto de esta incidencia del campus."
-                        + (f" Contexto del usuario: {contexto}" if contexto else ""),
-                    },
-                ],
-            }
-        ],
-    )
-    if resp.stop_reason == "refusal":
-        raise IAError("La IA no pudo analizar la imagen")
-    texto = next(b.text for b in resp.content if b.type == "text")
-    return AnalisisImagen.model_validate_json(texto)
+def calcular_backoff(numero_reintento: int) -> float:
+    """Espera acotada para el único reintento; `numero_reintento` empieza en 1."""
+    base = BACKOFF_BASE_SEGUNDOS * (2 ** max(0, numero_reintento - 1))
+    jitter = _aleatorio_uniforme(0, BACKOFF_JITTER_SEGUNDOS)
+    return min(base + jitter, BACKOFF_MAX_SEGUNDOS)
+
+
+def _normalizar_error(error: Exception) -> IAError:
+    """Los adaptadores ya traducen sus excepciones; cualquier otra cosa es un fallo no transitorio."""
+    if isinstance(error, IAError):
+        return error
+    if isinstance(error, TimeoutError):
+        return IAError("El proveedor de IA excedió el tiempo límite", transitorio=True, tipo="timeout")
+    return IAError("El proveedor de IA devolvió una respuesta no válida")
+
+
+async def _intento_con_timeout[T](operacion: Callable[[], Awaitable[T]]) -> T:
+    try:
+        async with asyncio.timeout(IA_TIMEOUT_SEGUNDOS):
+            return await operacion()
+    except TimeoutError as error:
+        raise IAError(
+            "El proveedor de IA excedió el tiempo límite",
+            transitorio=True,
+            tipo="timeout",
+        ) from error
+
+
+async def con_reintento_transitorio[T](operacion: Callable[[], Awaitable[T]]) -> T:
+    """Ejecuta como máximo dos intentos dentro del deadline total y nunca reintenta fallos permanentes."""
+    try:
+        async with asyncio.timeout(IA_DEADLINE_TOTAL_SEGUNDOS):
+            return await _con_reintento(operacion)
+    except TimeoutError as error:
+        raise IAError(
+            "El proveedor de IA excedió el tiempo límite",
+            transitorio=True,
+            tipo="timeout",
+        ) from error
+
+
+async def _con_reintento[T](operacion: Callable[[], Awaitable[T]]) -> T:
+    for intento in range(IA_INTENTOS_MAXIMOS):
+        try:
+            return await _intento_con_timeout(operacion)
+        except Exception as error:
+            normalizado = _normalizar_error(error)
+            ultimo_intento = intento == IA_INTENTOS_MAXIMOS - 1
+            if not normalizado.transitorio or ultimo_intento:
+                if normalizado is error:
+                    raise
+                raise normalizado from error
+            await _esperar(calcular_backoff(intento + 1))
+    raise AssertionError("Bucle de reintentos de IA sin resultado")

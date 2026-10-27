@@ -1,0 +1,57 @@
+# Blueprint de Render: API FastAPI en Docker (plan gratuito). Deploy automático al hacer push/merge a main.
+# Los valores con sync: false se capturan en el panel de Render; nunca se escriben aquí.
+services:
+  - type: web
+    name: utm-desk-api
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: true
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: utm_desk
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DOMINIO_CORREO
+        value: utm.edu.mx
+      # PWA (Cloudflare Pages) y API (onrender.com) son sitios distintos: la cookie de refresh exige None + Secure.
+      - key: REFRESH_COOKIE_SECURE
+        value: "true"
+      - key: REFRESH_COOKIE_SAMESITE
+        value: none
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: STORAGE_ENDPOINT
+        sync: false
+      - key: STORAGE_REGION
+        sync: false
+      - key: IA_HABILITADA
+        value: "true"
+      # Gemini con llave gratuita (AI Studio). En la capa gratuita Google puede usar las fotos:
+      # la PWA lo avisa al usuario. El cupo diario global se ajusta en Configuración (admin).
+      - key: IA_PROVEEDOR
+        value: gemini
+      - key: GEMINI_CAPA
+        value: gratuita
+      - key: GEMINI_MODELO
+        value: gemini-3.5-flash
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: IA_PERMITIR_CAPA_GRATUITA
+        value: "true"

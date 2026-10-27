@@ -1,6 +1,6 @@
 from typing import Literal, get_args
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 CATALOGO_PERMISOS = [
     "incidencias:crear",
@@ -15,6 +15,7 @@ CATALOGO_PERMISOS = [
     "roles:gestionar",
     "categorias:gestionar",
     "ia:usar",
+    "configuracion:gestionar",
 ]
 
 Permiso = Literal[
@@ -30,11 +31,14 @@ Permiso = Literal[
     "roles:gestionar",
     "categorias:gestionar",
     "ia:usar",
+    "configuracion:gestionar",
 ]
 assert list(get_args(Permiso)) == CATALOGO_PERMISOS
 
 
 class RolIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     clave: str = Field(pattern=r"^[a-z_]{3,30}$")
     nombre: str = Field(min_length=3, max_length=50)
     descripcion: str = Field(default="", max_length=200)
@@ -45,5 +49,22 @@ class RolIn(BaseModel):
     @classmethod
     def _unicos(cls, v: list[str]) -> list[str]:
         if len(set(v)) != len(v):
+            raise ValueError("permisos duplicados")
+        return v
+
+
+class RolPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    clave: str | None = Field(default=None, pattern=r"^[a-z_]{3,30}$")
+    nombre: str | None = Field(default=None, min_length=3, max_length=50)
+    descripcion: str | None = Field(default=None, max_length=200)
+    permisos: list[Permiso] | None = Field(default=None, min_length=1)
+    alcance: Literal["propio", "area", "edificio", "global"] | None = None
+
+    @field_validator("permisos")
+    @classmethod
+    def _unicos(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None and len(set(v)) != len(v):
             raise ValueError("permisos duplicados")
         return v

@@ -1,199 +1,324 @@
 @import 'tailwindcss';
 @import './styles/tokens.css';
+@import './styles/componentes.css';
 
 /* Tokens (tokens.css) expuestos como utilidades Tailwind: bg-brand, text-ink, border-line... */
 @theme inline {
   --color-brand: var(--color-primary);
   --color-on-brand: var(--color-on-primary);
   --color-accent: var(--color-secondary);
+  --color-on-accent: var(--color-on-secondary);
   --color-canvas: var(--color-bg);
   --color-panel: var(--color-surface);
   --color-panel-2: var(--color-surface-2);
   --color-line: var(--color-border);
+  --color-line-strong: var(--color-border-strong);
+  --color-line-input: var(--color-border-input);
   --color-ink: var(--color-text);
   --color-muted: var(--color-text-muted);
+  --color-focus: var(--color-focus);
   --color-ok: var(--color-success);
+  --color-on-ok: var(--color-on-success);
   --color-warn: var(--color-warning);
+  --color-on-warn: var(--color-on-warning);
   --color-bad: var(--color-danger);
+  --color-on-bad: var(--color-on-danger);
   --color-note: var(--color-info);
+  --color-on-note: var(--color-on-info);
   --font-sans: var(--font-sans);
-  --radius-card: 14px;
-  --radius-input: 10px;
+  --radius-card: var(--radius-card);
+  --radius-input: var(--radius-input);
+  --radius-sheet: var(--radius-sheet);
 }
 
-html,
-body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  overscroll-behavior: none;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+
+  /* Evita el zoom de iOS al enfocar campos (UX-06). Base de todo campo, también los heredados. */
+  input:not([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']),
+  select,
+  textarea {
+    font-size: var(--font-size-input);
+    font-weight: 400;
+    line-height: 1.4;
+    min-height: var(--tap-min);
+    border-radius: var(--radius-input);
+    border: 1px solid var(--color-border-input);
+    background: var(--color-surface);
+    color: var(--color-text);
+    padding: 0 12px;
+    width: 100%;
+    transition: border-color var(--duracion) ease, box-shadow var(--duracion) ease;
+  }
+  input:not([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']),
+  select {
+    height: var(--tap-min);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-muted);
+    opacity: 0.8;
+  }
+  input:not([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']):hover:not(:disabled, :focus),
+  select:hover:not(:disabled, :focus),
+  textarea:hover:not(:disabled, :focus) {
+    border-color: var(--color-border-strong);
+  }
+  /* Foco de campos: borde + halo del color de foco (sustituye al outline, UX-24). */
+  input:not([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']):focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 1px var(--color-focus), 0 0 0 4px color-mix(in srgb, var(--color-focus) 22%, transparent);
+  }
+  input[aria-invalid='true'],
+  select[aria-invalid='true'],
+  textarea[aria-invalid='true'] {
+    border-color: var(--color-danger);
+  }
+  input[aria-invalid='true']:focus-visible,
+  select[aria-invalid='true']:focus-visible,
+  textarea[aria-invalid='true']:focus-visible {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 1px var(--color-danger), 0 0 0 4px color-mix(in srgb, var(--color-danger) 20%, transparent);
+  }
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    background: var(--color-surface-2);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+  /* Fechas: alineadas a la izquierda y con altura estable en Safari/iOS. */
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'],
+  input[type='month'] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    text-align: left;
+  }
+  input::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
+    /* Safari: sin esto el texto de la fecha queda pegado arriba del campo. */
+    min-height: 1.5em;
+    line-height: 1.5;
+  }
+  input::-webkit-datetime-edit {
+    padding: 0;
+    line-height: 1.5;
+  }
+  input::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+    cursor: pointer;
+  }
+  input[type='search']::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+  textarea {
+    padding: 10px 12px;
+    height: auto;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-primary);
+  }
+  button {
+    min-height: var(--tap-min);
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Foco visible en todo control (UX-24) */
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-focus);
+    outline-offset: var(--focus-ring-offset);
+  }
 }
 
-body {
-  margin: 0;
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
-}
+@layer components {
+  /* Clases heredadas (las pantallas existentes las usan; lo nuevo usa components/ui) */
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    padding: 16px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: var(--tap-min);
+    padding: 0 18px;
+    border-radius: var(--radius-input);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    font-weight: 600;
+    border: 0;
+    transition: transform var(--duracion) ease, opacity var(--duracion) ease;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .btn:disabled {
+    opacity: 0.55;
+  }
+  .btn-secundario {
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+  }
+  .campo-error {
+    color: var(--color-danger);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .etiqueta {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 14px 0 6px;
+  }
 
-/* Evita el zoom de iOS al enfocar campos */
-input,
-select,
-textarea {
-  font-size: 16px;
-  min-height: var(--tap-min);
-  border-radius: var(--radius-input);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  padding: 0 12px;
-  width: 100%;
-}
-textarea {
-  padding: 10px 12px;
-}
-button {
-  min-height: var(--tap-min);
-  cursor: pointer;
-}
+  /* Cromo de navegación: no seleccionable */
+  .nav-chrome {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
 
-.card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  padding: 16px;
-}
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: var(--tap-min);
-  padding: 0 18px;
-  border-radius: var(--radius-input);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-weight: 600;
-  border: 0;
-}
-.btn-secundario {
-  background: var(--color-surface-2);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-}
-.campo-error {
-  color: var(--color-danger);
-  font-size: 13px;
-  margin-top: 4px;
-}
-.etiqueta {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  margin: 12px 0 4px;
-}
-
-/* Cromo de navegación: no seleccionable */
-.nav-chrome {
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-
-.tabbar {
-  position: fixed;
-  inset: auto 0 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding-bottom: var(--safe-bottom);
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  z-index: 40;
-}
-.tabbar a {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: var(--tap-min);
-  min-height: 52px;
-  font-size: 11px;
-  color: var(--color-text-muted);
-  text-decoration: none;
-}
-.tabbar a[aria-current='page'] {
-  color: var(--color-primary);
-}
-.tabbar .reportar {
-  width: 58px;
-  height: 58px;
-  margin-top: -22px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
-}
-.titulo-pagina {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 12px;
-}
-.app-main {
-  padding: calc(16px + var(--safe-top)) 16px calc(84px + var(--safe-bottom));
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-/* iOS: tab bar translúcida y títulos grandes */
-:root[data-platform='ios'] .tabbar {
-  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
-}
-:root[data-platform='ios'] .titulo-pagina {
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  margin-bottom: 16px;
-}
-
-/* Android: barra superior elevada y FAB */
-:root[data-platform='android'] .topbar {
-  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-}
-:root[data-platform='android'] .tabbar .reportar {
-  border-radius: 18px;
-  box-shadow: 0 6px 16px rgb(0 0 0 / 0.3);
-}
-
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  padding: calc(10px + var(--safe-top)) 16px 10px;
-  display: none;
-  align-items: center;
-  font-weight: 700;
-}
-:root[data-platform='android'] .topbar {
-  display: flex;
-}
-
-@media (min-width: 1024px) {
-  .tabbar {
-    display: none;
+  .titulo-pagina {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 12px;
   }
   .app-main {
-    padding-bottom: 24px;
+    padding: calc(16px + var(--safe-top)) 16px calc(var(--tabbar-height) + 32px + var(--safe-bottom));
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  /* Ritmo vertical: hijos separados por un gap constante. */
+  .pila {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .pila--sm {
+    gap: 8px;
+  }
+  .pila--lg {
+    gap: 24px;
+  }
+  /* Formularios y lecturas largas: ancho cómodo aunque el contenido sea más ancho. */
+  .contenido-estrecho {
+    max-width: 720px;
+  }
+  :root[data-platform='android'] .app-main {
+    padding-top: 16px;
+  }
+
+  /* iOS: título grande */
+  :root[data-platform='ios'] .titulo-pagina {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 16px;
+  }
+
+  /* Android: barra superior (app bar) sólida y elevada */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    min-height: 56px;
+    padding: calc(8px + var(--safe-top)) 16px 8px;
+    display: none;
+    align-items: center;
+    font-size: 20px;
+    font-weight: 600;
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
   }
   :root[data-platform='android'] .topbar {
-    display: none;
+    display: flex;
+  }
+  .topbar form[role='search'] {
+    position: relative;
+  }
+  .topbar form[role='search']::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    transform: translateY(-50%);
+    background: var(--color-text-muted);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    pointer-events: none;
+  }
+  .topbar input[type='search'] {
+    padding-left: 38px;
+    background: var(--color-surface-2);
+    border-color: var(--color-border);
+    border-radius: var(--radius-pill);
+  }
+  .topbar input[type='search']:focus-visible {
+    background: var(--color-surface);
+  }
+
+  @media (min-width: 1024px) {
+    .app-main {
+      max-width: 1200px;
+      padding: calc(24px + var(--safe-top)) 32px 40px;
+    }
+    :root[data-platform='android'] .topbar {
+      display: none;
+    }
+    :root[data-platform='android'] .app-main {
+      padding-top: calc(24px + var(--safe-top));
+    }
+    /* Escritorio: barra delgada y translúcida solo con el buscador; si no hay buscador, no se muestra. */
+    .topbar {
+      min-height: 56px;
+      padding: calc(8px + var(--safe-top)) 32px 8px;
+      font-size: 15px;
+      background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+      -webkit-backdrop-filter: saturate(180%) blur(12px);
+      backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid var(--color-border);
+      box-shadow: none;
+    }
+    .topbar:not(:has(form)) {
+      display: none !important;
+    }
   }
 }
 
@@ -205,5 +330,26 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Reportes: impresión / PDF. Oculta el cromo de navegación y los controles de pantalla. */
+@media print {
+  .nav-chrome,
+  .solo-pantalla {
+    display: none !important;
+  }
+  .reporte-imprimible {
+    color: var(--color-text);
+  }
+  .reporte-imprimible .reporte-seccion {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+  .reporte-imprimible table {
+    break-inside: auto;
+  }
+  .reporte-imprimible tr {
+    break-inside: avoid;
   }
 }
