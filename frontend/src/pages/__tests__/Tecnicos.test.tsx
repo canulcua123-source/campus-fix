@@ -65,19 +65,34 @@ describe('Técnicos (Vitest + MSW)', () => {
     preparar()
     expect(screen.getByLabelText('Cargando técnicos')).toBeInTheDocument()
     const lista = await screen.findByRole('list', { name: 'Carga por técnico' })
-    const enlaces = within(lista).getAllByRole('link')
-    expect(enlaces.map((e) => e.getAttribute('aria-label'))).toEqual([
-      'Luis Gómez: 5 incidencias activas, 12.5 horas. Ver en el tablero',
-      'Ana Pérez: 2 incidencias activas, 3 horas. Ver en el tablero',
-      'Eva Ruiz: 0 incidencias activas, 0 horas. Ver en el tablero',
+    const filas = within(lista).getAllByRole('button')
+    expect(filas.map((e) => e.getAttribute('aria-label'))).toEqual([
+      'Luis Gómez: 5 incidencias activas, 12.5 horas. Ver su operación',
+      'Ana Pérez: 2 incidencias activas, 3 horas. Ver su operación',
+      'Eva Ruiz: 0 incidencias activas, 0 horas. Ver su operación',
     ])
     expect(within(lista).getByText('5 activas · 12.5 h')).toBeInTheDocument()
   })
 
-  it('enlaza al tablero filtrado por el técnico', async () => {
+  it('abre la operación del técnico agrupada por etapa y enlaza al tablero filtrado', async () => {
     preparar()
+    let pedido = ''
+    servidor.use(http.get(`${BASE}/incidencias`, ({ request }) => {
+      pedido = new URL(request.url).search
+      return HttpResponse.json([
+        { _id: 'a1', codigo: 'INC-A1', titulo: 'Proyector apagado', categoria: 'computo_redes', estado: 'en_proceso', prioridad: 'alta', ubicacion: { edificio: 'A', piso: 1, aula: '101' }, fecha_creacion: '2026-10-20T10:00:00Z', tecnico_asignado: { usuario_id: LUIS, nombre: 'Luis Gómez' } },
+        { _id: 'a2', codigo: 'INC-A2', titulo: 'Falta cable', categoria: 'computo_redes', estado: 'en_espera', prioridad: 'media', ubicacion: { edificio: 'A', piso: 1, aula: '102' }, fecha_creacion: '2026-10-19T10:00:00Z', tecnico_asignado: { usuario_id: LUIS, nombre: 'Luis Gómez' } },
+        { _id: 'a3', codigo: 'INC-A3', titulo: 'Ya quedó', categoria: 'computo_redes', estado: 'resuelta', prioridad: 'baja', ubicacion: { edificio: 'B', piso: 2, aula: '201' }, fecha_creacion: '2026-10-18T10:00:00Z', tecnico_asignado: { usuario_id: LUIS, nombre: 'Luis Gómez' } },
+      ])
+    }))
     const persona = userEvent.setup()
-    await persona.click(await screen.findByRole('link', { name: /^Luis Gómez/ }))
+    await persona.click(await screen.findByRole('button', { name: /^Luis Gómez/ }))
+    const panel = await screen.findByRole('dialog', { name: 'Operación de Luis Gómez' })
+    expect(await within(panel).findByRole('list', { name: 'En curso' })).toHaveTextContent('Proyector apagado')
+    expect(within(panel).getByRole('list', { name: 'En espera' })).toHaveTextContent('Falta cable')
+    expect(within(panel).getByRole('list', { name: 'Por confirmar' })).toHaveTextContent('Ya quedó')
+    expect(pedido).toContain(`tecnico=${LUIS}`)
+    await persona.click(within(panel).getByRole('link', { name: 'Ver en el tablero' }))
     expect(screen.getByTestId('url')).toHaveTextContent(`?tecnico=${LUIS}`)
   })
 
@@ -91,7 +106,7 @@ describe('Técnicos (Vitest + MSW)', () => {
     const { llamadas } = preparar({ falla: 'carga' })
     expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar a los técnicos')
     await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }))
-    expect(await screen.findByRole('link', { name: /^Luis Gómez/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^Luis Gómez/ })).toBeInTheDocument()
     expect(llamadas()).toBe(2)
   })
 

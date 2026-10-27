@@ -1,10 +1,14 @@
-import { Activity, ChevronRight, Clock, RefreshCw, UserCheck, Users } from 'lucide-react'
+import { Activity, ChevronRight, Clock, RefreshCw, UserCheck, UserPlus, Users } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../auth/store'
+import { OperacionTecnico } from '../components/OperacionTecnico'
+import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { useTecnicos } from '../api/hooks/admin'
 import { useCargaTecnicos } from '../api/hooks/analitica'
 import { mensajeDeError } from '../api/client'
 import { AvatarIniciales } from '../components/TarjetaIncidencia'
-import { Button, EmptyState, ErrorState, PageHeader, Seccion, SkeletonLista, StatGrid, StatTile } from '../components/ui'
+import { Button, EmptyState, ErrorState, PageHeader, PanelLateral, Seccion, SkeletonLista, StatGrid, StatTile } from '../components/ui'
 
 type FilaCarga = { id: string; nombre: string; activas: number; horas: number }
 
@@ -15,6 +19,9 @@ const horasFmt = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 1 })
 export default function Tecnicos() {
   const tecnicos = useTecnicos()
   const carga = useCargaTecnicos()
+  const [elegido, setElegido] = useState<FilaCarga | null>(null)
+  const { abrir, panel } = usePanelIncidencia()
+  const puedeCrearUsuarios = useAuth((s) => s.tiene('usuarios:gestionar'))
   const isPending = tecnicos.isPending || carga.isPending
   const error = tecnicos.error ?? carga.error
   const isFetching = tecnicos.isFetching || carga.isFetching
@@ -89,17 +96,18 @@ export default function Tecnicos() {
             <StatTile etiqueta="Horas acumuladas" valor={`${horasFmt.format(totalHoras)} h`} icono={<Clock size={18} />} />
           </StatGrid>
 
-          <Seccion titulo="Carga por técnico" descripcion="Ordenados de mayor a menor carga. Toca uno para ver sus incidencias." sinPadding>
+          <Seccion titulo="Carga por técnico" descripcion="Ordenados de mayor a menor carga. Toca uno para ver toda su operación." sinPadding>
             <ul className="m-0 flex list-none flex-col p-0" aria-label="Carga por técnico">
               {filas.map((f) => {
                 const proporcion = f.activas / maximo
                 const tonoBarra = f.activas === 0 ? 'bg-line-strong' : proporcion >= 0.8 && f.activas >= 5 ? 'bg-warn' : 'bg-brand'
                 return (
                   <li key={f.id} className="border-t border-line first:border-t-0">
-                    <Link
-                      to={`/tablero?tecnico=${encodeURIComponent(f.id)}`}
-                      className="flex min-h-11 items-center gap-3 px-4 py-3 text-ink no-underline transition-colors hover:bg-panel-2"
-                      aria-label={`${f.nombre}: ${f.activas} incidencias activas, ${horasFmt.format(f.horas)} horas. Ver en el tablero`}
+                    <button
+                      type="button"
+                      onClick={() => setElegido(f)}
+                      className="flex min-h-11 w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-ink transition-colors hover:bg-panel-2"
+                      aria-label={`${f.nombre}: ${f.activas} incidencias activas, ${horasFmt.format(f.horas)} horas. Ver su operación`}
                     >
                       <AvatarIniciales nombre={f.nombre} />
                       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -114,7 +122,7 @@ export default function Tecnicos() {
                         </div>
                       </div>
                       <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden />
-                    </Link>
+                    </button>
                   </li>
                 )
               })}
@@ -122,6 +130,18 @@ export default function Tecnicos() {
           </Seccion>
         </>
       )}
+
+      <p className="m-0 flex flex-wrap items-center gap-x-2 text-sm text-muted">
+        <UserPlus size={16} aria-hidden />
+        {puedeCrearUsuarios
+          ? <>Para dar de alta un técnico ve a <Link to="/admin/usuarios">Usuarios → Nuevo usuario</Link> y elige el rol Técnico con sus áreas.</>
+          : 'Los técnicos los da de alta el administrador en Usuarios. Pídeselo indicando nombre, correo y áreas.'}
+      </p>
+
+      <PanelLateral abierto={Boolean(elegido)} onCerrar={() => setElegido(null)} titulo={elegido ? `Operación de ${elegido.nombre}` : 'Operación'}>
+        {elegido && <OperacionTecnico tecnicoId={elegido.id} horas={elegido.horas} onAbrirIncidencia={abrir} />}
+      </PanelLateral>
+      {panel}
     </div>
   )
 }
