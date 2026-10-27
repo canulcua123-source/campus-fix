@@ -430,12 +430,27 @@ def _resumen_auditoria_categoria() -> dict:
     }
 
 
+def _resumen_auditoria_aula() -> dict:
+    return {
+        "bsonType": "object",
+        "required": ["edificio", "piso", "aula", "activa"],
+        "additionalProperties": False,
+        "properties": {
+            "edificio": {"bsonType": "string", "minLength": 1, "maxLength": 60},
+            "piso": {"bsonType": ["int", "long"], "minimum": -5, "maximum": 50},
+            "aula": {"bsonType": "string", "minLength": 1, "maxLength": 60},
+            "activa": {"bsonType": "bool"},
+        },
+    }
+
+
 def esquema_auditoria() -> dict:
     """Validador estricto de eventos administrativos resumidos."""
     recursos = (
         ("usuarios", _resumen_auditoria_usuario()),
         ("roles", _resumen_auditoria_rol()),
         ("categorias", _resumen_auditoria_categoria()),
+        ("aulas", _resumen_auditoria_aula()),
     )
     return {
         "$jsonSchema": {
@@ -446,7 +461,7 @@ def esquema_auditoria() -> dict:
                 "_id": {"bsonType": "objectId"},
                 "actor_id": {"bsonType": "objectId"},
                 "accion": {"enum": ["crear", "editar"]},
-                "recurso": {"enum": ["usuarios", "roles", "categorias"]},
+                "recurso": {"enum": [recurso for recurso, _ in recursos]},
                 "recurso_id": {"bsonType": "string", "minLength": 1, "maxLength": 64},
                 "antes": {"bsonType": "object"},
                 "despues": {"bsonType": "object"},

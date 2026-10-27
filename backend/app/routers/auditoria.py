@@ -28,7 +28,7 @@ PROYECCION_AUDITORIA = {
     response_model_exclude_none=True,
     summary="Consultar la bitácora administrativa",
     description=(
-        "Solo el rol administrador puede consultar eventos de usuarios, roles y categorías. "
+        "Solo el rol administrador puede consultar eventos de usuarios, roles, categorías y aulas. "
         "Los resultados se ordenan por fecha e identificador descendentes y admiten filtro por recurso."
     ),
     responses={

@@ -4200,6 +4200,160 @@
               ]
             }
           }
+        },
+        {
+          "name": "Crear aula",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('aula_nombre', 'PM-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Devuelve el aula con id_publico opaco', function () { const j = pm.response.json(); pm.expect(j).to.have.all.keys('id_publico', 'edificio', 'piso', 'aula', 'activa'); pm.expect(j.id_publico).to.match(/^[A-Za-z0-9_-]{22}$/); pm.expect(j.aula).to.eql(pm.collectionVariables.get('aula_nombre')); pm.expect(j.activa).to.eql(true); pm.collectionVariables.set('aula_id_publico', j.id_publico); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Alta manual de un aula (RF-ADM-04). Requiere usuarios:gestionar. El servidor genera el id_publico para el QR.",
+            "url": {
+              "raw": "{{base_url}}/aulas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"edificio\": \"Postman\",\n  \"piso\": 1,\n  \"aula\": \"{{aula_nombre}}\",\n  \"activa\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Crear aula duplicada (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Mensaje de ubicación duplicada', function () { pm.expect(pm.response.json().detalle).to.eql('Ya existe un aula con ese edificio, piso y aula'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Misma ubicación que «Crear aula»: el índice único responde 409.",
+            "url": {
+              "raw": "{{base_url}}/aulas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"edificio\": \"Postman\",\n  \"piso\": 1,\n  \"aula\": \"{{aula_nombre}}\",\n  \"activa\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Editar aula",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Aula desactivada con el mismo id', function () { const j = pm.response.json(); pm.expect(j.id_publico).to.eql(pm.collectionVariables.get('aula_id_publico')); pm.expect(j.piso).to.eql(2); pm.expect(j.activa).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Edición parcial (al menos un campo). Una aula inactiva deja de aparecer en /aulas/ubicaciones.",
+            "url": {
+              "raw": "{{base_url}}/aulas/{{aula_id_publico}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas",
+                "{{aula_id_publico}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"piso\": 2,\n  \"activa\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
         }
       ]
     },
@@ -4774,6 +4928,150 @@
               }
             }
           }
+        },
+        {
+          "name": "Crear aula - datos inválidos (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Error de validación', function () { pm.expect(pm.response.json().error).to.eql('validacion'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/aulas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"edificio\": \"\",\n  \"piso\": 99,\n  \"aula\": \"X\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Crear aula - sin permiso (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_reportante}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/aulas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"edificio\": \"Postman\",\n  \"piso\": 1,\n  \"aula\": \"Sin permiso\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Editar aula - no existe (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('Sin pistas de enumeración', function () { pm.expect(pm.response.json().detalle).to.eql('Aula no encontrada'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/aulas/NoExisteNoExisteNoExis",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "aulas",
+                "NoExisteNoExisteNoExis"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activa\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
         }
       ]
     }
@@ -4829,6 +5127,14 @@
     },
     {
       "key": "analisis_id",
+      "value": ""
+    },
+    {
+      "key": "aula_nombre",
+      "value": ""
+    },
+    {
+      "key": "aula_id_publico",
       "value": ""
     }
   ]

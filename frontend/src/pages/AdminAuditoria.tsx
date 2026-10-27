@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, History, RefreshCw, ShieldCheck, Tags, UserRound, type LucideIcon } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, DoorOpen, History, RefreshCw, ShieldCheck, Tags, UserRound, type LucideIcon } from 'lucide-react'
 import { useAuditoria } from '../api/hooks/auditoria'
 import { categoriasQuery } from '../api/catalogos'
 import { mensajeDeError } from '../api/client'
@@ -17,9 +17,9 @@ import {
 
 const LIMITE = 20
 
-const ETIQUETAS_RECURSO: Record<RecursoAuditoria, string> = { usuarios: 'Usuarios', roles: 'Roles', categorias: 'Categorías' }
-const RECURSO_CON_ARTICULO: Record<RecursoAuditoria, string> = { usuarios: 'el usuario', roles: 'el rol', categorias: 'la categoría' }
-const ICONO_RECURSO: Record<RecursoAuditoria, LucideIcon> = { usuarios: UserRound, roles: ShieldCheck, categorias: Tags }
+const ETIQUETAS_RECURSO: Record<RecursoAuditoria, string> = { usuarios: 'Usuarios', roles: 'Roles', categorias: 'Categorías', aulas: 'Aulas' }
+const RECURSO_CON_ARTICULO: Record<RecursoAuditoria, string> = { usuarios: 'el usuario', roles: 'el rol', categorias: 'la categoría', aulas: 'el aula' }
+const ICONO_RECURSO: Record<RecursoAuditoria, LucideIcon> = { usuarios: UserRound, roles: ShieldCheck, categorias: Tags, aulas: DoorOpen }
 const VERBO = { crear: 'Creó', editar: 'Editó' } as const
 const ETIQUETAS_CAMPO: Record<keyof ResumenAuditoria, string> = {
   rol: 'Rol',
@@ -31,9 +31,13 @@ const ETIQUETAS_CAMPO: Record<keyof ResumenAuditoria, string> = {
   alcance: 'Alcance',
   cantidad_permisos: 'Permisos',
   version: 'Versión',
+  activa: 'Activa',
   prefijo: 'Prefijo',
   cantidad_campos: 'Campos',
   sistema: 'De sistema',
+  edificio: 'Edificio',
+  piso: 'Piso',
+  aula: 'Aula',
 }
 
 type Valor = ResumenAuditoria[keyof ResumenAuditoria]
@@ -67,6 +71,10 @@ function cambiosDe(evento: EventoAuditoria) {
 function nombreRecurso(evento: EventoAuditoria, nombres: Nombres): string {
   const clave = evento.despues.clave ?? evento.antes?.clave
   if (evento.recurso === 'usuarios') return nombres.usuario(evento.recurso_id) ?? idCorto(evento.recurso_id)
+  if (evento.recurso === 'aulas') {
+    const { aula, edificio } = evento.despues
+    return aula ? (edificio ? `${aula} · ${edificio}` : aula) : idCorto(evento.recurso_id)
+  }
   if (evento.recurso === 'roles') return (clave && nombres.rol(clave)) ?? clave ?? idCorto(evento.recurso_id)
   return nombres.categoria(evento.recurso_id) ?? (clave && nombres.categoria(clave)) ?? clave ?? idCorto(evento.recurso_id)
 }
@@ -152,7 +160,7 @@ export default function AdminAuditoria() {
         <EmptyState
           icono={History}
           titulo="Sin eventos de auditoría"
-          descripcion={recurso ? `Nadie ha cambiado ${ETIQUETAS_RECURSO[recurso].toLowerCase()} todavía.` : 'Aquí verás cada alta o edición de usuarios, roles y categorías.'}
+          descripcion={recurso ? `Nadie ha cambiado ${ETIQUETAS_RECURSO[recurso].toLowerCase()} todavía.` : 'Aquí verás cada alta o edición de usuarios, roles, categorías y aulas.'}
           accion={recurso || pagina > 1 ? <Button variante="secundario" tamano="sm" onClick={() => cambiarRecurso('')}>Ver todos</Button> : undefined}
         />
       ) : (

@@ -72,6 +72,32 @@ describe('Auditoría administrativa', () => {
     }
   })
 
+  it('describe altas y ediciones de aulas con su ubicación', async () => {
+    preparar(() => HttpResponse.json({
+      pagina: 1, limite: 20, total: 2,
+      resultados: [
+        {
+          _id: 'ev3', actor_id: 'admin1', accion: 'editar', recurso: 'aulas', recurso_id: 'AbCdEfGhIjKlMnOpQrStUv',
+          antes: { edificio: 'Edificio A', piso: 2, aula: 'A-201', activa: true },
+          despues: { edificio: 'Edificio A', piso: 2, aula: 'A-201', activa: false },
+          fecha: '2026-10-25T18:30:00Z',
+        },
+        {
+          _id: 'ev4', actor_id: 'admin1', accion: 'crear', recurso: 'aulas', recurso_id: 'ZyXwVuTsRqPoNmLkJiHgFe',
+          despues: { edificio: 'Biblioteca', piso: 0, aula: 'Sala 1', activa: true },
+          fecha: '2026-10-24T10:00:00Z',
+        },
+      ],
+    } satisfies PaginaAuditoria))
+    expect(await screen.findByText(/A-201 · Edificio A/)).toBeInTheDocument()
+    const [edicion, alta] = screen.getAllByRole('listitem', { name: /el aula/ })
+    expect(edicion).toHaveTextContent('Editó el aula A-201 · Edificio A')
+    expect(edicion).toHaveTextContent('ActivaSí')
+    expect(edicion).toHaveTextContent('No')
+    expect(alta).toHaveTextContent('Creó el aula Sala 1 · Biblioteca')
+    expect(screen.getByRole('button', { name: 'Aulas' })).toBeInTheDocument()
+  })
+
   it('muestra nombres de usuarios ya en caché en lugar de ids', async () => {
     const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     cliente.setQueryData(['usuarios'], [
