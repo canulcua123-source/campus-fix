@@ -3,7 +3,10 @@ import '../../test/setup'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { BASE } from '../../api/client'
+import { servidor } from '../../test/msw/server'
 import App from '../../App'
 import { ACCESO_RUTA, cumpleAcceso, rutaInicio, type RutaApp } from '../../components/navegacion'
 import { ROLES_BASE, sesionDe, type RolBase } from '../../test/roles'
@@ -33,6 +36,11 @@ function montar(ruta: string) {
 }
 
 describe('RequirePermiso', () => {
+  // Tras redirigir, la pantalla principal del rol pide datos: aquí basta con responder vacío.
+  beforeEach(() => {
+    servidor.use(http.all(`${BASE}/*`, () => HttpResponse.json([])))
+  })
+
   it('sin permiso no muestra la ruta y lleva a la pantalla principal del rol', () => {
     useAuth.setState({ token: 't', usuario })
     montar('/bandeja')
