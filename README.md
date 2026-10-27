@@ -174,6 +174,14 @@ docker run --rm -p 8000:8000 -e MONGODB_URI=mongodb://host.docker.internal:27017
   -e REDIS_URL=redis://host.docker.internal:6379/0 -e JWT_SECRET=$(openssl rand -hex 32) utm-desk-api
 ```
 
+## Despliegue de la PWA (Cloudflare Pages)
+
+1. Cloudflare → **Workers & Pages → Create → Pages → Connect to Git**, repositorio `campus-fix`, rama `main`.
+2. Configuración de build: *Root directory* `frontend`, *Build command* `npm ci && npm run build`, *Output* `dist`, variable `NODE_VERSION` = la de `.nvmrc`.
+3. Variables de entorno (Production): `VITE_API_URL=https://<servicio>.onrender.com` y `VITE_DOMINIO_CORREO=utm.edu.mx`. Se leen **al compilar**: si cambian, vuelve a desplegar.
+4. Copia el dominio que te da Pages (`https://<proyecto>.pages.dev`) a `CORS_ORIGINS` en Render y redepliega la API.
+5. `frontend/public/_redirects` sirve la SPA en cualquier ruta y `_headers` añade cabeceras de seguridad y evita cachear `sw.js`/`index.html` (para que lleguen las actualizaciones).
+
 ## CI
 
 GitHub Actions ejecuta el pipeline en cada Pull Request hacia `dev` o `main` y en cada push a `dev`. Los jobs se filtran por las rutas modificadas y el check final obligatorio es `ci-ok`.

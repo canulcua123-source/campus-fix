@@ -1,0 +1,2 @@
+# SPA: toda ruta del cliente (/bandeja, /incidencias/abc…) sirve index.html con 200.
+/*    /index.html   200
