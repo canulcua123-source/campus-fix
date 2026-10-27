@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { Clock, MapPin, Search, SearchX } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useBuscar } from '../api/hooks/incidencias'
 import { haceCuanto } from '../lib/tiempo'
@@ -202,6 +202,12 @@ function BuscadorInicial({ inicial }: { inicial: string }) {
   const [, setParametros] = useSearchParams()
   const [texto, setTexto] = useState(inicial)
   const valido = texto.trim().length >= 2
+  // Busca sola al dejar de escribir (300 ms); Enter o «Buscar» la lanzan de inmediato.
+  useEffect(() => {
+    if (!valido) return
+    const t = window.setTimeout(() => setParametros({ q: texto.trim() }, { replace: true }), 300)
+    return () => window.clearTimeout(t)
+  }, [texto, valido, setParametros])
   return (
     <div className="pila">
       <PageHeader titulo="Buscar" subtitulo="Encuentra reportes de tu área por palabras clave." />

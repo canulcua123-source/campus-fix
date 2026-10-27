@@ -13,6 +13,7 @@ import Bandeja from './pages/Bandeja'
 import Buscar from './pages/Buscar'
 import Dashboard from './pages/Dashboard'
 import DetalleIncidencia from './pages/DetalleIncidencia'
+import Incidencias from './pages/Incidencias'
 import Inicio from './pages/Inicio'
 import Login from './pages/Login'
 import MisTickets from './pages/MisTickets'
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="reportar" element={<RequirePermiso {...A['/reportar']}><Reportar /></RequirePermiso>} />
         <Route path="mis-reportes" element={<RequirePermiso {...A['/mis-reportes']}><MisTickets /></RequirePermiso>} />
         <Route path="mis-tickets" element={<Navigate to="/mis-reportes" replace />} />
+        <Route path="incidencias" element={<RequirePermiso {...A['/incidencias']}><Incidencias /></RequirePermiso>} />
         <Route path="incidencias/:id" element={<RequirePermiso {...A['/incidencias/:id']}><DetalleIncidencia /></RequirePermiso>} />
         <Route path="bandeja" element={<RequirePermiso {...A['/bandeja']}><Bandeja /></RequirePermiso>} />
         <Route path="tablero" element={<RequirePermiso {...A['/tablero']}><Tablero /></RequirePermiso>} />

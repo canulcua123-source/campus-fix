@@ -24,6 +24,7 @@ const RUTAS_POR_ROL: Record<RutaApp, RolBase[]> = {
   '/perfil': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
   '/reportar': ['reportante', 'tecnico', 'coordinador', 'admin'],
   '/mis-reportes': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
+  '/incidencias': ['tecnico', 'coordinador', 'directivo', 'admin'],
   '/incidencias/:id': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
   '/bandeja': ['tecnico', 'coordinador', 'admin'],
   '/buscar': ['tecnico', 'coordinador', 'directivo', 'admin'],
