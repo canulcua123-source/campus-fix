@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../test/setup'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
@@ -62,7 +62,8 @@ describe('Bandeja (T-050)', () => {
     renderBandeja()
 
     await screen.findByText('Crítica asignada')
-    expect(screen.getAllByRole('link').map((enlace) => enlace.textContent)).toEqual([
+    const propias = within(screen.getByRole('list', { name: 'Asignadas a ti' }))
+    expect(propias.getAllByRole('link').map((enlace) => enlace.textContent)).toEqual([
       expect.stringContaining('Crítica asignada'),
       expect.stringContaining('Alta antigua'),
       expect.stringContaining('Alta reciente'),
@@ -70,22 +71,22 @@ describe('Bandeja (T-050)', () => {
     ])
   })
 
-  it('muestra en su pestaña las incidencias sin asignar', async () => {
+  it('muestra en una sola lista las aceptadas y las por aceptar, cada una en su sección', async () => {
     responder(INCIDENCIAS)
     renderBandeja()
 
-    const usuario = userEvent.setup()
     await screen.findByText('Crítica asignada')
-    await usuario.click(screen.getByRole('button', { name: /^Sin asignar/ }))
-    expect(screen.getByText('Pendiente de asignación')).toBeInTheDocument()
-    expect(screen.queryByText('Crítica asignada')).not.toBeInTheDocument()
+    const porAceptar = within(screen.getByRole('list', { name: 'Por aceptar' }))
+    expect(porAceptar.getByText('Pendiente de asignación')).toBeInTheDocument()
+    expect(porAceptar.queryByText('Crítica asignada')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Asignadas a ti' })).getAllByText('Aceptada por ti').length).toBeGreaterThan(0)
   })
 
   it('muestra el estado vacío', async () => {
     responder([])
     renderBandeja()
 
-    expect(await screen.findByText('Sin incidencias asignadas')).toBeInTheDocument()
+    expect(await screen.findByText('Todo al día')).toBeInTheDocument()
   })
 
   it('"Mis asignadas" usa el id del usuario y no confunde homónimos', async () => {
@@ -136,11 +137,11 @@ describe('Bandeja (T-050)', () => {
     renderBandeja()
     const usuario = userEvent.setup()
     await screen.findByText('Crítica asignada')
-    expect(screen.queryByRole('button', { name: /Tomar/ })).not.toBeInTheDocument()
-    await usuario.click(screen.getByRole('button', { name: /^Sin asignar/ }))
+    expect(within(screen.getByRole('list', { name: 'Asignadas a ti' })).queryByRole('button', { name: /Tomar/ })).not.toBeInTheDocument()
     await usuario.click(screen.getByRole('button', { name: 'Tomar INC-SIN' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Tomaste INC-SIN')
-    await waitFor(() => expect(screen.queryByText('Pendiente de asignación')).not.toBeInTheDocument())
+    await waitFor(() => expect(within(screen.getByRole('list', { name: 'Asignadas a ti' })).getByText('Pendiente de asignación')).toBeInTheDocument())
+    expect(screen.queryByRole('list', { name: 'Por aceptar' })).not.toBeInTheDocument()
   })
 
   it('muestra el 409 cuando otro técnico la tomó antes y refresca la lista', async () => {
@@ -156,7 +157,6 @@ describe('Bandeja (T-050)', () => {
     renderBandeja()
     const usuario = userEvent.setup()
     await screen.findByText('Crítica asignada')
-    await usuario.click(screen.getByRole('button', { name: /^Sin asignar/ }))
     await usuario.click(screen.getByRole('button', { name: 'Tomar INC-SIN' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('La incidencia no está disponible para autoasignación')
     await waitFor(() => expect(listas).toBeGreaterThan(1))
@@ -166,9 +166,8 @@ describe('Bandeja (T-050)', () => {
     responder(INCIDENCIAS)
     renderBandeja()
     useAuth.setState({ usuario: { nombre: 'Ana', rol: 'coordinador', permisos: ['incidencias:ver', 'seguimiento:registrar'], alcance: 'area' } })
-    const usuario = userEvent.setup()
     await screen.findByText('Crítica asignada')
-    await usuario.click(screen.getByRole('button', { name: /^Sin asignar/ }))
     expect(screen.queryByRole('button', { name: /Tomar/ })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Por aceptar' })).getByText('Por aceptar')).toBeInTheDocument()
   })
 })

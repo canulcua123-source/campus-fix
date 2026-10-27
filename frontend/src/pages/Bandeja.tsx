@@ -1,4 +1,4 @@
-import { CircleCheck, Hand, Inbox, RefreshCw, Search, SearchX } from 'lucide-react'
+import { CircleCheck, Hand, Hourglass, Inbox, RefreshCw, Search, SearchX } from 'lucide-react'
 import { useState } from 'react'
 import { useMe } from '../api/hooks/auth'
 import { mensajeDeError } from '../api/client'
@@ -6,8 +6,8 @@ import { useIncidencias, useTomar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
-import { Button, EmptyState, ErrorState, Input, PageHeader, Segmentado, SkeletonLista } from '../components/ui'
-import { antiguedad, filtrarBandeja, ordenarBandeja, type PestanaBandeja } from '../lib/bandeja'
+import { Button, EmptyState, ErrorState, Input, PageHeader, SkeletonLista } from '../components/ui'
+import { antiguedad, filtrarBandeja, ordenarBandeja } from '../lib/bandeja'
 import type { IncidenciaListaItem } from '../schemas/incidencia'
 
 /** Sin acentos ni mayúsculas, para comparar «aire» con «Aire acondicionado». */
@@ -21,14 +21,9 @@ function coincide(t: IncidenciaListaItem, consulta: string) {
   return palabras.every((p) => texto.includes(p))
 }
 
-const PESTANAS: { clave: PestanaBandeja; texto: string }[] = [
-  { clave: 'mias', texto: 'Mis asignadas' },
-  { clave: 'sin_asignar', texto: 'Sin asignar' },
-]
 
 /** Bandeja del técnico: sus asignadas y las de su área sin técnico, por prioridad y antigüedad. */
 export default function Bandeja() {
-  const [pestana, setPestana] = useState<PestanaBandeja>('mias')
   const incidencias = useIncidencias({})
   const me = useMe()
   const tomar = useTomar()
@@ -44,14 +39,49 @@ export default function Bandeja() {
     void me.refetch()
   }
 
-  const conteo = {
-    mias: filtrarBandeja(data ?? [], 'mias', me.data?._id).length,
-    sin_asignar: filtrarBandeja(data ?? [], 'sin_asignar', me.data?._id).length,
-  }
   const [consulta, setConsulta] = useState('')
-  const deLaPestana = ordenarBandeja(filtrarBandeja(data ?? [], pestana, me.data?._id))
-  const lista = deLaPestana.filter((t) => coincide(t, consulta))
-  const sinCoincidencias = consulta.trim() !== '' && deLaPestana.length > 0 && lista.length === 0
+  const propias = ordenarBandeja(filtrarBandeja(data ?? [], 'mias', me.data?._id))
+  const porAceptar = ordenarBandeja(filtrarBandeja(data ?? [], 'sin_asignar', me.data?._id))
+  const visibles = { propias: propias.filter((t) => coincide(t, consulta)), porAceptar: porAceptar.filter((t) => coincide(t, consulta)) }
+  const hayAlgo = propias.length + porAceptar.length > 0
+  const sinCoincidencias = consulta.trim() !== '' && hayAlgo && visibles.propias.length + visibles.porAceptar.length === 0
+  const listo = !isPending && !isError
+
+  const tarjeta = (t: IncidenciaListaItem, aceptada: boolean) => (
+    <li key={t._id}>
+      <TarjetaIncidencia
+        incidencia={t}
+        onAbrir={abrir}
+        tonoTiempo={antiguedad(t.fecha_creacion).nivel}
+        accion={aceptada ? (
+          <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-ok">
+            <CircleCheck size={16} aria-hidden /> Aceptada por ti
+          </p>
+        ) : puedeTomar ? (
+          <Button
+            bloque
+            tamano="sm"
+            variante="primario"
+            icono={<Hand size={16} />}
+            aria-label={`Tomar ${t.codigo}`}
+            disabled={tomar.isPending}
+            cargando={tomar.isPending && tomar.variables === t._id}
+            textoCargando="Tomando…"
+            onClick={() => {
+              setAviso(null)
+              tomar.mutate(t._id, { onSuccess: () => setAviso(`Tomaste ${t.codigo}. Ya está en «Asignadas a ti».`) })
+            }}
+          >
+            Tomar
+          </Button>
+        ) : (
+          <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-warn">
+            <Hourglass size={16} aria-hidden /> Por aceptar
+          </p>
+        )}
+      />
+    </li>
+  )
 
   return (
     <div className="pila">
@@ -69,19 +99,6 @@ export default function Bandeja() {
         )}
       />
 
-      <Segmentado
-        etiqueta="Incidencias de la bandeja"
-        valor={pestana}
-        onCambio={(v) => {
-          setPestana(v)
-          setAviso(null)
-        }}
-        className="flex w-full [&>button]:flex-1"
-        opciones={PESTANAS.map((p) => ({
-          valor: p.clave,
-          texto: isPending ? p.texto : `${p.texto} · ${conteo[p.clave]}`,
-        }))}
-      />
       <Input
         etiqueta="Buscar en la bandeja"
         etiquetaOculta
@@ -116,64 +133,50 @@ export default function Bandeja() {
         />
       )}
 
-      {!isPending && !isError && sinCoincidencias && (
+      {listo && sinCoincidencias && (
         <EmptyState
           compacto
           titulo="Sin coincidencias"
-          descripcion={`Ninguna incidencia de esta pestaña coincide con «${consulta.trim()}».`}
+          descripcion={`Ninguna incidencia coincide con «${consulta.trim()}».`}
           icono={SearchX}
           accion={<Button variante="secundario" tamano="sm" onClick={() => setConsulta('')}>Limpiar búsqueda</Button>}
         />
       )}
 
-      {!isPending && !isError && !sinCoincidencias && lista.length === 0 && (
+      {listo && !hayAlgo && (
         <EmptyState
           compacto
-          titulo={pestana === 'mias' ? 'Sin incidencias asignadas' : 'Sin incidencias por asignar'}
-          descripcion={
-            pestana === 'mias'
-              ? 'Cuando te asignen una incidencia de tu área aparecerá aquí.'
-              : 'No hay incidencias pendientes de asignación en tu área.'
-          }
+          titulo="Todo al día"
+          descripcion="No tienes incidencias asignadas ni hay pendientes por aceptar en tu área."
           icono={Inbox}
-          accion={pestana === 'mias' && conteo.sin_asignar > 0 ? (
-            <Button variante="secundario" tamano="sm" onClick={() => setPestana('sin_asignar')}>
-              Ver {conteo.sin_asignar} sin asignar
-            </Button>
-          ) : undefined}
         />
       )}
 
-      {!isPending && !isError && lista.length > 0 && (
-        <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Incidencias">
-          {lista.map((t) => (
-            <li key={t._id}>
-              <TarjetaIncidencia
-                incidencia={t}
-                onAbrir={abrir}
-                tonoTiempo={antiguedad(t.fecha_creacion).nivel}
-                accion={puedeTomar && !t.tecnico_asignado ? (
-                  <Button
-                    bloque
-                    tamano="sm"
-                    variante="primario"
-                    icono={<Hand size={16} />}
-                    aria-label={`Tomar ${t.codigo}`}
-                    disabled={tomar.isPending}
-                    cargando={tomar.isPending && tomar.variables === t._id}
-                    textoCargando="Tomando…"
-                    onClick={() => {
-                      setAviso(null)
-                      tomar.mutate(t._id, { onSuccess: () => setAviso(`Tomaste ${t.codigo}. Ya aparece en Mis asignadas.`) })
-                    }}
-                  >
-                    Tomar
-                  </Button>
-                ) : undefined}
-              />
-            </li>
-          ))}
-        </ul>
+      {listo && !sinCoincidencias && visibles.propias.length > 0 && (
+        <section aria-labelledby="bandeja-propias" className="pila pila--sm">
+          <h2 id="bandeja-propias" className="m-0 flex items-center gap-2 text-base font-semibold">
+            <CircleCheck size={18} aria-hidden className="text-ok" /> Asignadas a ti
+            <span className="rounded-full bg-panel-2 px-2 text-sm font-medium text-muted">{visibles.propias.length}</span>
+          </h2>
+          <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Asignadas a ti">
+            {visibles.propias.map((t) => tarjeta(t, true))}
+          </ul>
+        </section>
+      )}
+
+      {listo && !sinCoincidencias && visibles.porAceptar.length > 0 && (
+        <section aria-labelledby="bandeja-por-aceptar" className="pila pila--sm">
+          <div>
+            <h2 id="bandeja-por-aceptar" className="m-0 flex items-center gap-2 text-base font-semibold">
+              <Hourglass size={18} aria-hidden className="text-warn" /> Por aceptar
+              <span className="rounded-full bg-panel-2 px-2 text-sm font-medium text-muted">{visibles.porAceptar.length}</span>
+            </h2>
+            {puedeTomar && <p className="m-0 text-sm text-muted">Sin técnico asignado. Tómala para que pase a «Asignadas a ti».</p>}
+          </div>
+          <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Por aceptar">
+            {visibles.porAceptar.map((t) => tarjeta(t, false))}
+          </ul>
+        </section>
       )}
       {panel}
     </div>
