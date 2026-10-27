@@ -30,6 +30,7 @@ export const ACCESO_RUTA = {
   '/perfil': {},
   '/reportar': { permiso: 'incidencias:crear' },
   '/mis-reportes': { permiso: 'incidencias:ver' },
+  '/incidencias': { permiso: 'incidencias:buscar' },
   '/incidencias/:id': { permiso: 'incidencias:ver' },
   '/bandeja': { permiso: 'seguimiento:registrar' },
   '/buscar': { permiso: 'incidencias:buscar' },
@@ -81,7 +82,7 @@ const I = {
   tablero: item('/tablero', 'Tablero', KanbanSquare),
   metricas: item('/dashboard', 'Métricas', BarChart3),
   dashboard: item('/dashboard', 'Dashboard', LayoutDashboard),
-  incidencias: item('/buscar', 'Incidencias', ListChecks),
+  incidencias: item('/incidencias', 'Incidencias', ListChecks),
   tecnicos: item('/tecnicos', 'Técnicos', Wrench),
   reportes: item('/reportes', 'Reportes', FileText),
   usuarios: item('/admin/usuarios', 'Usuarios', Users),
@@ -102,7 +103,8 @@ interface Config {
 
 export const NAVEGACION: Record<PerfilNav, Config> = {
   reportante: { movil: [I.inicio, REPORTAR, I.misReportes, I.perfil], lateral: [I.inicio, I.misReportes] },
-  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: [I.bandeja, I.buscar, I.misReportes] },
+  // En escritorio la barra superior ya busca: «Buscar» solo queda en la barra inferior (móvil).
+  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: [I.bandeja, I.misReportes] },
   coordinador: {
     movil: [I.tablero, I.bandeja, REPORTAR, I.metricas, I.perfil],
     lateral: [I.tablero, I.incidencias, I.tecnicos, I.metricas],
@@ -110,7 +112,7 @@ export const NAVEGACION: Record<PerfilNav, Config> = {
   directivo: { movil: [I.dashboard, I.buscar, I.perfil], lateral: [I.dashboard, I.incidencias, I.reportes] },
   admin: {
     movil: [I.usuarios, I.roles, I.categorias, I.perfil],
-    lateral: [I.usuarios, I.roles, I.categorias, I.edificios, I.auditoria, I.configuracion, I.metricasIA],
+    lateral: [I.dashboard, I.usuarios, I.roles, I.categorias, I.edificios, I.auditoria, I.configuracion, I.metricasIA],
   },
 }
 
@@ -137,4 +139,9 @@ export function navegacionPara(permisos: readonly string[], rol?: string) {
     lateral: lateral.filter(permitido),
     puedeReportar: permitido(REPORTAR),
   }
+}
+
+/** Pantalla principal del rol: la primera de su menú lateral (Bandeja, Tablero, Dashboard…); «/» si no hay. */
+export function rutaInicio(permisos: readonly string[], rol?: string): string {
+  return navegacionPara(permisos, rol).lateral[0]?.to ?? '/'
 }

@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
@@ -11,9 +12,23 @@ from app.core.limiter import limite_general, limiter
 from app.routers import analitica, auditoria, aulas, auth, categorias, config, ia, incidencias, roles, usuarios
 
 
+logger = logging.getLogger(__name__)
+
+
+def _avisar_si_falta_llave_ia() -> None:
+    """Aviso al arrancar si la IA está habilitada pero el proveedor elegido no tiene llave (#132)."""
+    llave = settings.gemini_api_key if settings.ia_proveedor == "gemini" else settings.anthropic_api_key
+    if settings.ia_habilitada and not llave:
+        logger.warning(
+            "IA habilitada sin llave para el proveedor %s: el análisis de fotos responderá 503 hasta configurarla",
+            settings.ia_proveedor,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.abrir()  # los clientes conectan de forma perezosa
+    _avisar_si_falta_llave_ia()
     yield
     await db.cerrar()
 

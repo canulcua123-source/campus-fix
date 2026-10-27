@@ -48,6 +48,7 @@ function pares(t: Record<string, string>): [string, string, string, number][] {
   // No texto (WCAG 1.4.11): anillo de foco y borde de campos ≥ 3:1.
   for (const fondo of FONDOS) lista.push(['--color-focus', t['--color-focus'], t[fondo], 3])
   lista.push(['--color-border-strong', t['--color-border-strong'], t['--color-surface'], 3])
+  for (const fondo of ['--color-surface', '--color-surface-2']) lista.push(['--color-border-input', t['--color-border-input'], t[fondo], 3])
   return lista
 }
 

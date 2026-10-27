@@ -7,12 +7,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from app.schemas.ia import AccionCompuertas, AnalisisImagen
 from app.schemas.incidencia import Ubicacion
 from app.services.vision.mapeo import construir_incidencia
+from app.services.vision.decision import ADVERTENCIAS_DUDOSAS
 
 UMBRAL_AGENTICO = 0.85
 VIGENCIA_UBICACION = timedelta(hours=4)
 CATEGORIAS_AGENTICAS = frozenset({"infraestructura"})
 PERMISOS_AGENTICOS = frozenset({"ia:usar", "incidencias:crear", "evidencias:subir"})
-SEÑALES_CALIDAD = ("borros", "oscur", "instruccion", "falta contexto", "falta_contexto")
+SEÑALES_CALIDAD = ADVERTENCIAS_DUDOSAS
 
 
 class UbicacionCompuertas(BaseModel):

@@ -2,16 +2,23 @@
 import '../../test/setup'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { http, HttpResponse } from 'msw'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { BASE } from '../../api/client'
+import { servidor } from '../../test/msw/server'
 import App from '../../App'
-import { ACCESO_RUTA, cumpleAcceso, type RutaApp } from '../../components/navegacion'
+import { ACCESO_RUTA, cumpleAcceso, rutaInicio, type RutaApp } from '../../components/navegacion'
 import { ROLES_BASE, sesionDe, type RolBase } from '../../test/roles'
 import { RequirePermiso, SiPermiso } from '../RequirePermiso'
 import { useAuth } from '../store'
 
 // El registro del service worker no existe fuera de Vite.
 vi.mock('../../components/UpdatePrompt', () => ({ UpdatePrompt: () => null }))
+
+function Ruta() {
+  return <output data-testid="ruta">{useLocation().pathname}</output>
+}
 
 const usuario = { nombre: 'Ana', rol: 'reportante', permisos: ['incidencias:crear', 'incidencias:ver'], alcance: 'propio' as const }
 
@@ -29,11 +36,16 @@ function montar(ruta: string) {
 }
 
 describe('RequirePermiso', () => {
-  it('oculta ruta sin permiso', () => {
+  // Tras redirigir, la pantalla principal del rol pide datos: aquí basta con responder vacío.
+  beforeEach(() => {
+    servidor.use(http.all(`${BASE}/*`, () => HttpResponse.json([])))
+  })
+
+  it('sin permiso no muestra la ruta y lleva a la pantalla principal del rol', () => {
     useAuth.setState({ token: 't', usuario })
     montar('/bandeja')
     expect(screen.queryByText('Bandeja secreta')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Sin acceso' })).toBeInTheDocument()
+    expect(screen.getByText('Inicio')).toBeInTheDocument()
   })
 
   it('SiPermiso oculta acciones sin permiso', () => {
@@ -47,7 +59,7 @@ describe('RequirePermiso', () => {
     expect(screen.getByText('Solo lectura')).toBeInTheDocument()
   })
 
-  // Toda ruta de la matriz abierta por URL sin permiso muestra «Sin acceso», nunca la pantalla ni un blanco.
+  // Toda ruta de la matriz abierta por URL sin permiso redirige a la pantalla principal del rol, nunca la muestra.
   const casos = (Object.keys(ROLES_BASE) as RolBase[]).flatMap((rol) =>
     (Object.keys(ACCESO_RUTA) as RutaApp[])
       .filter((ruta) => !cumpleAcceso(ACCESO_RUTA[ruta], ROLES_BASE[rol].permisos, rol))
@@ -57,10 +69,12 @@ describe('RequirePermiso', () => {
     useAuth.setState({ token: 't', usuario: sesionDe(rol) })
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <MemoryRouter initialEntries={[ruta]}><App /></MemoryRouter>
+        <MemoryRouter initialEntries={[ruta]}><App /><Ruta /></MemoryRouter>
       </QueryClientProvider>,
     )
-    expect(screen.getByRole('heading', { name: 'Sin acceso' })).toBeInTheDocument()
+    const inicio = rutaInicio(ROLES_BASE[rol].permisos, rol)
+    expect(screen.getByTestId('ruta')).toHaveTextContent(new RegExp(`^${inicio}$`))
+    expect(inicio).not.toBe(ruta)
   })
 
   it('ruta inexistente muestra «Página no encontrada»', () => {

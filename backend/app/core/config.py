@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Puerto ProveedorVision (T-028): cambiar de proveedor no requiere tocar el router.
     ia_proveedor: Literal["claude", "gemini"] = "claude"
     gemini_api_key: str = ""
-    gemini_modelo: str = "gemini-3.8-flash"
+    gemini_modelo: str = "gemini-3.5-flash"
     # La capa gratuita de Gemini usa el contenido para mejorar productos: solo para el set de evaluación.
     gemini_capa: Literal["gratuita", "pagada"] = "gratuita"
     ia_permitir_capa_gratuita: bool = False

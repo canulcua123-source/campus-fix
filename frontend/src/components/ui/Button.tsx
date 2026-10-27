@@ -3,11 +3,11 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Spinner } from './Spinner'
 
 export type VarianteBoton = 'primario' | 'secundario' | 'peligro' | 'fantasma'
-export type TamanoBoton = 'md' | 'lg'
+export type TamanoBoton = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: VarianteBoton
-  /** md = 44 px (mínimo táctil), lg = 52 px (acción principal de la pantalla). */
+  /** sm = 40 px en escritorio / 44 px táctil (barras de filtros, tablas), md = 44 px (mínimo táctil), lg = 52 px (acción principal). */
   tamano?: TamanoBoton
   /** Muestra spinner, deshabilita el botón y anuncia aria-busy (UX-17). */
   cargando?: boolean
@@ -41,7 +41,7 @@ export function Button({
       className={clsx(
         'ui-btn',
         `ui-btn--${variante}`,
-        tamano === 'lg' && 'ui-btn--lg',
+        tamano !== 'md' && `ui-btn--${tamano}`,
         bloque && 'ui-btn--bloque',
         !children && 'ui-btn--icono',
         className,

@@ -172,7 +172,8 @@ describe('Buscar (T-055)', () => {
     responder(RESULTADOS, () => { consultas += 1 })
     renderBuscar('/buscar?q=r')
 
-    expect(await screen.findByText('Busca incidencias')).toBeInTheDocument()
+    expect(await screen.findByRole('searchbox', { name: 'Buscar incidencias' })).toHaveValue('r')
+    expect(screen.getByRole('button', { name: 'Buscar' })).toBeDisabled()
     expect(consultas).toBe(0)
   })
 

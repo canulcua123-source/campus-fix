@@ -14,7 +14,11 @@ export const ESTADOS = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerra
 export const ESTADOS_SEGUIMIENTO = ['abierta', 'en_proceso', 'en_espera', 'resuelta', 'cerrada'] as const
 export const CATEGORIAS = ['computo_redes', 'infraestructura', 'academico'] as const
 export const PLATAFORMAS = ['lms', 'portal_calificaciones', 'correo'] as const
-export const TIPOS_MIME_EVIDENCIA = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
+export const TIPOS_MIME_EVIDENCIA = [
+  'image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'video/mp4', 'video/quicktime', 'video/webm',
+] as const
+/** Videos admitidos como evidencia: 1 por incidencia, hasta 50 MB (TIPOS_VIDEO del backend). */
+export const TIPOS_VIDEO = ['video/mp4', 'video/quicktime', 'video/webm'] as const
 export const ACCIONES_IA = ['agentico', 'formulario', 'duplicado', 'autollenar', 'sugerir', 'preguntar', 'rechazar'] as const
 export const COMPUERTAS_IA = ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9'] as const
 
@@ -51,6 +55,7 @@ export const LIMITES = {
   horas: [0, 24],
   nombre_archivo: [1, 120],
   peso_bytes_max: 10 * 1024 * 1024,
+  peso_bytes_max_video: 50 * 1024 * 1024,
 } as const
 
 // ---------- tags ----------
@@ -160,6 +165,19 @@ export const asignacionSchema = z.object({
 })
 export type AsignacionIn = z.infer<typeof asignacionSchema>
 
+/** ConfirmacionIn (POST /incidencias/{id}/confirmacion): el reportante confirma o reabre una incidencia resuelta. */
+export const confirmacionSchema = z.object({
+  accion: z.enum(['confirmar', 'reabrir']),
+  comentario: z.string().trim().min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres').optional(),
+})
+export type ConfirmacionIn = z.infer<typeof confirmacionSchema>
+
+/** ComentarioReportanteIn (POST /incidencias/{id}/comentarios): solo mientras la incidencia está en espera. */
+export const comentarioReportanteSchema = z.object({
+  comentario: z.string('Requerido').trim().min(5, 'Mínimo 5 caracteres').max(1000, 'Máximo 1000 caracteres'),
+})
+export type ComentarioReportanteIn = z.infer<typeof comentarioReportanteSchema>
+
 /** PrioridadIn (PATCH /incidencias/{id}/prioridad). */
 export const prioridadSchema = z.object({
   prioridad: z.enum(PRIORIDADES, 'Selecciona la prioridad'),
@@ -174,9 +192,12 @@ export const evidenciaFirmaSchema = z.object({
     .max(120, 'Nombre de archivo de máximo 120 caracteres')
     .regex(/^[^/\\]+$/, 'El nombre no puede contener / ni \\')
     .refine((v) => !v.includes('..'), "El nombre no puede contener '..'"),
-  tipo_mime: z.enum(TIPOS_MIME_EVIDENCIA, 'Formato no permitido (JPEG, PNG, WebP o PDF)'),
-  peso_bytes: z.number().int().min(1, 'El archivo está vacío').max(10 * 1024 * 1024, 'El archivo excede 10 MB'),
-})
+  tipo_mime: z.enum(TIPOS_MIME_EVIDENCIA, 'Formato no permitido (JPEG, PNG, WebP, PDF o video MP4, MOV, WebM)'),
+  peso_bytes: z.number().int().min(1, 'El archivo está vacío').max(50 * 1024 * 1024, 'El video excede 50 MB'),
+}).refine(
+  (v) => (TIPOS_VIDEO as readonly string[]).includes(v.tipo_mime) || v.peso_bytes <= 10 * 1024 * 1024,
+  { path: ['peso_bytes'], message: 'El archivo excede 10 MB' },
+)
 export type EvidenciaFirmaIn = z.infer<typeof evidenciaFirmaSchema>
 
 /** EvidenciaIn (POST /incidencias/{id}/evidencias). */
@@ -279,6 +300,7 @@ export type IncidenciaCreada = z.infer<typeof incidenciaCreadaSchema>
 export const okSchema = z.object({ ok: z.literal(true) })
 export const seguimientoOutSchema = okSchema.extend({ estado: z.enum(ESTADOS) })
 export const asignacionOutSchema = okSchema.extend({ tecnico_asignado: personaRef })
+export const tomarOutSchema = seguimientoOutSchema.extend({ tecnico_asignado: personaRef })
 export const prioridadOutSchema = okSchema.extend({ prioridad: z.enum(PRIORIDADES) })
 
 export const firmaEvidenciaOutSchema = z.object({

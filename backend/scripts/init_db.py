@@ -26,7 +26,9 @@ PATRON_CATEGORIA = r"^[a-z][a-z0-9_]{2,29}$"
 PATRON_CATEGORIA_PERSONALIZADA = r"^(?!(?:computo_redes|infraestructura|academico)$)[a-z][a-z0-9_]{2,29}$"
 ESTADOS = ["abierta", "en_proceso", "en_espera", "resuelta", "cerrada", "retirada"]
 PRIORIDADES = ["baja", "media", "alta", "critica"]
-TIPOS_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+TIPOS_MIME = [
+    "image/jpeg", "image/png", "image/webp", "application/pdf", "video/mp4", "video/quicktime", "video/webm"
+]
 ALCANCES = ["propio", "area", "edificio", "global"]
 TIPOS_REPORTANTE = ["docente", "estudiante", "administrativo"]
 EVENTOS_IA = ["ofrecido", "deshecho", "editado", "enviado", "duplicado_sumado", "fallback"]
@@ -638,7 +640,7 @@ def esquema_incidencias() -> dict:
                         "properties": {
                             "nombre_archivo": {"bsonType": "string"},
                             "tipo_mime": {"enum": TIPOS_MIME},
-                            "peso_kb": {"bsonType": ["int", "long", "double"], "maximum": 10240},
+                            "peso_kb": {"bsonType": ["int", "long", "double"], "maximum": 51200},  # 50 MB (video); fotos y PDF ≤ 10 MB en la API
                             "url_storage": {"bsonType": "string"},
                             "fecha_carga": {"bsonType": "date"},
                         },

@@ -4,7 +4,7 @@ import { useEvidencia } from '../api/hooks/incidencias'
 import { nombreSeguro } from '../lib/archivos'
 import { ErrorImagen } from '../lib/imagen'
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
-import { evidenciaFirmaSchema, TIPOS_MIME_EVIDENCIA, type TipoMimeEvidencia } from '../schemas/incidencia'
+import { evidenciaFirmaSchema, TIPOS_MIME_EVIDENCIA, TIPOS_VIDEO, type TipoMimeEvidencia } from '../schemas/incidencia'
 import { Button } from './ui'
 
 /** Máximo de evidencias por incidencia (MAX_EVIDENCIAS del backend). */
@@ -15,6 +15,8 @@ interface SubirEvidenciaProps {
   incidenciaId: string
   /** Evidencias ya adjuntas (para el límite de 10). */
   cantidad: number
+  /** Ya hay un video adjunto: solo se admite uno por incidencia. */
+  hayVideo?: boolean
 }
 
 type Estado =
@@ -27,10 +29,11 @@ type Estado =
 const esCancelacion = (e: unknown) => e instanceof DOMException && e.name === 'AbortError'
 
 /**
- * Adjunta evidencias desde el detalle (T-048): fotos procesadas (JPEG sin EXIF, 2048 px) o PDF ≤ 10 MB, hasta 10.
+ * Adjunta evidencias desde el detalle (T-048): fotos procesadas (JPEG sin EXIF, 2048 px) o PDF ≤ 10 MB, hasta 10;
+ * además un video (MP4, MOV o WebM) de hasta 50 MB por incidencia, que se sube tal cual.
  * Valida tipo, peso y límite antes de pedir la firma; muestra el progreso real del PUT y permite cancelar.
  */
-export function SubirEvidencia({ incidenciaId, cantidad }: SubirEvidenciaProps) {
+export function SubirEvidencia({ incidenciaId, cantidad, hayVideo = false }: SubirEvidenciaProps) {
   const entrada = useRef<HTMLInputElement>(null)
   const cancelar = useRef<AbortController | null>(null)
   const [estado, setEstado] = useState<Estado>({ tipo: 'inactivo' })
@@ -46,7 +49,12 @@ export function SubirEvidencia({ incidenciaId, cantidad }: SubirEvidenciaProps) 
       return
     }
     if (!(TIPOS_MIME_EVIDENCIA as readonly string[]).includes(archivo.type)) {
-      setEstado({ tipo: 'error', mensaje: 'Formato no permitido. Adjunta una foto JPEG, PNG o WebP, o un PDF.' })
+      setEstado({ tipo: 'error', mensaje: 'Formato no permitido. Adjunta una foto JPEG, PNG o WebP, un PDF o un video MP4, MOV o WebM.' })
+      return
+    }
+    const esVideo = (TIPOS_VIDEO as readonly string[]).includes(archivo.type)
+    if (esVideo && hayVideo) {
+      setEstado({ tipo: 'error', mensaje: 'Esta incidencia ya tiene un video. Solo se permite uno.' })
       return
     }
     const control = new AbortController()
@@ -55,7 +63,7 @@ export function SubirEvidencia({ incidenciaId, cantidad }: SubirEvidenciaProps) 
     try {
       let blob: Blob = archivo
       let nombre = nombreSeguro(archivo.name)
-      if (archivo.type !== 'application/pdf') {
+      if (archivo.type !== 'application/pdf' && !esVideo) {
         // Fotos: orientación aplicada y sin EXIF/GPS, igual que en Reportar.
         blob = (await procesarFotoEnSegundoPlano(archivo)).evidencia
         nombre = nombreSeguro(archivo.name, 'jpg')
@@ -117,7 +125,7 @@ export function SubirEvidencia({ incidenciaId, cantidad }: SubirEvidenciaProps) 
         <span className="text-sm text-muted">
           {lleno
             ? `Límite de ${MAX_EVIDENCIAS} evidencias alcanzado`
-            : `JPG, PNG, WebP o PDF hasta 10 MB · ${cantidad} de ${MAX_EVIDENCIAS}`}
+            : `Fotos o PDF hasta 10 MB · ${hayVideo ? 'ya tiene su video' : '1 video hasta 50 MB'} · ${cantidad} de ${MAX_EVIDENCIAS}`}
         </span>
       </div>
 

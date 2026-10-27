@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../test/setup'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
@@ -23,6 +23,11 @@ function renderReportar() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={cliente}><MemoryRouter><Reportar /></MemoryRouter></QueryClientProvider>)
 }
+
+/** Prioridad es un control segmentado: el valor es el botón con aria-pressed. */
+const grupoPrioridad = () => screen.getByRole('group', { name: 'Prioridad' })
+const prioridadActual = () => within(grupoPrioridad()).getByRole('button', { pressed: true }).textContent
+const elegirPrioridad = (texto: string, user: Pick<typeof userEvent, 'click'> = userEvent) => user.click(within(grupoPrioridad()).getByRole('button', { name: texto }))
 
 function seleccionarFoto() {
   const archivo = new File(['foto'], 'foto.jpg', { type: 'image/jpeg' })
@@ -135,7 +140,41 @@ describe('Reportar', () => {
     seleccionarFoto()
 
     await waitFor(() => expect(screen.getByLabelText('Riesgo de seguridad')).toHaveValue('medio'))
-    expect(screen.getByLabelText('Prioridad')).toHaveValue('alta')
+    expect(prioridadActual()).toBe('Alta')
+  })
+})
+
+
+describe('Reportar: robustez del análisis con IA', () => {
+  it('muestra el motivo real del servidor (p. ej. límite diario) en vez de un error genérico', async () => {
+    dobles.analizarImagen.mockRejectedValue(new ApiError(429, 'limite', 'Alcanzaste el límite de 20 análisis por día.'))
+    renderReportar()
+    seleccionarFoto()
+    expect(await screen.findByText('Alcanzaste el límite de 20 análisis por día. Puedes llenar el formulario manualmente.')).toBeInTheDocument()
+  })
+
+  it('recorta lo que propone la IA a los límites del formulario y avisa de «crítica» aunque la prioridad ya esté elegida', async () => {
+    const tags = Array.from({ length: 20 }, (_, i) => `etiqueta_${i}`)
+    dobles.analizarImagen.mockResolvedValue({
+      ...respuestaIA('critica'),
+      analisis: { ...respuestaIA('critica').analisis, descripcion: 'x'.repeat(2500), tags: [...tags, 'etiqueta_0', '!'] },
+    })
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Descripción')).toHaveValue('x'.repeat(2000)))
+    expect(screen.getByLabelText(/^Tags/)).toHaveValue(tags.slice(0, 15).join(', '))
+    expect(await screen.findByText('La IA sugiere prioridad crítica')).toBeInTheDocument()
+  })
+
+  it('al tomar otra foto no deja visible la sugerencia anterior', async () => {
+    dobles.analizarImagen.mockResolvedValueOnce(respuestaIA()).mockRejectedValueOnce(new Error('red'))
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+    expect(screen.getByText(/confianza 90%/)).toBeInTheDocument()
+    seleccionarFoto()
+    expect(await screen.findByText(/No se pudo analizar la imagen con IA/)).toBeInTheDocument()
+    expect(screen.queryByText(/confianza 90%/)).not.toBeInTheDocument()
   })
 })
 
@@ -238,11 +277,11 @@ describe('Reportar con IA no bloqueante (T-024)', () => {
     seleccionarFoto()
 
     expect(await screen.findByText('La IA sugiere prioridad crítica')).toBeInTheDocument()
-    expect(screen.getByLabelText('Prioridad')).toHaveValue('alta')
+    expect(prioridadActual()).toBe('Alta')
 
     await userEvent.click(screen.getByRole('button', { name: 'Sí, es crítica' }))
 
-    expect(screen.getByLabelText('Prioridad')).toHaveValue('critica')
+    expect(prioridadActual()).toBe('Crítica')
     expect(screen.queryByText('La IA sugiere prioridad crítica')).not.toBeInTheDocument()
   })
 
@@ -254,7 +293,7 @@ describe('Reportar con IA no bloqueante (T-024)', () => {
     await screen.findByText('La IA sugiere prioridad crítica')
     await userEvent.click(screen.getByRole('button', { name: 'No, mantener alta' }))
     expect(screen.queryByText('La IA sugiere prioridad crítica')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Prioridad')).toHaveValue('alta')
+    expect(prioridadActual()).toBe('Alta')
   })
 
   it('editar la prioridad a mano descarta la confirmación pendiente', async () => {
@@ -263,10 +302,10 @@ describe('Reportar con IA no bloqueante (T-024)', () => {
 
     seleccionarFoto()
     await screen.findByText('La IA sugiere prioridad crítica')
-    await userEvent.selectOptions(screen.getByLabelText('Prioridad'), 'media')
+    await elegirPrioridad('Media')
 
     expect(screen.queryByText('La IA sugiere prioridad crítica')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Prioridad')).toHaveValue('media')
+    expect(prioridadActual()).toBe('Media')
   })
 
   it('envía el contexto opcional del usuario al análisis', async () => {
@@ -329,7 +368,7 @@ describe('Reportar completo (T-049)', () => {
 
   it('etiquetas legibles', async () => {
     await abrirFormularioManual()
-    expect(screen.getByRole('option', { name: 'Crítica' })).toHaveValue('critica')
+    expect(within(grupoPrioridad()).getByRole('button', { name: 'Crítica' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Cómputo y redes' })).toHaveValue('computo_redes')
     expect(screen.queryByRole('option', { name: 'critica' })).not.toBeInTheDocument()
 
@@ -362,7 +401,7 @@ describe('Reportar completo (T-049)', () => {
     }))
     await abrirFormularioManual()
     const user = await llenarMinimo()
-    await user.selectOptions(screen.getByLabelText('Prioridad'), 'alta')
+    await elegirPrioridad('Alta', user)
 
     await user.click(screen.getByRole('button', { name: 'Enviar reporte' }))
 

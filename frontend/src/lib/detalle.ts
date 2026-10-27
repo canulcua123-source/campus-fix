@@ -148,3 +148,16 @@ export function mensajeErrorDetalle(status: number): ErrorDetalle {
 export function esImagen(tipo: TipoMimeEvidencia): boolean {
   return tipo.startsWith('image/')
 }
+
+export function esVideo(tipo: TipoMimeEvidencia): boolean {
+  return tipo.startsWith('video/')
+}
+
+const PLAZO_REAPERTURA_MS = 7 * 24 * 60 * 60 * 1000
+
+/** Pista visual del plazo de 7 días; la API es la que decide (409 si venció). */
+export function dentroDePlazoReapertura(fechaResolucion: string | undefined, ahora = Date.now()): boolean {
+  if (!fechaResolucion) return false
+  const t = new Date(fechaResolucion).getTime()
+  return !Number.isNaN(t) && ahora - t <= PLAZO_REAPERTURA_MS && t <= ahora
+}

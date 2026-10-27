@@ -142,6 +142,37 @@ async def test_calidad_cliente_hace_fallar_g4_y_degrada_a_formulario(api, ia_fal
     assert await get_redis().mget(clave_usuario, clave_aula) == [None, None]
 
 
+async def test_calidad_cliente_topa_la_confianza_y_no_autollena(api, ia_falsa):
+    """Una foto marcada borrosa por el cliente nunca se autollena aunque el modelo reporte confianza alta."""
+    r = await api.c.post(
+        "/ia/analizar-imagen",
+        files={"imagen": ("foto2.png", PNG, "image/png")},
+        data={"calidad_cliente": "sobreexpuesta"},
+        headers=api.h("reportante_a"),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["accion_asistida"] == "sugerir"
+    assert r.json()["analisis"]["confianza"] <= 0.79
+
+
+async def test_fallo_del_proveedor_registra_la_causa(api, monkeypatch, caplog):
+    """#132: el 503 deja en el log el proveedor y el tipo de error, sin la llave."""
+    from app.services.vision.puerto import ErrorProveedor
+
+    async def falla(datos, media_type, contexto=None):
+        raise ErrorProveedor("sin llave", tipo="autenticacion")
+
+    monkeypatch.setattr(ia_router, "analizar_imagen", falla)
+    with caplog.at_level("WARNING", logger="app.routers.ia"):
+        r = await api.c.post(
+            "/ia/analizar-imagen",
+            files={"imagen": ("falla.png", PNG, "image/png")},
+            headers=api.h("reportante_a"),
+        )
+    assert r.status_code == 503
+    assert "tipo=autenticacion" in caplog.text and "ErrorProveedor" in caplog.text
+
+
 async def test_calidad_cliente_desconocida_responde_400(api, ia_falsa):
     r = await api.c.post(
         "/ia/analizar-imagen",

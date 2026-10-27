@@ -17,7 +17,7 @@ const tasaSchema = z.object({
   denominador: z.number().int().nonnegative(),
   porcentaje: numeroNoNegativo.max(100).nullable(),
   disponible: z.boolean(),
-  motivo: z.string().min(1).max(240).optional(),
+  motivo: z.string().min(1).max(240).nullish(),
 }).strict()
 
 const duracionSchema = z.object({

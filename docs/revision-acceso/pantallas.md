@@ -15,7 +15,7 @@ la tabla 3.3 de permisos (`docs/revision-acceso/roles.md`). Código revisado: `f
 - `NAVEGACION` define las pestañas por perfil (celular y escritorio). El perfil se deduce de los
   permisos y cada pestaña se filtra además por su propio acceso (UX-31).
 - `RequirePermiso`: sin sesión → `/login` conservando el destino; mientras se restaura la sesión →
-  indicador de carga; sin permiso o rol → pantalla **«Sin acceso»** (nunca en blanco).
+  indicador de carga; sin permiso o rol → redirige a la **pantalla principal del rol** (primera de su menú lateral; nunca en blanco ni la pantalla prohibida).
 - `SiPermiso` / `usePermiso`: misma regla para botones y acciones dentro de una pantalla.
 - Rutas de la matriz que aún no tienen pantalla (`/tablero`, `/tecnicos`, `/reportes`,
   `/admin/edificios`, `/admin/auditoria`, `/admin/configuracion`) caen en `SeccionNoDisponible`:
@@ -26,7 +26,7 @@ la tabla 3.3 de permisos (`docs/revision-acceso/roles.md`). Código revisado: `f
 
 ## Ruta × rol
 
-✔ permitido · — bloqueado («Sin acceso» si se abre por URL).
+✔ permitido · — bloqueado (si se abre por URL redirige a la pantalla principal del rol).
 
 | Ruta | Acceso | REP | TEC | COO | DIR | ADM | Pantalla |
 |---|---|---|---|---|---|---|---|
@@ -83,6 +83,6 @@ de `puede_otorgar`; la API responde 403).
 - `components/navegacion.test.ts`: pestañas por rol igual a la matriz (5 roles), cada pestaña con el
   acceso de su ruta y ruta × rol de la tabla anterior.
 - `auth/__tests__/RequirePermiso.test.tsx`: «bloquea ruta por url» renderiza `App` en cada ruta
-  prohibida de cada rol base y espera «Sin acceso»; `SiPermiso` oculta acciones.
+  prohibida de cada rol base y espera la redirección a su pantalla principal; `SiPermiso` oculta acciones.
 - `pages/__tests__/AdminRoles.test.tsx`: listado, alta, edición parcial, 409 al eliminar y acciones
   ocultas para roles no otorgables.

@@ -5,7 +5,7 @@ import { ACCESO_RUTA, accesoDe, cumpleAcceso, navegacionPara, perfilDe, REPORTAR
 /** Matriz «Pantallas por rol» (docs/TAREAS.md, doc §6.5). «Reportar» es el botón central de cámara. */
 const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
   reportante: { movil: ['Inicio', 'Reportar', 'Mis reportes', 'Perfil'], lateral: ['Inicio', 'Mis reportes'] },
-  tecnico: { movil: ['Bandeja', 'Buscar', 'Reportar', 'Perfil'], lateral: ['Bandeja', 'Buscar', 'Mis reportes'] },
+  tecnico: { movil: ['Bandeja', 'Buscar', 'Reportar', 'Perfil'], lateral: ['Bandeja', 'Mis reportes'] },
   coordinador: {
     movil: ['Tablero', 'Bandeja', 'Reportar', 'Métricas', 'Perfil'],
     lateral: ['Tablero', 'Incidencias', 'Técnicos', 'Métricas'],
@@ -13,8 +13,8 @@ const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
   directivo: { movil: ['Dashboard', 'Buscar', 'Perfil'], lateral: ['Dashboard', 'Incidencias', 'Reportes'] },
   admin: {
     movil: ['Usuarios', 'Roles', 'Categorías', 'Perfil'],
-    // + Métricas IA (T-030, exclusiva del rol admin), fuera de la tabla original.
-    lateral: ['Usuarios', 'Roles', 'Categorías', 'Edificios', 'Auditoría', 'Configuración', 'Métricas IA'],
+    // + Dashboard (acceso a analítica:ver) y Métricas IA (T-030, exclusiva del rol admin), fuera de la tabla original.
+    lateral: ['Dashboard', 'Usuarios', 'Roles', 'Categorías', 'Edificios', 'Auditoría', 'Configuración', 'Métricas IA'],
   },
 }
 
@@ -24,6 +24,7 @@ const RUTAS_POR_ROL: Record<RutaApp, RolBase[]> = {
   '/perfil': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
   '/reportar': ['reportante', 'tecnico', 'coordinador', 'admin'],
   '/mis-reportes': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
+  '/incidencias': ['tecnico', 'coordinador', 'directivo', 'admin'],
   '/incidencias/:id': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
   '/bandeja': ['tecnico', 'coordinador', 'admin'],
   '/buscar': ['tecnico', 'coordinador', 'directivo', 'admin'],

@@ -1,6 +1,7 @@
 import type { FiltrosIncidencias } from '../schemas/incidencia'
 import type { FiltrosAnalitica } from '../schemas/analitica'
 import type { FiltrosMetricasIA } from '../schemas/metricasIA'
+import type { FiltrosAuditoria } from '../schemas/auditoria'
 
 /** Claves centralizadas: invalidar ['analitica'] cubre resumen, edificios y tags filtrados. */
 export const claves = {
@@ -15,15 +16,22 @@ export const claves = {
   analiticaEdificios: ['analitica', 'edificios'] as const,
   analiticaTags: ['analitica', 'tags'] as const,
   metricasIA: ['analitica', 'ia'] as const,
+  cargaTecnicos: (f: FiltrosAnalitica = {}) => ['analitica', 'carga-tecnicos', limpiarFiltrosAnalitica(f)] as const,
   resumenFiltrado: (f: FiltrosAnalitica = {}) => ['analitica', 'resumen', limpiarFiltrosAnalitica(f)] as const,
   edificiosFiltrados: (f: FiltrosAnalitica = {}) => ['analitica', 'edificios', limpiarFiltrosAnalitica(f)] as const,
   tagsFiltrados: (f: FiltrosAnalitica = {}) => ['analitica', 'tags', limpiarFiltrosAnalitica(f)] as const,
   metricasIAFiltradas: (f: FiltrosMetricasIA = {}) => ['analitica', 'ia', limpiarFiltrosMetricasIA(f)] as const,
+  auditoria: ['auditoria'] as const,
+  auditoriaFiltrada: (f: FiltrosAuditoria = {}) =>
+    ['auditoria', Object.fromEntries(Object.entries(f).filter(([, v]) => v !== undefined))] as const,
   categorias: ['categorias'] as const,
   roles: ['roles'] as const,
   usuarios: ['usuarios'] as const,
   tecnicos: (area?: string) => ['usuarios', 'tecnicos', area ?? 'todas'] as const,
   aula: (id: string) => ['aulas', id] as const,
+  catalogoAulas: ['aulas', 'catalogo'] as const,
+  ubicacionesAula: ['aulas', 'ubicaciones'] as const,
+  configIA: ['config', 'ia'] as const,
 }
 
 /** Quita filtros vacíos para que {} y {estado: undefined} compartan caché. */

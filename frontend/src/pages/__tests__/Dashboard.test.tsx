@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BASE } from '../../api/client'
 import { analiticaEdificiosQuery, analiticaResumenQuery, analiticaTagsQuery } from '../../api/analitica'
 import { useAuth } from '../../auth/store'
+import { rangoUltimosDias } from '../../lib/fechas'
 import { servidor } from '../../test/msw/server'
 import Dashboard from '../Dashboard'
 
@@ -18,14 +19,27 @@ const EDIFICIOS = [
     { edificio: 'B', total: 2, horas_invertidas: 9, horas_resolucion_prom: null },
 ]
 const TAGS = [{ tag: 'wifi', total: 7 }, { tag: 'filtracion', total: 3 }]
+const TENDENCIA = [
+    { periodo: '2026-09', categoria: 'computo_redes', total: 3 },
+    { periodo: '2026-10', categoria: 'infraestructura', total: 2 },
+]
+const AULAS = [{ edificio: 'A', piso: 2, aula: '204', total: 4 }]
 const rutas = {
     resumen: `${BASE}/analitica/resumen`,
     edificios: `${BASE}/analitica/edificios`,
     tags: `${BASE}/analitica/tags`,
+    tendencia: `${BASE}/analitica/tendencia`,
+    aulas: `${BASE}/analitica/aulas-cronicas`,
 }
+type Mocks = { resumen?: typeof RESUMEN; edificios?: typeof EDIFICIOS; tags?: typeof TAGS; tendencia?: typeof TENDENCIA; aulas?: typeof AULAS }
+const POR_DEFECTO = { resumen: RESUMEN, edificios: EDIFICIOS, tags: TAGS, tendencia: TENDENCIA, aulas: AULAS }
+
+/** Valor mostrado por el StatTile cuya etiqueta es `etiqueta`. */
+const tile = (etiqueta: string) => screen.getByText(etiqueta, { selector: '.ui-stat__etiqueta' }).closest('.ui-stat') as HTMLElement
+const valorDe = (etiqueta: string) => tile(etiqueta).querySelector('.ui-stat__valor')?.textContent
 
 function preparar(
-    mocks: { resumen?: typeof RESUMEN; edificios?: typeof EDIFICIOS; tags?: typeof TAGS } = {},
+    mocks: Mocks = {},
     seccionConError?: keyof typeof rutas,
 ) {
     const peticiones: { ruta: string; filtros: URLSearchParams }[] = []
@@ -33,9 +47,8 @@ function preparar(
         servidor.use(http.get(url, ({ request }) => {
             peticiones.push({ ruta: tipo, filtros: new URL(request.url).searchParams })
             if (tipo === seccionConError) return HttpResponse.json({ error: 'no_disponible' }, { status: 503 })
-            const respuesta = tipo === 'resumen' ? (mocks.resumen ?? RESUMEN)
-                : tipo === 'edificios' ? (mocks.edificios ?? EDIFICIOS) : (mocks.tags ?? TAGS)
-            return HttpResponse.json(respuesta)
+            const clave = tipo as keyof typeof POR_DEFECTO
+            return HttpResponse.json(mocks[clave] ?? POR_DEFECTO[clave])
         }))
     }
     useAuth.setState({
@@ -54,10 +67,11 @@ function preparar(
 describe('Dashboard T-056 (Vitest + MSW)', () => {
     it('renderiza kpis, barras reales y tablas accesibles', async () => {
         const { peticiones } = preparar()
-        expect(await screen.findByLabelText('Abiertas: 11')).toBeInTheDocument()
-        expect(screen.getByLabelText('En proceso: 4')).toBeInTheDocument()
-        expect(screen.getByLabelText('Críticas: 2')).toBeInTheDocument()
-        expect(screen.getByLabelText('Resueltas: 6')).toBeInTheDocument()
+        await waitFor(() => expect(valorDe('Abiertas')).toBe('11'))
+        expect(valorDe('En proceso')).toBe('4')
+        expect(valorDe('Críticas')).toBe('2')
+        expect(valorDe('Resueltas')).toBe('6')
+        expect(screen.getByRole('group', { name: 'Indicadores principales' })).toBeInTheDocument()
         expect(await screen.findByText('Ver tabla de horas por edificio')).toBeInTheDocument()
         expect(await screen.findByText('Ver tabla de etiquetas')).toBeInTheDocument()
         expect(screen.getByText('Los resultados se limitan a tu área asignada.')).toBeInTheDocument()
@@ -68,57 +82,76 @@ describe('Dashboard T-056 (Vitest + MSW)', () => {
         fireEvent.click(screen.getByText('Ver tabla de etiquetas'))
         const tablaTags = screen.getByRole('table', { name: /Diez etiquetas más frecuentes/i })
         expect(within(tablaTags).getAllByRole('rowheader').map((n) => n.textContent)).toEqual(['wifi', 'filtracion'])
-        expect(peticiones).toHaveLength(3)
+        const aulas = await screen.findByRole('table', { name: 'Aulas con incidencias recurrentes' })
+        expect(within(aulas).getByRole('rowheader', { name: '204' })).toBeInTheDocument()
+        expect(await screen.findByText('Ver tabla de tendencia')).toBeInTheDocument()
+        expect(peticiones).toHaveLength(5)
+        // Por defecto: últimos 30 días.
+        const { desde, hasta } = rangoUltimosDias(30)
+        expect(peticiones.every((p) => p.filtros.get('desde') === desde && p.filtros.get('hasta') === hasta)).toBe(true)
         // El alcance del coordinador es aplicado por el backend; no enviamos areas ni role desde el cliente.
         expect(peticiones.every((p) => !p.filtros.has('area') && !p.filtros.has('alcance'))).toBe(true)
     })
 
-    it('aplica filtro periodo y categoría a las tres secciones', async () => {
+    it('aplica periodo personalizado y categoría a todas las secciones sin botón Aplicar', async () => {
         const { peticiones } = preparar()
-        await screen.findByLabelText('Abiertas: 11')
+        await waitFor(() => expect(valorDe('Abiertas')).toBe('11'))
         const persona = userEvent.setup()
+        expect(screen.queryByRole('button', { name: 'Aplicar filtros' })).not.toBeInTheDocument()
+        await persona.click(screen.getByRole('button', { name: 'Personalizado' }))
         fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-10-01' } })
         fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-24' } })
         await persona.selectOptions(screen.getByLabelText('Categoría'), 'computo_redes')
-        await persona.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
-        await waitFor(() => expect(peticiones).toHaveLength(6))
-        for (const peticion of peticiones.slice(3)) {
-            expect(peticion.filtros.get('desde')).toBe('2026-10-01')
-            expect(peticion.filtros.get('hasta')).toBe('2026-10-24')
-            expect(peticion.filtros.get('categoria')).toBe('computo_redes')
-        }
-        expect(new Set(peticiones.slice(3).map((p) => p.ruta))).toEqual(new Set(['resumen', 'edificios', 'tags']))
-        expect(screen.getByText(/Filtros aplicados al resumen/)).toBeInTheDocument()
+        const completas = () => peticiones.filter((p) =>
+            p.filtros.get('desde') === '2026-10-01' && p.filtros.get('hasta') === '2026-10-24' && p.filtros.get('categoria') === 'computo_redes')
+        await waitFor(() => expect(completas()).toHaveLength(5))
+        expect(new Set(completas().map((p) => p.ruta))).toEqual(new Set(Object.keys(rutas)))
         await persona.click(screen.getByRole('button', { name: 'Limpiar' }))
-        expect(screen.getByLabelText('Desde')).toHaveValue('')
         expect(screen.getByLabelText('Categoría')).toHaveValue('')
+        expect(screen.getByRole('button', { name: '30 días' })).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.queryByLabelText('Desde')).not.toBeInTheDocument()
+    })
+
+    it('un atajo de periodo se aplica al instante', async () => {
+        const { peticiones } = preparar()
+        await waitFor(() => expect(valorDe('Abiertas')).toBe('11'))
+        await userEvent.click(screen.getByRole('button', { name: '7 días' }))
+        const { desde } = rangoUltimosDias(7)
+        await waitFor(() => expect(peticiones.filter((p) => p.filtros.get('desde') === desde)).toHaveLength(5))
+        expect(screen.getByRole('button', { name: '7 días' })).toHaveAttribute('aria-pressed', 'true')
     })
 
     it('estado vacío sin datos y sugerencias útiles', async () => {
         preparar({
             resumen: { abiertas: 0, en_proceso: 0, criticas: 0, resueltas_periodo: 0 },
-            edificios: [], tags: [],
+            edificios: [], tags: [], tendencia: [], aulas: [],
         })
-        expect(await screen.findByLabelText('Abiertas: 0')).toBeInTheDocument()
         expect(await screen.findByText('Sin resultados para los filtros seleccionados')).toBeInTheDocument()
-        expect(screen.getByText('Sin datos por edificio')).toBeInTheDocument()
-        expect(screen.getByText('Sin etiquetas')).toBeInTheDocument()
+        expect(valorDe('Abiertas')).toBe('0')
+        // Un solo estado vacío en lugar de uno por sección.
+        expect(screen.queryByText('Sin datos por edificio')).not.toBeInTheDocument()
+        expect(screen.queryByText('Sin etiquetas')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Ver últimos 90 días' })).toBeInTheDocument()
     })
 
     it('no envía rango inválido y informa el error del filtro', async () => {
         const { peticiones } = preparar()
-        await screen.findByLabelText('Abiertas: 11')
-        fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-10-24' } })
-        fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-01' } })
-        expect(screen.getByRole('button', { name: 'Aplicar filtros' })).toBeDisabled()
+        await waitFor(() => expect(valorDe('Abiertas')).toBe('11'))
+        await userEvent.click(screen.getByRole('button', { name: 'Personalizado' }))
+        fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-01-10' } })
+        await waitFor(() => expect(peticiones.filter((p) => p.filtros.get('desde') === '2026-01-10')).toHaveLength(5))
+        const antes = peticiones.length
+        fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-01-05' } })
         expect(screen.getByText('Desde debe ser igual o anterior a Hasta')).toBeInTheDocument()
-        expect(peticiones).toHaveLength(3)
+        await new Promise((r) => setTimeout(r, 50))
+        expect(peticiones).toHaveLength(antes)
+        expect(peticiones.some((p) => p.filtros.get('hasta') === '2026-01-05')).toBe(false)
     })
 
     it('muestra errores por sección sin ocultar las otras secciones', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => { })
         preparar({}, 'tags')
-        expect(await screen.findByLabelText('Abiertas: 11')).toBeInTheDocument()
+        await waitFor(() => expect(valorDe('Abiertas')).toBe('11'))
         expect(await screen.findByText('Reintentar')).toBeInTheDocument()
         expect(screen.getByText('Ver tabla de horas por edificio')).toBeInTheDocument()
     })

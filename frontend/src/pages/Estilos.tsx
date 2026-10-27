@@ -1,11 +1,14 @@
-import { Camera, Moon, MoreHorizontal, Plus, Search, Sun, SunMoon, Trash2 } from 'lucide-react'
+import {
+  CheckCircle2, Camera, Clock, Download, FolderOpen, Inbox, Moon, MoreHorizontal, Plus, Search, Siren, Sun, SunMoon, Trash2,
+} from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { NavegacionLateral, NavegacionMovil } from '../components/AppShell'
 import { perfilDe } from '../components/navegacion'
 import {
-  Badge, BottomSheet, Button, Card, claseCardInteractiva, EmptyState, ErrorState, ETIQUETAS, Input, PageHeader, Select,
-  Segmentado, Skeleton, SkeletonLista, Spinner, Textarea,
+  Badge, BarraFiltros, BottomSheet, Button, Card, claseCardInteractiva, claseNumerica, EmptyState, ErrorState, ETIQUETAS, Input,
+  PageHeader, RangoFechas, Seccion, Select, Segmentado, Skeleton, SkeletonLista, Spinner, StatGrid, StatTile, Tabla, Textarea,
+  type ValorRango,
 } from '../components/ui'
 
 /*
@@ -45,7 +48,7 @@ const COLORES = [
   ['--color-info', 'Información'],
 ] as const
 
-function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) {
+function Bloque({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <section className="mb-10" aria-labelledby={`s-${titulo}`}>
       <h2 id={`s-${titulo}`} className="mb-3 text-xl font-bold">{titulo}</h2>
@@ -76,6 +79,8 @@ export default function Estilos() {
   const [hoja, setHoja] = useState(params.get('hoja') === 'abierta')
   const [cargando, setCargando] = useState(false)
   const [rol, setRol] = useState(0)
+  const [rango, setRango] = useState<ValorRango>({})
+  const [estadoFiltro, setEstadoFiltro] = useState('')
 
   useEffect(() => {
     const raiz = document.documentElement
@@ -123,7 +128,7 @@ export default function Estilos() {
         />
       </div>
 
-      <Seccion titulo="Colores base">
+      <Bloque titulo="Colores base">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {COLORES.map(([token, nombre]) => (
             <Card key={token} className="flex items-center gap-3 p-3">
@@ -135,9 +140,9 @@ export default function Estilos() {
             </Card>
           ))}
         </div>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Insignias">
+      <Bloque titulo="Insignias">
         <Card>
           {(Object.keys(ETIQUETAS) as (keyof typeof ETIQUETAS)[]).map((tipo) => (
             <Fila key={tipo} etiqueta={tipo === 'categoria' ? 'Categoría' : tipo === 'estado' ? 'Estado' : 'Prioridad'}>
@@ -150,9 +155,9 @@ export default function Estilos() {
             <Badge tipo="estado" valor="reabierta_por_usuario" />
           </Fila>
         </Card>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Botones">
+      <Bloque titulo="Botones">
         <Card>
           <Fila etiqueta="Variantes">
             <Button>Primario</Button>
@@ -171,7 +176,9 @@ export default function Estilos() {
             <Button variante="secundario" cargando>Guardar</Button>
             <Button onClick={simularCarga} cargando={cargando} textoCargando="Enviando…">Probar carga</Button>
           </Fila>
-          <Fila etiqueta="Tamaños e ícono">
+          <Fila etiqueta="Tamaños e ícono (sm = 40 px escritorio / 44 px táctil)">
+            <Button tamano="sm" variante="secundario" icono={<Download size={16} />}>Exportar CSV</Button>
+            <Button tamano="sm">Aplicar</Button>
             <Button tamano="lg" icono={<Camera size={20} />}>Tomar foto</Button>
             <Button icono={<Plus size={18} />}>Nuevo</Button>
             <Button variante="secundario" aria-label="Buscar" icono={<Search size={20} />} />
@@ -181,9 +188,9 @@ export default function Estilos() {
             <Button tamano="lg" bloque>Enviar reporte</Button>
           </Fila>
         </Card>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Campos de formulario">
+      <Bloque titulo="Campos de formulario">
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <Input etiqueta="Título" placeholder="Ej. Proyector no enciende" ayuda="Máximo 120 caracteres." />
@@ -206,10 +213,91 @@ export default function Estilos() {
             />
             <Textarea etiqueta="Descripción" placeholder="¿Qué pasó y dónde?" ayuda="Entre más detalle, más rápido se atiende." />
           </Card>
+          <Card>
+            <Input etiqueta="Buscar" icono={<Search />} placeholder="Folio o título" type="search" />
+            <Input etiqueta="Fecha (vacía)" type="date" ayuda="Vacía se ve como «dd/mm/aaaa», no como la fecha de hoy." />
+            <Input etiqueta="Fecha (con valor)" type="date" defaultValue="2026-10-20" />
+          </Card>
+          <Card>
+            <Input etiqueta="Compacto (tamano=sm)" tamano="sm" placeholder="40 px en escritorio" />
+            <Select etiqueta="Estado" tamano="sm" placeholder="Todos" opciones={Object.entries(ETIQUETAS.estado).map(([valor, texto]) => ({ valor, texto }))} />
+            <Input etiqueta="Etiqueta oculta" etiquetaOculta icono={<Search />} placeholder="Etiqueta solo para lectores de pantalla" />
+          </Card>
         </div>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Tarjetas">
+      <Bloque titulo="Barra de filtros y rango de fechas">
+        <BarraFiltros
+          activos={[rango.desde, estadoFiltro].filter(Boolean).length}
+          onEnviar={() => undefined}
+          acciones={
+            <>
+              <Button tamano="sm" variante="fantasma" onClick={() => { setRango({}); setEstadoFiltro('') }}>Limpiar</Button>
+              <Button tamano="sm" type="submit">Aplicar filtros</Button>
+            </>
+          }
+        >
+          <RangoFechas valor={rango} onCambio={setRango} permitirTodo />
+          <Select
+            etiqueta="Estado" tamano="sm" placeholder="Todos" value={estadoFiltro} onChange={(e) => setEstadoFiltro(e.target.value)}
+            opciones={Object.entries(ETIQUETAS.estado).map(([valor, texto]) => ({ valor, texto }))}
+          />
+          <Select etiqueta="Categoría" tamano="sm" placeholder="Todas" opciones={Object.entries(ETIQUETAS.categoria).map(([valor, texto]) => ({ valor, texto }))} />
+        </BarraFiltros>
+        <p className="m-0 text-sm text-muted">Valor: <code>{JSON.stringify(rango)}</code> · En &lt; 768 px la barra se pliega tras «Filtros».</p>
+      </Bloque>
+
+      <Bloque titulo="Indicadores (StatTile)">
+        <StatGrid columnas={4} etiqueta="Indicadores del periodo">
+          <StatTile etiqueta="Abiertas" valor="128" icono={<FolderOpen />} tono="brand" delta={{ texto: '+12 %', direccion: 'sube', bueno: false }} pista="vs. periodo anterior" />
+          <StatTile etiqueta="Resueltas" valor="342" icono={<CheckCircle2 />} tono="success" delta={{ texto: '+8 %', direccion: 'sube', bueno: true }} />
+          <StatTile etiqueta="Tiempo medio" valor="4.2 h" icono={<Clock />} tono="warning" pista="Meta: 6 h" />
+          <StatTile etiqueta="Críticas" valor="3" icono={<Siren />} tono="danger" />
+        </StatGrid>
+        <div className="mt-3">
+          <StatGrid>
+            <StatTile etiqueta="Sin tono" valor="57" />
+            <StatTile etiqueta="Cargando" valor="" cargando />
+          </StatGrid>
+        </div>
+      </Bloque>
+
+      <Bloque titulo="Sección y tabla">
+        <div className="pila">
+          <Seccion
+            titulo="Incidencias por técnico"
+            descripcion="Últimos 30 días"
+            acciones={<Button tamano="sm" variante="secundario" icono={<Download size={16} />}>CSV</Button>}
+            sinPadding
+          >
+            <Tabla etiqueta="Incidencias por técnico" apilada>
+              <thead>
+                <tr><th>Técnico</th><th className={claseNumerica}>Asignadas</th><th className={claseNumerica}>Resueltas</th><th>Estado</th></tr>
+              </thead>
+              <tbody>
+                {[['Ana López', 24, 21, 'resuelta'], ['Luis Pérez', 18, 9, 'en_proceso'], ['Marta Ruiz', 7, 7, 'cerrada']].map(([n, a, r, e]) => (
+                  <tr key={n}>
+                    <td data-label="Técnico">{n}</td>
+                    <td data-label="Asignadas" className={claseNumerica}>{a}</td>
+                    <td data-label="Resueltas" className={claseNumerica}>{r}</td>
+                    <td data-label="Estado"><Badge tipo="estado" valor={String(e)} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </Tabla>
+          </Seccion>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Seccion titulo="Sin datos" descripcion="EmptyState compacto dentro de una sección">
+              <EmptyState compacto icono={Inbox} titulo="Sin incidencias en este periodo" descripcion="Prueba con otro rango de fechas." />
+            </Seccion>
+            <Seccion titulo="Error al cargar">
+              <ErrorState compacto onReintentar={simularCarga} reintentando={cargando} />
+            </Seccion>
+          </div>
+        </div>
+      </Bloque>
+
+      <Bloque titulo="Tarjetas">
         <div className="grid gap-3 md:grid-cols-2">
           <Card>
             <p className="m-0 text-xs text-muted">INC-2026-1020-RED-0042</p>
@@ -226,9 +314,9 @@ export default function Estilos() {
             <p className="m-0 mt-1 text-sm text-muted">Usa claseCardInteractiva en un Link para que el foco y el rol sean reales.</p>
           </Link>
         </div>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Cargando, vacío y error">
+      <Bloque titulo="Cargando, vacío y error">
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <p className="mb-3 text-sm font-semibold text-muted">Skeleton</p>
@@ -253,9 +341,9 @@ export default function Estilos() {
           <Spinner />
           <Spinner tamano={28} />
         </Fila>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Encabezado de página">
+      <Bloque titulo="Encabezado de página">
         <Card>
           <PageHeader titulo="Mis reportes" subtitulo="Hola, Ana" acciones={<Button variante="fantasma" aria-label="Buscar" icono={<Search size={22} />} />} />
           <PageHeader titulo="Detalle" atras={{ to: '/_estilos', texto: 'Mis reportes' }} />
@@ -263,9 +351,9 @@ export default function Estilos() {
             Cambia la plataforma arriba: iOS = título grande 34 px; Android = 22 px con barra superior; escritorio = 26 px.
           </p>
         </Card>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Hoja inferior">
+      <Bloque titulo="Hoja inferior">
         <Button variante="secundario" onClick={() => setHoja(true)}>Abrir hoja</Button>
         <BottomSheet
           abierto={hoja}
@@ -285,9 +373,9 @@ export default function Estilos() {
           />
           <Textarea etiqueta="Comentario" placeholder="Opcional" />
         </BottomSheet>
-      </Seccion>
+      </Bloque>
 
-      <Seccion titulo="Navegación por rol">
+      <Bloque titulo="Navegación por rol">
         <p className="mb-3 text-sm text-muted">
           Matriz «Pantallas por rol» de docs/TAREAS.md. El perfil se deduce de los permisos del usuario.
         </p>
@@ -310,7 +398,7 @@ export default function Estilos() {
             <NavegacionLateral permisos={ROLES[rol][1]} nombre="Perfil" estatica />
           </div>
         </div>
-      </Seccion>
+      </Bloque>
     </main>
   )
 }

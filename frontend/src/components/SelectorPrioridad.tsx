@@ -32,14 +32,15 @@ export function SelectorPrioridad({ incidenciaId, prioridad }: SelectorPrioridad
 
   return (
     <form
-      className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+      className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault()
         if (elegida !== prioridad) mutacion.mutate({ prioridad: elegida })
       }}
     >
-      <div className="sm:flex-1">
+      <div className="min-w-0 flex-1">
         <Select
+          tamano="sm"
           etiqueta="Prioridad"
           value={elegida}
           disabled={mutacion.isPending}
@@ -50,14 +51,14 @@ export function SelectorPrioridad({ incidenciaId, prioridad }: SelectorPrioridad
           }}
         />
       </div>
-      <Button type="submit" disabled={elegida === prioridad} cargando={mutacion.isPending} textoCargando="Guardando…">
+      <Button type="submit" tamano="sm" variante="secundario" disabled={elegida === prioridad} cargando={mutacion.isPending} textoCargando="Guardando…">
         Guardar prioridad
       </Button>
       {mutacion.isSuccess && (
-        <p role="status" className="m-0 text-sm text-ok sm:basis-full">Prioridad actualizada.</p>
+        <p role="status" className="m-0 text-sm text-ok basis-full">Prioridad actualizada.</p>
       )}
       {mutacion.isError && (
-        <p role="alert" className="m-0 text-sm text-bad sm:basis-full">{mensajeDeError(mutacion.error)}</p>
+        <p role="alert" className="m-0 text-sm text-bad basis-full">{mensajeDeError(mutacion.error)}</p>
       )}
     </form>
   )

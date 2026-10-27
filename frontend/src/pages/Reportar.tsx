@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Camera, ImagePlus, Sparkles } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Camera, Check, ImagePlus, Lock, PencilLine, Send, ShieldAlert, Sparkles } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { aulaQuery } from '../api/aulas'
@@ -11,14 +11,15 @@ import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import { AvisoCalidad } from '../components/AvisoCalidad'
 import { CamposDetalleReporte } from '../components/CamposDetalleReporte'
+import { SelectorUbicacion } from '../components/SelectorUbicacion'
 import { SugerenciaIA } from '../components/SugerenciaIA'
-import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui'
+import { Badge, Button, Card, Input, PageHeader, Seccion, Segmentado, Select, Skeleton, Spinner, Textarea } from '../components/ui'
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
-import { OPCIONES_CATEGORIA, OPCIONES_PRIORIDAD } from '../lib/etiquetas'
+import { ETIQUETAS_PRIORIDAD, OPCIONES_CATEGORIA } from '../lib/etiquetas'
 import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
 import type { RespuestaIA } from '../schemas/ia'
-import { incidenciaSchema, type Categoria, type IncidenciaCreada, type IncidenciaForm } from '../schemas/incidencia'
+import { incidenciaSchema, LIMITES, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
 import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
 
 /** Rutas del formulario que tienen un campo visible: un 400 de la API en ellas se marca bajo el campo (UX-18). */
@@ -39,11 +40,56 @@ function Err({ id, msg }: { id?: string; msg?: string }) {
   return msg ? <p id={id} className="campo-error">{msg}</p> : null
 }
 
+const AYUDA_PRIORIDAD: Record<Prioridad, string> = {
+  baja: 'Molestia menor; puede esperar.',
+  media: 'Afecta tu trabajo, pero hay alternativa.',
+  alta: 'Impide una clase o actividad.',
+  critica: 'Riesgo de seguridad o servicio caído.',
+}
+
+const PASOS = ['Foto', 'Revisa', 'Envía'] as const
+
+/** Indicador de los 3 pasos de Reportar (UX-29). */
+function Pasos({ actual }: { actual: 1 | 2 | 3 }) {
+  return (
+    <ol className="m-0 flex list-none items-center gap-2 p-0 text-sm" aria-label="Pasos para reportar">
+      {PASOS.map((texto, i) => {
+        const n = i + 1
+        const hecho = n < actual
+        const activo = n === actual
+        return (
+          <li key={texto} className="flex flex-1 items-center gap-2" aria-current={activo ? 'step' : undefined}>
+            <span
+              className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                activo ? 'bg-brand text-on-brand' : hecho ? 'bg-accent text-on-accent' : 'border border-line-strong bg-panel text-muted'
+              }`}
+              aria-hidden
+            >
+              {hecho ? <Check size={14} /> : n}
+            </span>
+            <span className={activo ? 'font-semibold text-ink' : 'text-muted'}>
+              {texto}
+              {hecho && <span className="sr-only"> (listo)</span>}
+            </span>
+            {n < PASOS.length && <span className="h-px flex-1 bg-line" aria-hidden />}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 function normalizarTag(t: string): string {
   return t.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/\s+/g, '_')
 }
 
+/** Reportar en 3 pasos. "Reportar otro" remonta el flujo con una llave nueva (estado limpio). */
 export default function Reportar() {
+  const [ronda, setRonda] = useState(0)
+  return <FlujoReporte key={ronda} onReportarOtro={() => setRonda((r) => r + 1)} />
+}
+
+function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const navigate = useNavigate()
   const [parametros] = useSearchParams()
   const aulaId = parametros.get('aula')?.trim() ?? ''
@@ -83,6 +129,7 @@ export default function Reportar() {
   // Leer dirtyFields en el render suscribe el formulario a su seguimiento (lo usa sinEditar).
   const { errors, isSubmitting, dirtyFields: _camposEditados } = formState
   const categoria = useWatch({ control, name: 'detalle_especifico.categoria' })
+  const prioridad = useWatch({ control, name: 'prioridad' })
   const { mutateAsync: crear } = useCrearIncidencia()
   const { mutateAsync: subirFoto } = useEvidencia()
   const ubicacionFijada = Boolean(aula.data)
@@ -136,14 +183,16 @@ export default function Reportar() {
     setCriticaPendiente(false)
   }
 
-  const marcaIA = (campo: Parameters<typeof sinEditar>[0]) =>
+  /** Marca "Sugerido por IA" (color secundario) sobre los campos que llenó la IA; desaparece al editarlos (UX-30). */
+  const campoIA = (campo: Parameters<typeof sinEditar>[0], hijo: ReactNode) =>
     camposIA.includes(campo) && sinEditar(campo)
       ? (
-        <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-panel-2 px-2 py-0.5 text-xs font-semibold text-brand">
-          <Sparkles size={12} aria-hidden /> Sugerido por IA
-        </span>
+        <div className="flex flex-col gap-1 border-l-2 border-accent pl-3">
+          <span className="self-start"><Badge tipo="ia" /></span>
+          {hijo}
+        </div>
       )
-      : null
+      : hijo
 
   function abrirCamara() {
     entrada.current?.click()
@@ -161,13 +210,17 @@ export default function Reportar() {
     setAviso(null)
     setCriticaPendiente(false)
     setCamposIA([])
+    setIa(null) // no deja visible la sugerencia de la foto anterior
     try {
       await tarea(control)
     } catch (e) {
       if (!vigente(control)) return
+      // El servidor ya manda un mensaje claro (límite diario, IA apagada, foto muy pequeña…): se muestra tal cual.
       setAviso(e instanceof ErrorImagen
         ? `${e.message} Puedes llenar el formulario sin foto.`
-        : 'No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
+        : e instanceof ApiError && e.message
+          ? `${e.message.replace(/\.$/, '')}. Puedes llenar el formulario manualmente.`
+          : 'No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
     } finally {
       if (montado.current && operacionIA.current === control) {
         operacionIA.current = null
@@ -192,17 +245,21 @@ export default function Reportar() {
         rellenados.push('titulo')
       }
       if (sinEditar('descripcion')) {
-        setValue('descripcion', analisis.descripcion)
+        setValue('descripcion', analisis.descripcion.slice(0, LIMITES.descripcion[1]))
         rellenados.push('descripcion')
       }
-      // "critica" nunca se autollena: se deja "alta" y se pide confirmación explícita.
+      // "critica" nunca se autollena: se deja "alta" y se pide confirmación explícita
+      // (el aviso aparece aunque el usuario ya haya elegido otra prioridad).
+      setCriticaPendiente(analisis.prioridad_sugerida === 'critica')
       if (sinEditar('prioridad')) {
         setValue('prioridad', analisis.prioridad_sugerida === 'critica' ? 'alta' : analisis.prioridad_sugerida)
-        setCriticaPendiente(analisis.prioridad_sugerida === 'critica')
         rellenados.push('prioridad')
       }
       if (sinEditar('tags')) {
-        const tags = analisis.tags.map(normalizarTag)
+        // Mismas reglas que el formulario: sin repetidos, formato válido y máximo 15.
+        const tags = [...new Set(analisis.tags.map(normalizarTag))]
+          .filter((t) => /^[a-z0-9_]{2,30}$/.test(t))
+          .slice(0, LIMITES.tags_max)
         setValue('tags', tags)
         setTagsTexto(tags.join(', '))
         rellenados.push('tags')
@@ -315,7 +372,8 @@ export default function Reportar() {
         estadoFoto={estadoFoto}
         errorFoto={errorFoto}
         onReintentarFoto={() => void adjuntarFoto(creada._id)}
-        onContinuarSinFoto={() => navigate('/mis-tickets')}
+        onContinuarSinFoto={() => navigate('/mis-reportes')}
+        onReportarOtro={onReportarOtro}
       />
     )
   }
@@ -351,67 +409,104 @@ export default function Reportar() {
 
   if (paso === 'foto') {
     return (
-      <>
-        <h1 className="titulo-pagina">Reportar</h1>
-        <div className="card flex flex-col items-center gap-4 py-10 text-center">
-          <p className="m-0 text-muted">Toma una foto del problema y la IA te ayudará a llenar el reporte.</p>
-          <label className="etiqueta w-full max-w-xs text-left" htmlFor="contexto">Contexto para la IA (opcional)</label>
-          <textarea
-            id="contexto"
-            className="w-full max-w-xs"
+      <div className="contenido-estrecho mx-auto pila">
+        <PageHeader titulo="Reportar" subtitulo="Toma una foto del problema y la IA te ayudará a llenar el reporte." />
+        <Pasos actual={1} />
+        <Card como="section" className="flex flex-col gap-4">
+          {entradaFoto}
+          {entradaGaleria}
+          <Button tamano="lg" bloque icono={<Camera size={22} aria-hidden />} cargando={analizando} textoCargando="Analizando…" onClick={abrirCamara}>
+            Tomar foto
+          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variante="secundario" icono={<ImagePlus size={18} aria-hidden />} disabled={analizando} onClick={() => galeria.current?.click()}>
+              Galería
+            </Button>
+            <Button variante="secundario" icono={<PencilLine size={18} aria-hidden />} disabled={analizando} onClick={continuarManual}>
+              Llenar sin foto
+            </Button>
+          </div>
+          <Textarea
+            etiqueta="Contexto para la IA (opcional)"
+            ayuda="Ayuda a la IA a entender la foto. Máximo 500 caracteres."
             rows={2}
             maxLength={500}
             value={contexto}
             placeholder="Ej. el proyector no enciende desde ayer"
             onChange={(e) => setContexto(e.target.value)}
           />
-          {entradaFoto}
-          {entradaGaleria}
-          <button className="btn w-full max-w-xs" style={{ minHeight: 64, fontSize: 18 }} disabled={analizando} onClick={abrirCamara}>
-            <Camera aria-hidden /> {analizando ? 'Analizando…' : 'Tomar foto'}
-          </button>
-          <Button variante="secundario" icono={<ImagePlus size={18} aria-hidden />} disabled={analizando} onClick={() => galeria.current?.click()}>
-            Elegir de la galería
-          </Button>
-          <button className="btn btn-secundario" onClick={continuarManual}>Llenar sin foto</button>
-        </div>
-      </>
+        </Card>
+        <p className="m-0 flex items-start gap-2 text-sm text-muted">
+          <Sparkles size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+          La IA solo propone: podrás revisar y cambiar todo antes de enviar.
+        </p>
+        <p className="m-0 flex items-start gap-2 text-sm text-muted" role="note">
+          <ShieldAlert size={16} className="mt-0.5 shrink-0" aria-hidden />
+          <span>
+            La foto se analiza con <strong className="font-semibold text-ink">Google Gemini</strong>, que puede usarla para mejorar
+            sus servicios. Fotografía solo la falla: evita personas, rostros y datos personales.
+          </span>
+        </p>
+      </div>
     )
   }
 
+  const sugerenciaAplicada = ia && (ia.accion_asistida === 'autollenar' || ia.accion_asistida === 'sugerir')
+
   return (
-    <>
-      <h1 className="titulo-pagina">Nueva incidencia</h1>
+    <div className="contenido-estrecho mx-auto pila">
+      <PageHeader titulo="Nuevo reporte" subtitulo="Revisa los datos y envía tu reporte." />
+      <Pasos actual={2} />
       {entradaFoto}
-      {vista && <img src={vista} alt="Foto de la incidencia" className="mb-3 max-h-56 rounded-card object-cover" />}
+
+      <Card className="flex items-center gap-3 !p-3">
+        {vista ? (
+          <div className="relative size-20 shrink-0 overflow-hidden rounded-input">
+            <img src={vista} alt="Foto de la incidencia" className="block size-full object-cover" />
+            {analizando && (
+              <div aria-hidden className="absolute inset-0 grid place-items-center bg-canvas/60 backdrop-blur-[2px]">
+                <Sparkles size={20} className="animate-pulse text-accent" />
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="grid size-20 shrink-0 place-items-center rounded-input bg-panel-2 text-muted" aria-hidden>
+            <Camera size={26} />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="m-0 font-semibold text-ink">{vista ? 'Foto adjunta' : 'Sin foto'}</p>
+          <p className="m-0 text-sm text-muted">{vista ? 'Se enviará como evidencia.' : 'Una foto ayuda al técnico a entender el problema.'}</p>
+        </div>
+        <Button variante="secundario" tamano="sm" icono={<Camera size={16} />} disabled={analizando} onClick={abrirCamara}>
+          {vista ? 'Cambiar' : 'Agregar'}
+        </Button>
+      </Card>
+
       {analizando && (
-        <Card role="status" className="mb-3 text-sm">
-          <p className="m-0">Analizando la foto… Puedes continuar llenando el formulario.</p>
-          <div aria-hidden className="mt-2 flex flex-col gap-2">
+        <Card role="status" aria-live="polite" className="flex flex-col gap-3 border-[var(--color-secondary)]">
+          <div className="flex items-start gap-3">
+            <Spinner tamano={24} etiqueta="Analizando con IA" className="mt-0.5 shrink-0 text-accent" />
+            <div>
+              <p className="m-0 font-semibold">Analizando la foto con IA…</p>
+              <p className="m-0 text-sm text-muted">Llenaremos título, descripción, categoría y prioridad. Puedes seguir escribiendo; no borraremos lo que cambies.</p>
+            </div>
+          </div>
+          <div aria-hidden className="flex flex-col gap-2">
             <Skeleton ancho="70%" alto={12} />
+            <Skeleton ancho="90%" alto={12} />
             <Skeleton ancho="45%" alto={12} />
           </div>
-          <Button variante="secundario" className="mt-3" onClick={continuarSinIA}>Continuar sin IA</Button>
+          <Button variante="secundario" className="self-start" onClick={continuarSinIA}>Continuar sin IA</Button>
         </Card>
       )}
       {calidadPendiente && (
         <AvisoCalidad pistas={calidadPendiente.pistas} onRepetir={repetirFoto} onUsar={usarFotoDeTodosModos} />
       )}
-      {aviso && <p role="status" className="card mb-3 text-sm">{aviso}</p>}
-      {aulaId && aula.isPending && <p role="status" className="card mb-3 text-sm">Comprobando la ubicación del código QR…</p>}
-      {aulaId && aula.isError && (
-        <p role="alert" className="card mb-3 text-sm text-warn">
-          No pudimos reconocer el aula del código QR. Puedes seleccionar la ubicación manualmente.
-        </p>
-      )}
-      {aula.data && (
-        <p role="status" className="card mb-3 text-sm text-ok">
-          Ubicación fijada por el código QR: {aula.data.ubicacion.edificio}, piso {aula.data.ubicacion.piso}, aula {aula.data.ubicacion.aula}.
-        </p>
-      )}
+      {aviso && <p role="status" className="card m-0 text-sm">{aviso}</p>}
       {ia && <SugerenciaIA respuesta={ia} />}
       {criticaPendiente && (
-        <Card role="alert" className="mb-3 text-sm">
+        <Card role="alert" className="text-sm">
           <p className="m-0 font-semibold">La IA sugiere prioridad crítica</p>
           <p className="mb-3 mt-1 text-muted">
             Crítica se reserva para riesgos de seguridad o servicios caídos. Mientras no la confirmes se usará «alta».
@@ -422,9 +517,9 @@ export default function Reportar() {
           </div>
         </Card>
       )}
-      {ia && (ia.accion_asistida === 'autollenar' || ia.accion_asistida === 'sugerir') && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-panel-2 px-3 py-1 text-xs font-semibold text-brand">
+      {sugerenciaAplicada && (
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold" style={{ background: 'var(--ia-bg)', color: 'var(--ia-text)' }}>
             <Sparkles size={14} aria-hidden /> Sugerido por IA · confianza {Math.round(ia.analisis.confianza * 100)}%
           </span>
           {ia.analisis.campos_detectados.map((c) => (
@@ -433,52 +528,86 @@ export default function Reportar() {
         </div>
       )}
 
-      <form onSubmit={enviarFormulario} className="card" noValidate>
-        {marcaIA('titulo')}
-        <Input etiqueta="Título" maxLength={120} error={errors.titulo?.message} {...register('titulo')} />
-        {marcaIA('descripcion')}
-        <Textarea etiqueta="Descripción" rows={4} maxLength={2000} error={errors.descripcion?.message} {...register('descripcion')} />
-        {marcaIA('prioridad')}
-        <Select
-          etiqueta="Prioridad"
-          opciones={OPCIONES_PRIORIDAD}
-          error={errors.prioridad?.message}
-          {...register('prioridad', { onChange: () => setCriticaPendiente(false) })}
-        />
+      <form onSubmit={enviarFormulario} className="pila" noValidate>
+        <Seccion titulo="Qué pasa" descripcion="Describe la falla en pocas palabras.">
+          <div className="pila">
+            {campoIA('titulo', <Input etiqueta="Título" maxLength={120} placeholder="Ej. Proyector no enciende" error={errors.titulo?.message} {...register('titulo')} />)}
+            {campoIA('descripcion', <Textarea etiqueta="Descripción" rows={4} maxLength={2000} error={errors.descripcion?.message} {...register('descripcion')} />)}
+          </div>
+        </Seccion>
 
-        <Input etiqueta="Edificio" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-          error={errors.ubicacion?.edificio?.message} {...register('ubicacion.edificio')} />
-        <Input etiqueta="Piso (opcional)" type="number" inputMode="numeric" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-          error={errors.ubicacion?.piso?.message}
-          {...register('ubicacion.piso', { setValueAs: (v) => (v === '' || v == null ? null : Number(v)) })} />
-        <Input etiqueta="Aula" readOnly={ubicacionFijada} aria-readonly={ubicacionFijada}
-          error={errors.ubicacion?.aula?.message} {...register('ubicacion.aula')} />
+        <Seccion titulo="Dónde" descripcion="Para que el técnico llegue directo.">
+          <div className="pila">
+            {aulaId && aula.isPending && <p role="status" className="m-0 text-sm text-muted">Comprobando la ubicación del código QR…</p>}
+            {aulaId && aula.isError && (
+              <p role="alert" className="m-0 text-sm text-warn">
+                No pudimos reconocer el aula del código QR. Puedes seleccionar la ubicación manualmente.
+              </p>
+            )}
+            {aula.data && (
+              <p role="status" className="m-0 flex items-start gap-2 rounded-card border border-line bg-panel-2 p-3 text-sm text-ink">
+                <Lock size={16} className="mt-0.5 shrink-0 text-ok" aria-hidden />
+                <span>
+                  <span className="block font-semibold">{aula.data.ubicacion.edificio}, piso {aula.data.ubicacion.piso}, aula {aula.data.ubicacion.aula}</span>
+                  <span className="block text-muted">Ubicación fijada por el código QR.</span>
+                </span>
+              </p>
+            )}
+            <SelectorUbicacion control={control} register={register} setValue={setValue} errors={errors} fijada={ubicacionFijada} />
+          </div>
+        </Seccion>
 
-        {marcaIA('detalle_especifico')}
-        <Select
-          etiqueta="Categoría"
-          opciones={OPCIONES_CATEGORIA}
-          value={categoria}
-          onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}
-        />
-        <CamposDetalleReporte categoria={categoria} register={register} errores={errors.detalle_especifico} />
+        <Seccion titulo="Detalles de la categoría" descripcion="Datos que ayudan a asignar al área correcta.">
+          <div className="pila">
+            {campoIA('detalle_especifico', (
+              <Select
+                etiqueta="Categoría"
+                opciones={OPCIONES_CATEGORIA}
+                value={categoria}
+                onChange={(e) => cambiarCategoria(e.target.value as Categoria, true)}
+              />
+            ))}
+            <CamposDetalleReporte categoria={categoria} register={register} errores={errors.detalle_especifico} />
+            {campoIA('tags', (
+              <Input
+                etiqueta="Tags (separados por coma)"
+                value={tagsTexto}
+                placeholder="Ej. proyector, hdmi"
+                aria-describedby={errors.tags ? 'tags-error' : undefined}
+                aria-invalid={errors.tags ? true : undefined}
+                onChange={(e) => {
+                  setTagsTexto(e.target.value)
+                  setValue('tags', e.target.value.split(',').map(normalizarTag).filter(Boolean), { shouldDirty: true })
+                }}
+              />
+            ))}
+            <Err id="tags-error" msg={errors.tags?.message ?? (Array.isArray(errors.tags) ? 'Revisa los tags: 2 a 30 letras, números o _' : undefined)} />
+          </div>
+        </Seccion>
 
-        {marcaIA('tags')}
-        <Input
-          etiqueta="Tags (separados por coma)"
-          value={tagsTexto}
-          aria-describedby={errors.tags ? 'tags-error' : undefined}
-          aria-invalid={errors.tags ? true : undefined}
-          onChange={(e) => {
-            setTagsTexto(e.target.value)
-            setValue('tags', e.target.value.split(',').map(normalizarTag).filter(Boolean), { shouldDirty: true })
-          }}
-        />
-        <Err id="tags-error" msg={errors.tags?.message ?? (Array.isArray(errors.tags) ? 'Revisa los tags: 2 a 30 letras, números o _' : undefined)} />
+        <Seccion titulo="Prioridad" descripcion="¿Qué tanto afecta?">
+          {campoIA('prioridad', (
+            <div className="flex flex-col gap-2">
+              <Segmentado<Prioridad>
+                etiqueta="Prioridad"
+                valor={prioridad}
+                opciones={PRIORIDADES.map((p) => ({ valor: p, texto: ETIQUETAS_PRIORIDAD[p] }))}
+                onCambio={(p) => {
+                  setValue('prioridad', p, { shouldDirty: true, shouldValidate: true })
+                  setCriticaPendiente(false)
+                }}
+              />
+              <p className="m-0 text-sm text-muted" aria-live="polite">{AYUDA_PRIORIDAD[prioridad]}</p>
+              <Err msg={errors.prioridad?.message} />
+            </div>
+          ))}
+        </Seccion>
 
-        {errorEnvio && <p className="campo-error" role="alert">{errorEnvio}</p>}
-        <Button type="submit" bloque className="mt-4" cargando={isSubmitting} textoCargando="Enviando…">Enviar reporte</Button>
+        <div className="sticky bottom-[calc(var(--tabbar-height)+var(--safe-bottom)+8px)] z-20 flex flex-col gap-2 rounded-card border border-line bg-panel p-3 shadow-lg lg:bottom-4">
+          {errorEnvio && <p className="campo-error m-0" role="alert">{errorEnvio}</p>}
+          <Button type="submit" tamano="lg" bloque icono={<Send size={20} />} cargando={isSubmitting} textoCargando="Enviando…">Enviar reporte</Button>
+        </div>
       </form>
-    </>
+    </div>
   )
 }

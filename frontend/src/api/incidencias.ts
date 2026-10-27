@@ -1,8 +1,8 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
-  asignacionOutSchema, asignacionSchema, busquedaSchema, incidenciaCreadaSchema, incidenciaDetalleSchema, incidenciaListaSchema,
-  incidenciaSchema, okSchema, prioridadOutSchema, prioridadSchema, seguimientoOutSchema, seguimientoSchema, tagsSchema,
-  type AsignacionIn, type FiltrosIncidencias, type IncidenciaIn, type PrioridadIn, type SeguimientoIn, type TagsIn,
+  asignacionOutSchema, asignacionSchema, busquedaSchema, comentarioReportanteSchema, confirmacionSchema, incidenciaCreadaSchema, incidenciaDetalleSchema, incidenciaListaSchema,
+  incidenciaSchema, okSchema, prioridadOutSchema, prioridadSchema, seguimientoOutSchema, seguimientoSchema, tagsSchema, tomarOutSchema,
+  type AsignacionIn, type ComentarioReportanteIn, type ConfirmacionIn, type FiltrosIncidencias, type IncidenciaIn, type PrioridadIn, type SeguimientoIn, type TagsIn,
 } from '../schemas/incidencia'
 import { api, validarEntrada } from './client'
 import { claves, limpiarFiltros } from './keys'
@@ -56,4 +56,16 @@ export function asignar(id: string, datos: AsignacionIn) {
 
 export function cambiarPrioridad(id: string, datos: PrioridadIn) {
   return api(`${ruta(id)}/prioridad`, { method: 'PATCH', json: validarEntrada(prioridadSchema, datos), schema: prioridadOutSchema })
+}
+
+export function confirmarSolucion(id: string, datos: ConfirmacionIn) {
+  return api(`${ruta(id)}/confirmacion`, { method: 'POST', json: validarEntrada(confirmacionSchema, datos), schema: seguimientoOutSchema })
+}
+
+export function comentarEnEspera(id: string, datos: ComentarioReportanteIn) {
+  return api(`${ruta(id)}/comentarios`, { method: 'POST', json: validarEntrada(comentarioReportanteSchema, datos), schema: seguimientoOutSchema })
+}
+
+export function tomarIncidencia(id: string) {
+  return api(`${ruta(id)}/tomar`, { method: 'POST', schema: tomarOutSchema })
 }

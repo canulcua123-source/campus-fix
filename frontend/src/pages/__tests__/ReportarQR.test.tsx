@@ -77,7 +77,8 @@ describe('Reportar desde QR T-012', () => {
 
   it('mantiene el flujo manual cuando no hay parámetro aula', async () => {
     let consultas = 0
-    servidor.use(http.get(`${BASE}/aulas/:id`, () => {
+    servidor.use(http.get(`${BASE}/aulas/:id`, ({ params }) => {
+      if (params.id === 'ubicaciones') return HttpResponse.json([]) // catálogo del selector, no es consulta de QR
       consultas += 1
       return HttpResponse.json({}, { status: 500 })
     }))
@@ -135,5 +136,37 @@ describe('Sesión y ruta QR T-012', () => {
 
     expect(await screen.findByText(`Destino conservado: /reportar?aula=${ID_VALIDO}`)).toBeInTheDocument()
     await waitFor(() => expect(useAuth.getState().token).toBe('token-prueba'))
+  })
+})
+
+describe('Selector de ubicación desde el catálogo', () => {
+  it('elige edificio, piso y aula en cascada y permite «Otro lugar»', async () => {
+    servidor.use(http.get(`${BASE}/aulas/ubicaciones`, () => HttpResponse.json([
+      { edificio: 'A', piso: 1, aula: '101' },
+      { edificio: 'A', piso: 2, aula: '201' },
+      { edificio: 'A', piso: 2, aula: '205' },
+      { edificio: 'B', piso: 0, aula: 'Lab 1' },
+    ])))
+    renderReportar()
+    await abrirFormulario()
+
+    const edificio = await screen.findByRole('combobox', { name: 'Edificio' })
+    await waitFor(() => expect(edificio).toBeEnabled())
+    expect(screen.getByRole('combobox', { name: 'Piso' })).toBeDisabled()
+    await userEvent.selectOptions(edificio, 'A')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Piso' }), '2')
+    const aula = screen.getByRole('combobox', { name: 'Aula' })
+    expect([...aula.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Elige un aula', '201', '205'])
+    await userEvent.selectOptions(aula, '205')
+    expect(aula).toHaveValue('205')
+
+    // Edificio con un solo piso: se elige solo.
+    await userEvent.selectOptions(edificio, 'B')
+    expect(screen.getByRole('combobox', { name: 'Piso' })).toHaveValue('0')
+
+    await userEvent.selectOptions(edificio, '__otro__')
+    expect(screen.getByRole('textbox', { name: 'Edificio' })).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: 'Elegir de la lista' }))
+    expect(screen.getByRole('combobox', { name: 'Edificio' })).toHaveValue('')
   })
 })

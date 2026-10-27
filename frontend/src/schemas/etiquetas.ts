@@ -76,4 +76,7 @@ export const ETIQUETAS_MIME = {
   'image/png': 'PNG',
   'image/webp': 'WebP',
   'application/pdf': 'PDF',
+  'video/mp4': 'MP4',
+  'video/quicktime': 'MOV',
+  'video/webm': 'WebM',
 } as const

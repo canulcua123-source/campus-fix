@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, Camera, CircleAlert, Eye, EyeOff, ListChecks, LogIn, Wrench } from 'lucide-react'
+import { BarChart3, Camera, CircleAlert, Eye, EyeOff, ListChecks, Lock, LogIn, Mail, Wrench } from 'lucide-react'
 import { mensajeDeError } from '../api/client'
 import { useLogin } from '../api/hooks/auth'
 import { useAuth } from '../auth/store'
+import { accesoDe, cumpleAcceso, rutaInicio } from '../components/navegacion'
 import { Button, Input } from '../components/ui'
 
 const VENTAJAS = [
@@ -41,7 +42,14 @@ export default function Login() {
     entrar.mutate(
       { correo, password },
       {
-        onSuccess: () => navigate(destino, { replace: true }),
+        onSuccess: () => {
+          // La ruta previa puede ser de otra cuenta (p. ej. /tablero del coordinador): si no es de este rol, va a su inicio.
+          const actual = useAuth.getState().usuario
+          const acceso = accesoDe(destino.split('?')[0])
+          const permitido = actual && (!acceso || cumpleAcceso(acceso, actual.permisos, actual.rol))
+          const final = !actual ? destino : destino === '/' || !permitido ? rutaInicio(actual.permisos, actual.rol) : destino
+          navigate(final, { replace: true })
+        },
         onError: (err) => setError(mensajeDeError(err, 'No fue posible iniciar sesión')),
       },
     )
@@ -89,7 +97,7 @@ export default function Login() {
 
       {/* Formulario */}
       <main className="flex flex-1 items-center justify-center px-4 py-10 lg:max-w-xl lg:bg-panel">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm rounded-card border border-line bg-panel p-6 shadow-sm sm:p-8 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
           <div className="mb-8 flex flex-col items-center text-center lg:items-start lg:text-left">
             <span className="lg:hidden"><Logo grande /></span>
             <h1 className="mt-4 text-3xl font-bold tracking-tight text-ink lg:mt-0">Bienvenido</h1>
@@ -102,7 +110,9 @@ export default function Login() {
               type="email"
               inputMode="email"
               autoComplete="username"
-              placeholder="nombre@universidad.edu.mx"
+              placeholder="nombre@utm.edu.mx"
+              ayuda="Usa tu correo de la universidad (termina en .edu.mx)."
+              icono={<Mail size={18} />}
               value={correo}
               onChange={(e) => setCorreo(e.target.value)}
               required
@@ -112,6 +122,7 @@ export default function Login() {
                 etiqueta="Contraseña"
                 type={verPassword ? 'text' : 'password'}
                 autoComplete="current-password"
+                icono={<Lock size={18} />}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -141,12 +152,12 @@ export default function Login() {
               </p>
             )}
 
-            <Button type="submit" tamano="lg" cargando={entrar.isPending} icono={<LogIn size={18} aria-hidden />} className="w-full">
-              {entrar.isPending ? 'Entrando…' : 'Entrar'}
+            <Button type="submit" tamano="lg" bloque cargando={entrar.isPending} textoCargando="Entrando…" icono={<LogIn size={18} aria-hidden />}>
+              Entrar
             </Button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-muted">¿Problemas para entrar? Pide a tu coordinación que revise tu cuenta.</p>
+          <p className="mb-0 mt-8 text-center text-sm text-muted">¿Problemas para entrar? Pide a tu coordinación que revise tu cuenta.</p>
         </div>
       </main>
     </div>

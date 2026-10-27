@@ -3,7 +3,8 @@ from collections.abc import Sequence
 
 from app.schemas.ia import AnalisisImagen, DecisionAsistida
 
-ADVERTENCIAS_DUDOSAS = ("borros", "oscur", "instruccion")
+# Una sola lista para las reglas de confianza y las compuertas (también recibe las pistas del cliente).
+ADVERTENCIAS_DUDOSAS = ("borros", "oscur", "sobreexpu", "instruccion", "falta contexto", "falta_contexto")
 
 
 def _normalizar(texto: str) -> str:

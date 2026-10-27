@@ -62,12 +62,12 @@ describe('MisTickets (T-045)', () => {
     renderMis()
     await screen.findByText('Luminaria fundida')
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Resuelta' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Resueltas' }))
 
     expect(await screen.findByText('Proyector sin señal')).toBeInTheDocument()
     expect(screen.queryByText('Luminaria fundida')).not.toBeInTheDocument()
     expect(screen.getByTestId('url')).toHaveTextContent('?estado=resuelta')
-    expect(screen.getByRole('button', { name: 'Resuelta' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Resueltas' })).toHaveAttribute('aria-pressed', 'true')
     expect(consultas.at(-1)?.get('estado')).toBe('resuelta')
   })
 
