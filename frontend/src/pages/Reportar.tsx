@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Camera, Check, ImagePlus, Lock, PencilLine, Send, Sparkles } from 'lucide-react'
+import { Camera, Check, ImagePlus, Lock, PencilLine, Send, ShieldAlert, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -439,6 +439,13 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
         <p className="m-0 flex items-start gap-2 text-sm text-muted">
           <Sparkles size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden />
           La IA solo propone: podrás revisar y cambiar todo antes de enviar.
+        </p>
+        <p className="m-0 flex items-start gap-2 text-sm text-muted" role="note">
+          <ShieldAlert size={16} className="mt-0.5 shrink-0" aria-hidden />
+          <span>
+            La foto se analiza con <strong className="font-semibold text-ink">Google Gemini</strong>, que puede usarla para mejorar
+            sus servicios. Fotografía solo la falla: evita personas, rostros y datos personales.
+          </span>
         </p>
       </div>
     )

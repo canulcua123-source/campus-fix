@@ -48,6 +48,7 @@ export default function Privacidad() {
 
       <Apartado id="priv-ia" titulo="Análisis con inteligencia artificial">
         <p>Si lo usas, la foto de la incidencia se envía a un servicio de inteligencia artificial para sugerir los campos del reporte. Las sugerencias siempre puedes editarlas y nunca se envía un reporte sin tu confirmación.</p>
+        <p>El servicio es <strong>Google Gemini</strong> en su modalidad gratuita: Google puede usar las fotos analizadas para mejorar sus productos. Por eso te pedimos fotografiar solo la falla, sin personas, rostros ni datos personales. Si prefieres no usarlo, elige «Llenar sin foto» y adjunta la evidencia después; las evidencias no se envían a la IA.</p>
       </Apartado>
 
       <Apartado id="priv-seguridad" titulo="Cómo los protegemos">
