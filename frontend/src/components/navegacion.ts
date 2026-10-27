@@ -102,7 +102,8 @@ interface Config {
 
 export const NAVEGACION: Record<PerfilNav, Config> = {
   reportante: { movil: [I.inicio, REPORTAR, I.misReportes, I.perfil], lateral: [I.inicio, I.misReportes] },
-  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: [I.bandeja, I.buscar, I.misReportes] },
+  // En escritorio la barra superior ya busca: «Buscar» solo queda en la barra inferior (móvil).
+  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: [I.bandeja, I.misReportes] },
   coordinador: {
     movil: [I.tablero, I.bandeja, REPORTAR, I.metricas, I.perfil],
     lateral: [I.tablero, I.incidencias, I.tecnicos, I.metricas],

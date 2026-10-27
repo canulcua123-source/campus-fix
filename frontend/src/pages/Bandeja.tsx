@@ -1,4 +1,4 @@
-import { CircleCheck, Hand, Inbox, RefreshCw } from 'lucide-react'
+import { CircleCheck, Hand, Inbox, RefreshCw, Search, SearchX } from 'lucide-react'
 import { useState } from 'react'
 import { useMe } from '../api/hooks/auth'
 import { mensajeDeError } from '../api/client'
@@ -6,8 +6,20 @@ import { useIncidencias, useTomar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
-import { Button, EmptyState, ErrorState, PageHeader, Segmentado, SkeletonLista } from '../components/ui'
+import { Button, EmptyState, ErrorState, Input, PageHeader, Segmentado, SkeletonLista } from '../components/ui'
 import { antiguedad, filtrarBandeja, ordenarBandeja, type PestanaBandeja } from '../lib/bandeja'
+import type { IncidenciaListaItem } from '../schemas/incidencia'
+
+/** Sin acentos ni mayúsculas, para comparar «aire» con «Aire acondicionado». */
+const plegar = (texto: string) => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+
+/** Coincide si todas las palabras aparecen en título, folio, edificio o aula. */
+function coincide(t: IncidenciaListaItem, consulta: string) {
+  const palabras = plegar(consulta).split(/\s+/).filter(Boolean)
+  if (palabras.length === 0) return true
+  const texto = plegar([t.titulo, t.codigo, t.ubicacion.edificio, t.ubicacion.aula].filter(Boolean).join(' '))
+  return palabras.every((p) => texto.includes(p))
+}
 
 const PESTANAS: { clave: PestanaBandeja; texto: string }[] = [
   { clave: 'mias', texto: 'Mis asignadas' },
@@ -36,7 +48,10 @@ export default function Bandeja() {
     mias: filtrarBandeja(data ?? [], 'mias', me.data?._id).length,
     sin_asignar: filtrarBandeja(data ?? [], 'sin_asignar', me.data?._id).length,
   }
-  const lista = ordenarBandeja(filtrarBandeja(data ?? [], pestana, me.data?._id))
+  const [consulta, setConsulta] = useState('')
+  const deLaPestana = ordenarBandeja(filtrarBandeja(data ?? [], pestana, me.data?._id))
+  const lista = deLaPestana.filter((t) => coincide(t, consulta))
+  const sinCoincidencias = consulta.trim() !== '' && deLaPestana.length > 0 && lista.length === 0
 
   return (
     <div className="pila">
@@ -67,6 +82,16 @@ export default function Bandeja() {
           texto: isPending ? p.texto : `${p.texto} · ${conteo[p.clave]}`,
         }))}
       />
+      <Input
+        etiqueta="Buscar en la bandeja"
+        etiquetaOculta
+        type="search"
+        icono={<Search size={18} />}
+        placeholder="Buscar por título, folio, edificio o aula"
+        value={consulta}
+        onChange={(e) => setConsulta(e.target.value)}
+        autoComplete="off"
+      />
 
       {aviso && (
         <p role="status" className="m-0 flex items-center gap-2 rounded-input border border-ok bg-panel p-3 text-sm text-ok">
@@ -91,7 +116,17 @@ export default function Bandeja() {
         />
       )}
 
-      {!isPending && !isError && lista.length === 0 && (
+      {!isPending && !isError && sinCoincidencias && (
+        <EmptyState
+          compacto
+          titulo="Sin coincidencias"
+          descripcion={`Ninguna incidencia de esta pestaña coincide con «${consulta.trim()}».`}
+          icono={SearchX}
+          accion={<Button variante="secundario" tamano="sm" onClick={() => setConsulta('')}>Limpiar búsqueda</Button>}
+        />
+      )}
+
+      {!isPending && !isError && !sinCoincidencias && lista.length === 0 && (
         <EmptyState
           compacto
           titulo={pestana === 'mias' ? 'Sin incidencias asignadas' : 'Sin incidencias por asignar'}

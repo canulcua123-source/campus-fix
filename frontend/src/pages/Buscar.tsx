@@ -6,7 +6,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useBuscar } from '../api/hooks/incidencias'
 import { haceCuanto } from '../lib/tiempo'
 import { busquedaSchema, ESTADOS, type Estado } from '../schemas/incidencia'
-import { Badge, Card, EmptyState, ErrorState, ETIQUETAS, PageHeader, SkeletonLista } from '../components/ui'
+import { Badge, Button, Card, EmptyState, ErrorState, ETIQUETAS, Input, PageHeader, SkeletonLista } from '../components/ui'
 
 /** Minúsculas y sin acentos, conservando la longitud (un carácter por carácter) para poder cortar el texto original. */
 function plegar(texto: string): string {
@@ -73,13 +73,7 @@ export default function Buscar() {
   const estado = filtro.termino === termino ? filtro.estado : null
 
   if (!consultaValida) {
-    return (
-      <EmptyState
-        titulo="Busca incidencias"
-        descripcion="Escribe al menos dos caracteres en la barra de búsqueda para encontrar reportes por palabras clave."
-        icono={Search}
-      />
-    )
+    return <BuscadorInicial inicial={termino} />
   }
 
   const encabezado = <PageHeader titulo={`Resultados para “${termino}”`} />
@@ -199,6 +193,41 @@ export default function Buscar() {
         ))}
       </ul>
       {panel}
+    </div>
+  )
+}
+
+/** Estado inicial de /buscar (sobre todo en móvil, donde no hay barra superior): campo propio con foco. */
+function BuscadorInicial({ inicial }: { inicial: string }) {
+  const [, setParametros] = useSearchParams()
+  const [texto, setTexto] = useState(inicial)
+  const valido = texto.trim().length >= 2
+  return (
+    <div className="pila">
+      <PageHeader titulo="Buscar" subtitulo="Encuentra reportes de tu área por palabras clave." />
+      <form
+        role="search"
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (valido) setParametros({ q: texto.trim() })
+        }}
+      >
+        <Input
+          etiqueta="Buscar incidencias"
+          etiquetaOculta
+          type="search"
+          icono={<Search size={18} />}
+          placeholder="Ej. proyector, wifi, A-201"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          claseCampo="flex-1"
+          autoFocus
+          autoComplete="off"
+        />
+        <Button type="submit" disabled={!valido}>Buscar</Button>
+      </form>
+      <p className="m-0 text-sm text-muted">Escribe al menos dos caracteres. Busca en el título y la descripción.</p>
     </div>
   )
 }
