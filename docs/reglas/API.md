@@ -37,6 +37,9 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `GET /usuarios/tecnicos?area` | `incidencias:asignar` | 200 lista `{_id, nombre, areas?, edificios?}` (técnicos activos asignables dentro del alcance; sin correo) |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200; `PATCH` a un usuario fuera del alcance gestionable responde **404** idéntico al de un id inexistente (no 403, para no revelar su existencia) |
 | `GET /categorias` | autenticado | 200 |
+| `GET /aulas` | `usuarios:gestionar` | 200 catálogo agrupado por edificio |
+| `POST /aulas`, `PATCH /aulas/{id_publico}` | `usuarios:gestionar` | **201** / 200 `{id_publico, edificio, piso, aula, activa}`; 409 si ya existe esa ubicación; `PATCH` con id inválido o inexistente responde 404 idéntico |
+| `GET /aulas/ubicaciones`, `GET /aulas/{id}` | `incidencias:crear` | 200 solo aulas activas |
 
 `propias=true` en `GET /incidencias` limita la lista a las incidencias reportadas por el usuario en sesión ("Mis reportes", T-045); se combina con `$and` con el alcance, así que nunca lo amplía.
 
@@ -285,11 +288,11 @@ alcance responde siempre 404 para no revelar su existencia; por ello el caso his
 ## 9. Bitácora administrativa (T-022)
 
 `GET /auditoria` permite exclusivamente al rol `admin` consultar los cambios administrativos ya aplicados sobre
-usuarios, roles y categorías. Requiere autenticación y el permiso vigente `usuarios:gestionar`; además comprueba el
+usuarios, roles, categorías y aulas. Requiere autenticación y el permiso vigente `usuarios:gestionar`; además comprueba el
 rol real para impedir que un gestor delegado consulte la bitácora. No se agregó un permiso ni un rol nuevo.
 
 La consulta acepta `pagina` (desde 1), `limite` (1 a 100, por defecto 20) y el filtro opcional `recurso`, limitado a
-`usuarios`, `roles` o `categorias`. Responde `{pagina, limite, total, resultados}` y ordena de forma estable por
+`usuarios`, `roles`, `categorias` o `aulas`. Responde `{pagina, limite, total, resultados}` y ordena de forma estable por
 `fecha` descendente y `_id` descendente. La API construye el filtro desde valores tipados, aplica una proyección
 explícita y serializa fechas e identificadores con `a_json()`; no admite filtros MongoDB arbitrarios.
 

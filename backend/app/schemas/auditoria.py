@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-RecursoAuditoria = Literal["usuarios", "roles", "categorias"]
+RecursoAuditoria = Literal["usuarios", "roles", "categorias", "aulas"]
 AccionAuditoria = Literal["crear", "editar"]
 
 
@@ -20,9 +20,13 @@ class ResumenAuditoriaOut(BaseModel):
     alcance: str | None = None
     cantidad_permisos: int | None = None
     version: int | None = None
+    activa: bool | None = None
     prefijo: str | None = None
     cantidad_campos: int | None = None
     sistema: bool | None = None
+    edificio: str | None = None
+    piso: int | None = None
+    aula: str | None = None
 
 
 class EventoAuditoriaOut(BaseModel):

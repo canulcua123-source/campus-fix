@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../test/setup'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
@@ -90,9 +90,112 @@ describe('AdminEdificios', () => {
     expect(screen.getByRole('button', { name: 'Todas' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('muestra estado vacío', async () => {
+  it('muestra estado vacío con acceso a «Nueva aula»', async () => {
     montar(() => HttpResponse.json([]))
     expect(await screen.findByRole('heading', { name: 'Aún no hay aulas registradas' })).toBeInTheDocument()
+    expect(screen.getByText(/Usa «Nueva aula» para darlas de alta; cada una recibe su código QR\./)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Nueva aula' })).toHaveLength(2)
+  })
+
+  it('crea un aula con el cuerpo correcto, refresca el catálogo y avisa', async () => {
+    const u = userEvent.setup()
+    let catalogo = CATALOGO
+    const cuerpos: unknown[] = []
+    servidor.use(http.post(`${BASE}/aulas`, async ({ request }) => {
+      const cuerpo = await request.json() as Record<string, unknown>
+      cuerpos.push(cuerpo)
+      catalogo = [...CATALOGO, {
+        edificio: 'Edificio C', total_aulas: 1, activas: 1, pisos: [-1],
+        aulas: [{ id_publico: 'CcccccccccccccccccccC1', piso: -1, aula: 'C-S01', activa: true }],
+      }]
+      return HttpResponse.json({ id_publico: 'CcccccccccccccccccccC1', ...cuerpo }, { status: 201 })
+    }))
+    montar(() => HttpResponse.json(catalogo))
+    await u.click(await screen.findByRole('button', { name: 'Nueva aula' }))
+    const hoja = screen.getByRole('dialog', { name: 'Nueva aula' })
+    const edificio = within(hoja).getByRole('combobox', { name: /Edificio/ })
+    expect(hoja.querySelectorAll('datalist option')).toHaveLength(2)
+
+    await u.click(within(hoja).getByRole('button', { name: 'Crear aula' }))
+    expect(await within(hoja).findByText('Escribe el edificio')).toBeInTheDocument()
+    expect(within(hoja).getByText('Escribe el nombre del aula')).toBeInTheDocument()
+    expect(cuerpos).toHaveLength(0)
+
+    await u.type(edificio, '  Edificio C ')
+    const piso = within(hoja).getByRole('spinbutton', { name: /Piso/ })
+    await u.clear(piso)
+    await u.type(piso, '-1')
+    await u.type(within(hoja).getByRole('textbox', { name: /Aula/ }), 'C-S01')
+    await u.click(within(hoja).getByRole('button', { name: 'Crear aula' }))
+
+    await waitFor(() => expect(cuerpos).toEqual([{ edificio: 'Edificio C', piso: -1, aula: 'C-S01', activa: true }]))
+    expect(await screen.findByText(/Aula C-S01 creada en Edificio C\. Su ID del QR es CcccccccccccccccccccC1/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Edificio C' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Nueva aula' })).not.toBeInTheDocument()
+  })
+
+  it('muestra el 409 de ubicación duplicada sin cerrar el formulario', async () => {
+    const u = userEvent.setup()
+    servidor.use(http.post(`${BASE}/aulas`, () =>
+      HttpResponse.json({ error: 'conflicto', detalle: 'Ya existe un aula con ese edificio, piso y aula' }, { status: 409 })))
+    montar(() => HttpResponse.json(CATALOGO))
+    await u.click(await screen.findByRole('button', { name: 'Nueva aula' }))
+    const hoja = screen.getByRole('dialog', { name: 'Nueva aula' })
+    await u.type(within(hoja).getByRole('combobox', { name: /Edificio/ }), 'Edificio A')
+    await u.type(within(hoja).getByRole('textbox', { name: /Aula/ }), 'A-001')
+    await u.click(within(hoja).getByRole('button', { name: 'Crear aula' }))
+    expect(await within(hoja).findByRole('alert')).toHaveTextContent('Ya existe un aula con ese edificio, piso y aula')
+    expect(screen.getByRole('dialog', { name: 'Nueva aula' })).toBeInTheDocument()
+  })
+
+  it('edita un aula enviando solo los campos cambiados', async () => {
+    const u = userEvent.setup()
+    const peticiones: { id: string; cuerpo: unknown }[] = []
+    servidor.use(http.patch(`${BASE}/aulas/:id`, async ({ request, params }) => {
+      const cuerpo = await request.json() as Record<string, unknown>
+      peticiones.push({ id: String(params.id), cuerpo })
+      return HttpResponse.json({ id_publico: params.id, edificio: 'Edificio A', piso: 2, aula: 'A-201', activa: true, ...cuerpo })
+    }))
+    montar(() => HttpResponse.json(CATALOGO))
+    const seccion = (await screen.findByRole('heading', { name: 'Edificio A' })).closest('section')!
+    await u.click(within(seccion).getByRole('button', { name: 'Ver aulas' }))
+    await u.click(within(seccion).getByRole('button', { name: 'Editar A-201' }))
+    const hoja = screen.getByRole('dialog', { name: 'Editar aula' })
+    const aula = within(hoja).getByRole('textbox', { name: /Aula/ })
+    expect(aula).toHaveValue('A-201')
+    expect(within(hoja).getByRole('combobox', { name: /Edificio/ })).toHaveValue('Edificio A')
+    expect(within(hoja).getByRole('spinbutton', { name: /Piso/ })).toHaveValue(2)
+    await u.click(within(hoja).getByRole('button', { name: 'Guardar cambios' }))
+    expect(await within(hoja).findByRole('alert')).toHaveTextContent('No hay cambios que guardar')
+    await u.clear(aula)
+    await u.type(aula, 'A-210')
+    await u.click(within(hoja).getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(peticiones).toEqual([{ id: 'AaaaaaaaaaaaaaaaaaaaA2', cuerpo: { aula: 'A-210' } }]))
+    expect(await screen.findByText('Aula A-210 actualizada')).toBeInTheDocument()
+  })
+
+  it('desactiva con confirmación y activa sin confirmación', async () => {
+    const u = userEvent.setup()
+    const peticiones: { id: string; cuerpo: unknown }[] = []
+    servidor.use(http.patch(`${BASE}/aulas/:id`, async ({ request, params }) => {
+      const cuerpo = await request.json() as Record<string, unknown>
+      peticiones.push({ id: String(params.id), cuerpo })
+      return HttpResponse.json({ id_publico: params.id, edificio: 'Edificio A', piso: 0, aula: 'A-001', activa: true, ...cuerpo })
+    }))
+    montar(() => HttpResponse.json(CATALOGO))
+    const seccion = (await screen.findByRole('heading', { name: 'Edificio A' })).closest('section')!
+    await u.click(within(seccion).getByRole('button', { name: 'Ver aulas' }))
+    await u.click(within(seccion).getByRole('button', { name: 'Desactivar A-001' }))
+    const confirmar = screen.getByRole('dialog', { name: '¿Desactivar aula?' })
+    expect(confirmar).toHaveTextContent('su código QR ya no abrirá el formulario')
+    expect(peticiones).toHaveLength(0)
+    await u.click(within(confirmar).getByRole('button', { name: 'Confirmar desactivación' }))
+    await waitFor(() => expect(peticiones).toEqual([{ id: 'AaaaaaaaaaaaaaaaaaaaA1', cuerpo: { activa: false } }]))
+    expect(await screen.findByText('Aula A-001 desactivada')).toBeInTheDocument()
+
+    await u.click(within(seccion).getByRole('button', { name: 'Activar A-202' }))
+    await waitFor(() => expect(peticiones.at(-1)).toEqual({ id: 'AaaaaaaaaaaaaaaaaaaaA3', cuerpo: { activa: true } }))
+    expect(await screen.findByText('Aula A-202 activada')).toBeInTheDocument()
   })
 
   it('muestra error con reintentar', async () => {

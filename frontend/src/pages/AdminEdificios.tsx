@@ -1,14 +1,28 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useId, useMemo, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Building2, Check, ChevronDown, CircleCheck, CircleOff, Copy, DoorOpen, QrCode, Search, SearchX } from 'lucide-react'
-import { catalogoAulasQuery } from '../api/aulas'
-import { mensajeDeError } from '../api/client'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
 import {
-  BarraFiltros, Button, EmptyState, ErrorState, Input, PageHeader, Seccion, Segmentado, SkeletonLista, StatGrid, StatTile, Tabla,
+  Building2, Check, ChevronDown, CircleCheck, CircleOff, Copy, DoorOpen, Pencil, Plus, Power, QrCode, Search, SearchX,
+} from 'lucide-react'
+import { catalogoAulasQuery, useCrearAula, useEditarAula } from '../api/aulas'
+import { ApiError, mensajeDeError } from '../api/client'
+import { Aviso } from '../components/admin/PiezasAdmin'
+import {
+  BarraFiltros, BottomSheet, Button, EmptyState, ErrorState, Input, PageHeader, Seccion, Segmentado, SkeletonLista, StatGrid, StatTile,
+  Tabla,
 } from '../components/ui'
-import type { AulaCatalogo, EdificioCatalogo } from '../schemas/aula'
+import { aulaInSchema, type AulaCatalogo, type AulaIn, type AulaPatch, type EdificioCatalogo } from '../schemas/aula'
 
 type FiltroEstado = 'todas' | 'activas' | 'inactivas'
+
+/** Aula de una fila con su edificio (el catálogo agrupa por edificio). */
+type AulaFila = AulaCatalogo & { edificio: string }
+type Formulario = { modo: 'crear' } | { modo: 'editar'; aula: AulaFila }
+type Acciones = { onEditar: (a: AulaFila) => void; onCambiarEstado: (a: AulaFila) => void }
+
+const CAMPOS_AULA = ['edificio', 'piso', 'aula', 'activa'] as const
+const VACIO: AulaIn = { edificio: '', piso: 0, aula: '', activa: true }
 
 const normalizar = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
@@ -61,7 +75,9 @@ function CopiarQR({ aula }: { aula: AulaCatalogo }) {
   )
 }
 
-function SeccionEdificio({ edificio, total, filtrado }: { edificio: EdificioCatalogo; total: EdificioCatalogo | undefined; filtrado: boolean }) {
+function SeccionEdificio({ edificio, total, filtrado, onEditar, onCambiarEstado }: Acciones & {
+  edificio: EdificioCatalogo; total: EdificioCatalogo | undefined; filtrado: boolean
+}) {
   const [abierto, setAbierto] = useState<boolean | null>(null)
   const expandido = abierto ?? filtrado
   const base = total ?? edificio
@@ -83,7 +99,7 @@ function SeccionEdificio({ edificio, total, filtrado }: { edificio: EdificioCata
       ) : expandido ? (
         <Tabla etiqueta={`Aulas de ${edificio.edificio}`} apilada densa>
           <thead>
-            <tr><th scope="col">Aula</th><th scope="col">Piso</th><th scope="col">Estado</th><th scope="col">ID del QR</th></tr>
+            <tr><th scope="col">Aula</th><th scope="col">Piso</th><th scope="col">Estado</th><th scope="col">ID del QR</th><th scope="col">Acciones</th></tr>
           </thead>
           <tbody>
             {ordenarAulas(edificio.aulas).map((a) => (
@@ -95,6 +111,14 @@ function SeccionEdificio({ edificio, total, filtrado }: { edificio: EdificioCata
                   <span className="inline-flex items-center gap-1">
                     <code className="break-all text-sm text-muted">{a.id_publico}</code>
                     <CopiarQR aula={a} />
+                  </span>
+                </td>
+                <td data-label="Acciones">
+                  <span className="inline-flex flex-wrap gap-1">
+                    <Button variante="fantasma" tamano="sm" icono={<Pencil size={16} />} aria-label={`Editar ${a.aula}`}
+                      onClick={() => onEditar({ ...a, edificio: edificio.edificio })}>Editar</Button>
+                    <Button variante="fantasma" tamano="sm" icono={<Power size={16} />} aria-label={`${a.activa ? 'Desactivar' : 'Activar'} ${a.aula}`}
+                      onClick={() => onCambiarEstado({ ...a, edificio: edificio.edificio })}>{a.activa ? 'Desactivar' : 'Activar'}</Button>
                   </span>
                 </td>
               </tr>
@@ -115,6 +139,86 @@ function SeccionEdificio({ edificio, total, filtrado }: { edificio: EdificioCata
   )
 }
 
+/** Solo los campos que cambiaron respecto al aula original (PATCH parcial). */
+function cambiosDe(original: AulaFila, datos: AulaIn): AulaPatch {
+  return Object.fromEntries(CAMPOS_AULA.filter((c) => datos[c] !== original[c]).map((c) => [c, datos[c]])) as AulaPatch
+}
+
+function FormAula({ formulario, edificios, onCerrar, onGuardado }: {
+  formulario: Formulario
+  edificios: string[]
+  onCerrar: () => void
+  onGuardado: (mensaje: string) => void
+}) {
+  const crear = useCrearAula()
+  const editar = useEditarAula()
+  const idLista = useId()
+  const [error, setErrorGeneral] = useState<string | null>(null)
+  const original = formulario.modo === 'editar' ? formulario.aula : null
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<AulaIn>({
+    resolver: zodResolver(aulaInSchema),
+    mode: 'onTouched',
+    defaultValues: original
+      ? { edificio: original.edificio, piso: original.piso, aula: original.aula, activa: original.activa }
+      : VACIO,
+  })
+
+  async function guardar(datos: AulaIn) {
+    setErrorGeneral(null)
+    try {
+      if (original) {
+        const cambios = cambiosDe(original, datos)
+        if (!Object.keys(cambios).length) { setErrorGeneral('No hay cambios que guardar'); return }
+        const r = await editar.mutateAsync({ id: original.id_publico, datos: cambios })
+        onGuardado(`Aula ${r.aula} actualizada`)
+      } else {
+        const r = await crear.mutateAsync(datos)
+        onGuardado(`Aula ${r.aula} creada en ${r.edificio}. Su ID del QR es ${r.id_publico}`)
+      }
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 400 && Object.keys(e.campos).length) {
+        const sueltos: string[] = []
+        let primero = true
+        for (const [ruta, mensaje] of Object.entries(e.campos)) {
+          const campo = ruta.split('.')[0] as (typeof CAMPOS_AULA)[number]
+          if (CAMPOS_AULA.includes(campo)) {
+            setError(campo, { type: 'servidor', message: mensaje }, { shouldFocus: primero })
+            primero = false
+          } else sueltos.push(mensaje)
+        }
+        if (sueltos.length) setErrorGeneral(sueltos.join('. '))
+        return
+      }
+      setErrorGeneral(mensajeDeError(e, 'No se pudo guardar el aula'))
+    }
+  }
+
+  return (
+    <form noValidate aria-label={original ? 'Editar aula' : 'Nueva aula'} className="flex flex-col gap-4"
+      onSubmit={(e) => { void handleSubmit(guardar)(e) }}>
+      <Input etiqueta="Edificio" required autoComplete="off" maxLength={60} list={idLista} placeholder="Ej. Edificio A"
+        ayuda="Elige uno existente o escribe uno nuevo." error={errors.edificio?.message} {...register('edificio')} />
+      <datalist id={idLista}>{edificios.map((e) => <option key={e} value={e} />)}</datalist>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input etiqueta="Piso" required type="number" inputMode="numeric" min={-5} max={50} step={1}
+          ayuda="0 = planta baja; negativos para sótanos." error={errors.piso?.message} {...register('piso', { valueAsNumber: true })} />
+        <Input etiqueta="Aula" required autoComplete="off" maxLength={60} placeholder="Ej. A-201"
+          error={errors.aula?.message} {...register('aula')} />
+      </div>
+      <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
+        <input type="checkbox" className="h-5 w-5" {...register('activa')} />
+        Activa (se puede elegir al reportar y su QR funciona)
+      </label>
+      {original && <p className="m-0 text-sm text-muted">El ID del QR (<code className="break-all">{original.id_publico}</code>) no cambia al editar.</p>}
+      {error && <p role="alert" className="ui-campo__error m-0">{error}</p>}
+      <div className="ui-sheet__acciones mt-0!">
+        <Button variante="secundario" onClick={onCerrar} disabled={isSubmitting}>Cancelar</Button>
+        <Button type="submit" cargando={isSubmitting} textoCargando="Guardando…">{original ? 'Guardar cambios' : 'Crear aula'}</Button>
+      </div>
+    </form>
+  )
+}
+
 export default function AdminEdificios() {
   const catalogo = useQuery(catalogoAulasQuery())
   const [busqueda, setBusqueda] = useState('')
@@ -128,10 +232,34 @@ export default function AdminEdificios() {
     return { edificios: datos.length, aulas, activas, inactivas: aulas - activas }
   }, [datos])
   const limpiar = () => { setBusqueda(''); setEstado('todas') }
+  const editar = useEditarAula()
+  const [formulario, setFormulario] = useState<Formulario | null>(null)
+  const [confirmar, setConfirmar] = useState<AulaFila | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [errorEstado, setErrorEstado] = useState<string | null>(null)
+  const abrir = (f: Formulario) => { setAviso(null); setErrorEstado(null); setFormulario(f) }
+
+  async function fijarEstado(aula: AulaFila, activa: boolean) {
+    setAviso(null)
+    setErrorEstado(null)
+    try {
+      await editar.mutateAsync({ id: aula.id_publico, datos: { activa } })
+      setAviso(activa ? `Aula ${aula.aula} activada` : `Aula ${aula.aula} desactivada`)
+    } catch (e) {
+      setErrorEstado(mensajeDeError(e, 'No se pudo cambiar el estado del aula'))
+    } finally {
+      setConfirmar(null)
+    }
+  }
+  // Desactivar pide confirmación (el QR deja de funcionar); activar es inmediato.
+  const cambiarEstado = (a: AulaFila) => (a.activa ? setConfirmar(a) : void fijarEstado(a, true))
 
   return (
     <div className="pila">
-      <PageHeader titulo="Edificios y aulas" subtitulo="Espacios del campus y sus QR (solo consulta)." />
+      <PageHeader titulo="Edificios y aulas" subtitulo="Aulas del campus, su estado y el ID de su código QR."
+        acciones={<Button icono={<Plus size={18} />} onClick={() => abrir({ modo: 'crear' })}>Nueva aula</Button>} />
+      {aviso && <Aviso tipo="ok" onCerrar={() => setAviso(null)}>{aviso}</Aviso>}
+      {errorEstado && <Aviso tipo="error" onCerrar={() => setErrorEstado(null)}>{errorEstado}</Aviso>}
       {catalogo.isPending ? (
         <SkeletonLista etiqueta="Cargando edificios" />
       ) : catalogo.isError ? (
@@ -139,7 +267,8 @@ export default function AdminEdificios() {
           onReintentar={() => void catalogo.refetch()} reintentando={catalogo.isFetching} />
       ) : datos.length === 0 ? (
         <EmptyState titulo="Aún no hay aulas registradas" icono={QrCode}
-          descripcion="Se dan de alta desde el CSV del campus; el script generar_qr_aulas.py les asigna su ID y genera el QR. Al cargarlas aparecerán aquí por edificio." />
+          descripcion="Aún no hay aulas registradas. Usa «Nueva aula» para darlas de alta; cada una recibe su código QR."
+          accion={<Button variante="secundario" tamano="sm" icono={<Plus size={16} />} onClick={() => abrir({ modo: 'crear' })}>Nueva aula</Button>} />
       ) : (
         <>
           <StatGrid columnas={4} etiqueta="Resumen del catálogo">
@@ -165,11 +294,32 @@ export default function AdminEdificios() {
               accion={<Button variante="secundario" tamano="sm" onClick={limpiar}>Limpiar filtros</Button>} />
           ) : (
             visibles.map((e) => (
-              <SeccionEdificio key={e.edificio} edificio={e} filtrado={filtrado} total={datos.find((d) => d.edificio === e.edificio)} />
+              <SeccionEdificio key={e.edificio} edificio={e} filtrado={filtrado} total={datos.find((d) => d.edificio === e.edificio)}
+                onEditar={(aula) => abrir({ modo: 'editar', aula })} onCambiarEstado={cambiarEstado} />
             ))
           )}
         </>
       )}
+
+      <BottomSheet abierto={formulario !== null} onCerrar={() => setFormulario(null)}
+        titulo={formulario?.modo === 'editar' ? 'Editar aula' : 'Nueva aula'}>
+        {formulario && (
+          <FormAula key={formulario.modo === 'editar' ? formulario.aula.id_publico : 'nueva'} formulario={formulario}
+            edificios={datos.map((e) => e.edificio)} onCerrar={() => setFormulario(null)}
+            onGuardado={(mensaje) => { setFormulario(null); setAviso(mensaje) }} />
+        )}
+      </BottomSheet>
+
+      <BottomSheet abierto={confirmar !== null} onCerrar={() => { if (!editar.isPending) setConfirmar(null) }} titulo="¿Desactivar aula?"
+        acciones={<>
+          <Button variante="secundario" disabled={editar.isPending} onClick={() => setConfirmar(null)}>Cancelar</Button>
+          <Button variante="peligro" cargando={editar.isPending} textoCargando="Desactivando…"
+            onClick={() => { if (confirmar) void fijarEstado(confirmar, false) }}>Confirmar desactivación</Button>
+        </>}>
+        {confirmar && <p className="m-0 text-sm text-muted">
+          {confirmar.aula} ({confirmar.edificio}) dejará de aparecer al reportar y su código QR ya no abrirá el formulario. Puedes volver a activarla cuando quieras.
+        </p>}
+      </BottomSheet>
     </div>
   )
 }

@@ -17,6 +17,7 @@ import app.routers.usuarios as router_usuarios  # noqa: E402
 from app.core.auditoria import (  # noqa: E402
     construir_evento_auditoria,
     registrar_auditoria,
+    resumir_aula,
     resumir_categoria,
     resumir_rol,
     resumir_usuario,
@@ -87,6 +88,22 @@ def test_resumenes_usan_listas_positivas_y_excluyen_secretos():
     serializado = repr({"usuario": usuario, "rol": rol, "categoria": categoria}).lower()
     for prohibido in ("password", "hash-secreto", "token-secreto", "refresh_token", "api_key"):
         assert prohibido not in serializado
+
+
+def test_resumen_aula_solo_ubicacion_y_estado():
+    resumen = resumir_aula(
+        {
+            "_id": ObjectId(),
+            "id_publico": "AbCdEfGhIjKlMnOpQrStUv",
+            "edificio": "A",
+            "piso": 2,
+            "aula": "A-201",
+            "activa": False,
+            "fecha_creacion": datetime.now(timezone.utc),
+        }
+    )
+    assert resumen == {"edificio": "A", "aula": "A-201", "piso": 2, "activa": False}
+    assert resumir_aula({"piso": True, "activa": 1}) == {}
 
 
 def test_construir_evento_guarda_actor_fecha_utc_y_omite_antes_en_creacion():
@@ -217,7 +234,7 @@ def test_esquema_auditoria_es_estricto_seguro_y_sin_ttl():
     assert esquema["properties"]["actor_id"] == {"bsonType": "objectId"}
     assert esquema["properties"]["fecha"] == {"bsonType": "date"}
     assert esquema["properties"]["accion"]["enum"] == ["crear", "editar"]
-    assert esquema["properties"]["recurso"]["enum"] == ["usuarios", "roles", "categorias"]
+    assert esquema["properties"]["recurso"]["enum"] == ["usuarios", "roles", "categorias", "aulas"]
     texto = repr(esquema).lower()
     assert "password" not in texto and "token" not in texto and "expireafterseconds" not in texto
 

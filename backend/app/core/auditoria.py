@@ -10,10 +10,10 @@ from bson import ObjectId
 from app.core.db import get_db
 
 AccionAuditoria = Literal["crear", "editar"]
-RecursoAuditoria = Literal["usuarios", "roles", "categorias"]
+RecursoAuditoria = Literal["usuarios", "roles", "categorias", "aulas"]
 
 ACCIONES_AUDITORIA = {"crear", "editar"}
-RECURSOS_AUDITORIA = {"usuarios", "roles", "categorias"}
+RECURSOS_AUDITORIA = {"usuarios", "roles", "categorias", "aulas"}
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +74,25 @@ def resumir_categoria(documento: dict[str, Any]) -> dict[str, Any]:
     return resumen
 
 
+def resumir_aula(documento: dict[str, Any]) -> dict[str, Any]:
+    """Resume la ubicación y el estado; nunca copia el `id_publico` del QR."""
+    resumen: dict[str, Any] = {}
+    for campo in ("edificio", "aula"):
+        if isinstance(documento.get(campo), str):
+            resumen[campo] = documento[campo]
+    if type(documento.get("piso")) is int:
+        resumen["piso"] = documento["piso"]
+    if type(documento.get("activa")) is bool:
+        resumen["activa"] = documento["activa"]
+    return resumen
+
+
 def resumir_recurso(recurso: RecursoAuditoria, documento: dict[str, Any]) -> dict[str, Any]:
     resumidores = {
         "usuarios": resumir_usuario,
         "roles": resumir_rol,
         "categorias": resumir_categoria,
+        "aulas": resumir_aula,
     }
     return resumidores[recurso](documento)
 

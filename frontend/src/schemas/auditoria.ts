@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /** Espejo de backend/app/schemas/auditoria.py (campos null se omiten en la respuesta). */
-export const RECURSOS_AUDITORIA = ['usuarios', 'roles', 'categorias'] as const
+export const RECURSOS_AUDITORIA = ['usuarios', 'roles', 'categorias', 'aulas'] as const
 export const ACCIONES_AUDITORIA = ['crear', 'editar'] as const
 
 export type RecursoAuditoria = (typeof RECURSOS_AUDITORIA)[number]
@@ -23,9 +23,13 @@ export const resumenAuditoriaSchema = z.object({
   alcance: z.string().optional(),
   cantidad_permisos: z.number().int().optional(),
   version: z.number().int().optional(),
+  activa: z.boolean().optional(),
   prefijo: z.string().optional(),
   cantidad_campos: z.number().int().optional(),
   sistema: z.boolean().optional(),
+  edificio: z.string().optional(),
+  piso: z.number().int().optional(),
+  aula: z.string().optional(),
 }).strict()
 
 export const eventoAuditoriaSchema = z.object({
