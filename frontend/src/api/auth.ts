@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { useAuth } from '../auth/store'
 import { loginOutSchema, loginSchema, meSchema, type LoginIn } from '../schemas/usuario'
-import { api, refrescarSesion, validarEntrada } from './client'
+import { api, esErrorTransitorio, mensajeDeError, refrescarSesion, validarEntrada } from './client'
 import { claves } from './keys'
 
 /** Login: `credentials: 'include'` para que el navegador guarde la cookie HttpOnly de refresh. */
@@ -27,7 +27,9 @@ let restauracion: Promise<boolean> | null = null
 /**
  * Refresh silencioso al abrir la app: si la cookie de refresh sigue vigente se obtiene un access
  * token nuevo y el perfil (/auth/me) sin pedir credenciales. Mientras corre, `restaurando` es true
- * y RequirePermiso espera en lugar de mandar a /login. Una sola ejecución a la vez.
+ * y RequirePermiso espera en lugar de mandar a /login (también durante los reintentos por arranque
+ * en frío). Si al final el servidor no respondió, el aviso de login lo dice en vez de "Tu sesión
+ * expiró". Una sola ejecución a la vez.
  */
 export function restaurarSesion(): Promise<boolean> {
   const auth = useAuth.getState()
@@ -45,7 +47,9 @@ export function restaurarSesion(): Promise<boolean> {
         return true
       } catch (e) {
         if (import.meta.env.DEV) console.info('[auth] no fue posible restaurar la sesión', e)
-        if (!useAuth.getState().usuario) useAuth.getState().cerrarSesion()
+        if (!useAuth.getState().usuario) {
+          useAuth.getState().cerrarSesion(esErrorTransitorio(e) ? mensajeDeError(e) : undefined)
+        }
         return false
       } finally {
         useAuth.getState().setRestaurando(false)
