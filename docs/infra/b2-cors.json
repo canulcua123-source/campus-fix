@@ -1,0 +1,10 @@
+[
+  {
+    "corsRuleName": "pwa-evidencias",
+    "allowedOrigins": ["https://campus-fix.pages.dev", "http://localhost:5173"],
+    "allowedOperations": ["s3_put", "s3_get", "s3_head"],
+    "allowedHeaders": ["content-type"],
+    "exposeHeaders": ["etag"],
+    "maxAgeSeconds": 3600
+  }
+]
