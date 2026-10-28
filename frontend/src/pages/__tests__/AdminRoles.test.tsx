@@ -18,7 +18,7 @@ const URL_ROLES = `${BASE}/roles`
 const SISTEMA: Rol = { _id: '664f1c2e9b1e8a3d4c5b6a01', clave: 'tecnico', nombre: 'Técnico', descripcion: 'Rol de sistema: Técnico', permisos: ['seguimiento:registrar'], alcance: 'area', sistema: true }
 const PROPIO: Rol = { _id: '664f1c2e9b1e8a3d4c5b6a02', clave: 'auxiliar', nombre: 'Auxiliar', descripcion: '', permisos: ['incidencias:ver'], alcance: 'propio', sistema: false }
 
-function entorno(usuario = sesionDe('admin'), roles: Rol[] = [SISTEMA, PROPIO]) {
+function entorno(usuario = sesionDe('superadmin'), roles: Rol[] = [SISTEMA, PROPIO]) {
   const lista = [...roles]
   const peticiones: { metodo: string; cuerpo?: unknown }[] = []
   servidor.use(
@@ -112,7 +112,7 @@ describe('AdminRoles', () => {
 
   it('muestra error con reintento si falla la carga', async () => {
     servidor.use(http.get(URL_ROLES, () => HttpResponse.json({ detail: 'x' }, { status: 500 })))
-    useAuth.setState({ token: 't', usuario: sesionDe('admin') })
+    useAuth.setState({ token: 't', usuario: sesionDe('superadmin') })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<QueryClientProvider client={qc}><MemoryRouter><AdminRoles /></MemoryRouter></QueryClientProvider>)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument())

@@ -161,7 +161,7 @@ La API se publica en Render como servicio Docker gratuito definido en [`render.y
 1. En Render: **New → Blueprint**, conecta el repositorio y elige la rama `main`. Render lee `render.yaml`.
 2. Captura en el panel las variables marcadas `sync: false` (nunca en el repo): `MONGODB_URI` (usuario Atlas con permisos mínimos, no el admin), `REDIS_URL` (Upstash, `rediss://…`), `JWT_SECRET` (`openssl rand -hex 32`), `CORS_ORIGINS` (dominio exacto de la PWA, sin `*`), credenciales del bucket (`R2_*`, `STORAGE_*`) e IA (`IA_PROVEEDOR`, `ANTHROPIC_API_KEY`/`GEMINI_API_KEY`).
 3. La PWA llama a la API por el **proxy same-origin** de Cloudflare Pages (`/api/*`, ver abajo), así que la cookie de refresh es de primera parte: `render.yaml` fija `REFRESH_COOKIE_SAMESITE=lax` y `REFRESH_COOKIE_SECURE=true` (con `none` Safari/iOS y la PWA instalada la bloquean y la sesión "se vence a cada rato"). Si el servicio ya existe, cambia `REFRESH_COOKIE_SAMESITE` a `lax` en el panel de Render.
-4. IA: el despliegue usa **Gemini con llave gratuita** (`IA_PROVEEDOR=gemini`, `IA_PERMITIR_CAPA_GRATUITA=true`). En esa capa Google puede usar las fotos para mejorar sus productos; la PWA lo avisa al reportar. Ajusta el cupo diario global en **Configuración** (admin) al límite que muestre la consola de AI Studio.
+4. IA: el despliegue usa **Gemini con llave gratuita** (`IA_PROVEEDOR=gemini`, `IA_PERMITIR_CAPA_GRATUITA=true`). En esa capa Google puede usar las fotos para mejorar sus productos; la PWA lo avisa al reportar. Ajusta el cupo diario global en **Configuración** (superadmin) al límite que muestre la consola de AI Studio.
 5. Verifica: `GET https://<servicio>.onrender.com/health` → 200 y `/docs` accesible. Postman: carpetas *Auth* e *Incidencias* con el environment `UTM-Desk.prod`.
 
 **Arranque en frío:** el plan gratuito duerme el servicio tras ~15 min sin tráfico; la primera petición tarda ~30–60 s. La PWA lo tolera: el refresh de sesión espera hasta 45 s por intento y reintenta (3 intentos, ≤ 60 s) sin cerrar la sesión por red/timeout/5xx. Para evitarlo, el workflow [`keepalive.yml`](.github/workflows/keepalive.yml) hace ping cada 10 min: crea la **variable de repositorio** `API_HEALTH_URL=https://<servicio>.onrender.com/health` (*Settings → Secrets and variables → Actions → Variables*). Los `schedule` solo corren desde la rama por defecto del repo.
@@ -230,7 +230,7 @@ Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`) y `VITE_DOMINIO_C
 `IA_HABILITADA`, `IA_LIMITE_DIARIO=20` e `IA_LIMITE_GLOBAL_DIARIO=300` son únicamente los valores
 iniciales que `scripts/init_db.py` inserta la primera vez. Después, MongoDB (`configuracion_ia`, documento
 `ia`) es la fuente de verdad. `GET/PATCH /config/ia` requieren `configuracion:gestionar`, permiso sembrado
-solo para el rol administrador. Redis guarda una copia con TTL de 60 segundos; si la caché falla se lee
+solo para el rol superadministrador (`superadmin`). Redis guarda una copia con TTL de 60 segundos; si la caché falla se lee
 MongoDB y una actualización sigue persistiendo.
 
 El modo agéntico (T-034) también se administra ahí, no en `.env`: `modo_agentico_habilitado` (*kill switch*,

@@ -667,28 +667,34 @@ Navegación esperada (documento de requerimientos §6.5). Estado actual del cód
 | Técnico | area | Bandeja · Buscar · **Reportar** · Perfil | — |
 | Coordinador | area | Tablero · Bandeja · **Reportar** · Métricas · Perfil | Tablero, Incidencias, Técnicos, Métricas |
 | Directivo | global | Dashboard · Buscar · Perfil | Dashboard, Incidencias, Reportes |
-| Admin | global | Usuarios · Roles · Categorías · Perfil | Usuarios, Roles, Categorías, Edificios, Auditoría, Configuración |
+| Admin | global | Usuarios · Categorías · Perfil | Dashboard, Usuarios, Categorías, Edificios, Auditoría, Métricas IA |
+| Superadmin | global | Control · Incidencias · Usuarios · Perfil | Centro de control, Dashboard, Incidencias, Tablero, Técnicos, Reportes, Usuarios, Roles, Categorías, Edificios, Auditoría, Configuración, Métricas IA |
+
+Superadmin (rol de sistema por encima de admin) tiene todos los permisos; son **exclusivos** suyos `sistema:administrar` (Centro de control `/control`, cuentas admin/superadmin), `roles:gestionar` y `configuracion:gestionar`. Su pantalla de inicio (al iniciar sesión y al entrar a `/`) es el Centro de control. Admin no ve ni edita cuentas admin/superadmin (404) ni puede asignar esos roles (403).
 
 Ruta / acción × rol (✔ = permitido por permiso de la tabla 3.3; la pantalla filtra por alcance):
 
-| Ruta o acción | Permiso (`RequirePermiso`) | REP | TEC | COO | DIR | ADM | Tarea |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| /login, /privacidad | público | ✔ | ✔ | ✔ | ✔ | ✔ | T-044, T-058 |
-| /inicio, /perfil | sesión | ✔ | ✔ | ✔ | ✔ | ✔ | T-058 |
-| /reportar, /reportar-rapido | incidencias:crear | ✔ | ✔ | ✔ | — | ✔ | T-049, T-037 |
-| /mis-reportes | incidencias:ver (propio) | ✔ | ✔ | ✔ | — | ✔ | T-045 |
-| /incidencias/:id (ver) | incidencias:ver | ✔ | ✔ | ✔ | ✔ solo lectura | ✔ | T-046 |
-| Acción: subir evidencia | evidencias:subir | ✔ | ✔ | ✔ | — | ✔ | T-048 |
-| /bandeja | seguimiento:registrar | — | ✔ | ✔ | — | ✔ | T-050 |
-| Acción: registrar seguimiento / cerrar | seguimiento:registrar | — | ✔ | ✔ | — | ✔ | T-052 |
-| Acción: etiquetas | tags:gestionar | — | ✔ | ✔ | — | ✔ | T-053 |
-| /buscar | incidencias:buscar | — | ✔ | ✔ | ✔ | ✔ | T-055 |
-| /tablero + acción asignar | incidencias:asignar | — | — | ✔ | — | ✔ | T-054 |
-| /dashboard (Métricas) | analitica:ver | — | — | ✔ (su área) | ✔ | ✔ | T-056 |
-| /admin/usuarios | usuarios:gestionar | — | — | — | — | ✔ | T-057 |
-| /admin/roles | roles:gestionar | — | — | — | — | ✔ | (existe) |
-| /admin/categorias | categorias:gestionar | — | — | — | — | ✔ | T-061 |
-| /admin/edificios, /admin/auditoria, /admin/configuracion | admin | — | — | — | — | ✔ | aulas: T-012 ⚑ (edificios sin tarea, RF-ADM-04) · T-022 · T-029 |
+| Ruta o acción | Permiso (`RequirePermiso`) | REP | TEC | COO | DIR | ADM | SUP | Tarea |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| /login, /privacidad | público | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | T-044, T-058 |
+| /inicio, /perfil | sesión | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ (`/` → `/control`) | T-058 |
+| /control (Centro de control) | sistema:administrar | — | — | — | — | — | ✔ | superadmin |
+| /reportar, /reportar-rapido | incidencias:crear | ✔ | ✔ | ✔ | — | ✔ | ✔ | T-049, T-037 |
+| /mis-reportes | incidencias:ver (propio) | ✔ | ✔ | ✔ | — | ✔ | ✔ | T-045 |
+| /incidencias/:id (ver) | incidencias:ver | ✔ | ✔ | ✔ | ✔ solo lectura | ✔ | ✔ | T-046 |
+| Acción: subir evidencia | evidencias:subir | ✔ | ✔ | ✔ | — | ✔ | ✔ | T-048 |
+| /bandeja | seguimiento:registrar | — | ✔ | ✔ | — | ✔ | ✔ | T-050 |
+| Acción: registrar seguimiento / cerrar | seguimiento:registrar | — | ✔ | ✔ | — | ✔ | ✔ | T-052 |
+| Acción: etiquetas | tags:gestionar | — | ✔ | ✔ | — | ✔ | ✔ | T-053 |
+| /buscar | incidencias:buscar | — | ✔ | ✔ | ✔ | ✔ | ✔ | T-055 |
+| /tablero + acción asignar | incidencias:asignar | — | — | ✔ | — | ✔ | ✔ | T-054 |
+| /dashboard (Métricas) | analitica:ver | — | — | ✔ (su área) | ✔ | ✔ | ✔ | T-056 |
+| /admin/usuarios | usuarios:gestionar | — | — | — | — | ✔ (sin cuentas admin/superadmin) | ✔ | T-057 |
+| /admin/roles | roles:gestionar | — | — | — | — | — | ✔ | (existe) |
+| /admin/categorias | categorias:gestionar | — | — | — | — | ✔ | ✔ | T-061 |
+| /admin/edificios, /admin/auditoria | usuarios:gestionar | — | — | — | — | ✔ | ✔ | aulas: T-012 ⚑ (edificios sin tarea, RF-ADM-04) · T-022 |
+| /admin/configuracion | configuracion:gestionar | — | — | — | — | — | ✔ | T-029 |
+| /admin/metricas-ia | analitica:ver + rol admin/superadmin | — | — | — | — | ✔ | ✔ | T-030 |
 
 ## Detalle de tareas
 
