@@ -64,6 +64,22 @@ export const respuestaIaSchema = z.strictObject({
 })
 export type RespuestaIA = z.infer<typeof respuestaIaSchema>
 
+/** EventoIAIn / EventoIAOut (POST /ia/eventos): lo único que el cliente puede declarar sobre una oferta. */
+export const EVENTOS_IA_CLIENTE = ['deshecho', 'editado', 'fallback'] as const
+const identificadorAnalisisSchema = z.string().regex(/^[A-Za-z0-9_-]{22,64}$/)
+export const eventoIaSchema = z.strictObject({
+  analisis_id: identificadorAnalisisSchema,
+  evento: z.enum(EVENTOS_IA_CLIENTE),
+  motivo: z.enum(['usuario_deshizo', 'usuario_edito', 'continuo_manual']).optional(),
+})
+export type EventoIAIn = z.infer<typeof eventoIaSchema>
+export const eventoIaOutSchema = z.strictObject({
+  analisis_id: identificadorAnalisisSchema,
+  evento: z.enum(EVENTOS_IA_CLIENTE),
+  registrado: z.boolean(),
+  es_final: z.boolean(),
+})
+
 const categoriaSchema = z.string().regex(/^[a-z][a-z0-9_]{2,29}$/)
 const coincidenciaIdSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

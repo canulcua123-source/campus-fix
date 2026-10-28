@@ -3,8 +3,11 @@ import {
   respuestaIaSchema,
   analizarImagenSchema,
   confirmarAdhesionSchema,
+  eventoIaOutSchema,
+  eventoIaSchema,
   type AnalizarImagenIn,
   type ConfirmarAdhesionIn,
+  type EventoIAIn,
 } from '../schemas/ia'
 import { TIMEOUT_IA_MS, api, validarEntrada } from './client'
 
@@ -36,5 +39,14 @@ export function confirmarAdhesion(datos: ConfirmarAdhesionIn) {
     method: 'POST',
     body: JSON.stringify(entrada),
     schema: adhesionSchema,
+  })
+}
+
+/** POST /ia/eventos: la persona descartó la sugerencia (deshecho) o siguió a mano (fallback). */
+export function registrarEventoIA(datos: EventoIAIn) {
+  return api('/ia/eventos', {
+    method: 'POST',
+    json: validarEntrada(eventoIaSchema, datos),
+    schema: eventoIaOutSchema,
   })
 }

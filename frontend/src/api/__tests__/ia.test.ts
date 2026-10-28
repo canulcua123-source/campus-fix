@@ -2,7 +2,7 @@
 import '../../test/setup'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TIMEOUT_IA_MS, ApiError } from '../client'
-import { analizarImagen, confirmarAdhesion } from '../ia'
+import { analizarImagen, confirmarAdhesion, registrarEventoIA } from '../ia'
 import { respuesta, simularFetch } from './utilidades'
 
 const ANALISIS_IA = {
@@ -117,5 +117,29 @@ describe('confirmar adhesion T-038', () => {
     }))
 
     await expect(confirmarAdhesion({ coincidencia_id: 'A'.repeat(43) })).rejects.toMatchObject({ codigo: 'contrato' })
+  })
+})
+
+describe('registrarEventoIA', () => {
+  it('envía el rechazo de la sugerencia a POST /ia/eventos', async () => {
+    const fetchMock = vi.fn(async () => respuesta(200, { analisis_id: ANALISIS.analisis_id, evento: 'fallback', registrado: true, es_final: true }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const resultado = await registrarEventoIA({ analisis_id: ANALISIS.analisis_id, evento: 'fallback' })
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toMatch(/\/ia\/eventos$/)
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({ analisis_id: ANALISIS.analisis_id, evento: 'fallback' })
+    expect(resultado.es_final).toBe(true)
+  })
+
+  it('no envía eventos fuera del contrato', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(() => registrarEventoIA({ analisis_id: 'corto', evento: 'fallback' })).toThrow()
+    expect(() => registrarEventoIA({ analisis_id: ANALISIS.analisis_id, evento: 'enviado' as never })).toThrow()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

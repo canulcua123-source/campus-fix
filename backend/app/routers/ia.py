@@ -1,9 +1,11 @@
+import asyncio
 import hashlib
 import json
 import logging
 import re
+import time
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -20,7 +22,7 @@ from app.core.imagen import (
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
-from app.schemas.ia import AnalisisImagen, DecisionAsistida, EventoIAIn, EventoIAOut, RespuestaIA
+from app.schemas.ia import AnalisisImagen, DecisionAsistida, EventoIAIn, EventoIAOut, OfertaIAInterna, RespuestaIA
 from app.schemas.config import ConfigIA
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
@@ -30,8 +32,14 @@ from app.services.duplicados import (
 )
 from app.services import ia as ia_service
 from app.services.ia import PROMPT_VERSION, IAError, analizar_imagen, identidad_proveedor
-from app.services.vision.analisis_temporal import RegistroAnalisis, cargar_analisis, guardar_analisis
-from app.services.vision.compuertas import EntradaCompuertas, UbicacionCompuertas, evaluar_compuertas, mapeo_valido
+from app.services.vision.analisis_temporal import ANALISIS_TTL, RegistroAnalisis, cargar_analisis, guardar_analisis
+from app.services.vision.compuertas import (
+    DecisionCompuertas,
+    EntradaCompuertas,
+    UbicacionCompuertas,
+    evaluar_compuertas,
+    mapeo_valido,
+)
 from app.services.vision.cupos import consumir_cupo_agentico, cupo_usuario_disponible
 from app.services.vision.decision import decidir
 from app.services.ia_eventos import (
@@ -40,12 +48,15 @@ from app.services.ia_eventos import (
     OfertaIANoEncontrada,
     OfertaIAVencida,
     registrar_evento_cliente,
+    registrar_oferta,
 )
 
 router = APIRouter(prefix="/ia", tags=["ia"])
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 24 * 3600
+# La telemetría nunca debe bloquear el análisis: si Mongo no responde pronto se abandona el registro.
+TIMEOUT_TELEMETRIA_SEGUNDOS = 2.0
 CUPO_TTL = 2 * 24 * 3600
 
 _CONSUMIR_CUPO = """
@@ -185,6 +196,58 @@ def _mensaje(accion: str, asistida: DecisionAsistida) -> str:
     return asistida.mensaje
 
 
+def _campos_autollenados(respuesta: RespuestaIA) -> list[str]:
+    """Campos que la PWA prellena (Reportar.tsx) cuando la decisión asistida es autollenar o sugerir."""
+    if respuesta.accion_asistida not in ("autollenar", "sugerir"):
+        return []
+    campos = ["titulo", "descripcion", "prioridad", "tags"]
+    if respuesta.analisis.categoria != "no_determinada":
+        campos.append("detalle_especifico.categoria")
+        if respuesta.analisis.detalle_infra is not None:
+            campos += ["detalle_especifico.tipo_dano", "detalle_especifico.riesgo_seguridad"]
+    return campos
+
+
+async def _registrar_oferta_ia(
+    usuario: dict, respuesta: RespuestaIA, decision: DecisionCompuertas, *, latencia_ms: int | None
+) -> None:
+    """Registra la oferta en ``ia_eventos`` (una por analisis_id); si falla solo se avisa en el log.
+
+    Las respuestas desde caché también cuentan como oferta (la persona sí ve una sugerencia que puede aceptar,
+    editar o descartar), pero sin ``latencia_ia_ms`` ni ``resultado_ia``: no hubo llamada al proveedor y no deben
+    sesgar la latencia ni el conteo de errores.
+    """
+    proveedor, modelo = identidad_proveedor()
+    fallidas = [c.id for c in decision.compuertas if not c.paso]
+    try:
+        datos = OfertaIAInterna(
+            modo="agentico" if respuesta.accion == "agentico" else "asistido",
+            modelo=modelo,
+            version_prompt=PROMPT_VERSION,
+            confianza=respuesta.analisis.confianza,
+            campos_autollenados=_campos_autollenados(respuesta),
+            proveedor=proveedor,
+            accion=respuesta.accion if respuesta.accion != "formulario" else respuesta.accion_asistida,
+            compuertas_fallidas=fallidas or None,
+            categoria=respuesta.analisis.categoria,
+            latencia_ia_ms=None if latencia_ms is None else min(max(latencia_ms, 0), 300_000),
+            resultado_ia=None if respuesta.cache else "ok",
+        )
+        await asyncio.wait_for(
+            registrar_oferta(
+                get_db(),
+                actor_id=usuario["_id"],
+                secreto=settings.jwt_secret,
+                datos=datos,
+                analisis_id=str(respuesta.analisis_id),
+                vigencia=timedelta(seconds=ANALISIS_TTL),
+            ),
+            timeout=TIMEOUT_TELEMETRIA_SEGUNDOS,
+        )
+    except Exception:
+        logger.warning("No se pudo registrar la oferta de IA en ia_eventos; el análisis continúa", exc_info=True)
+
+
 async def _responder(
     redis,
     usuario: dict,
@@ -196,6 +259,7 @@ async def _responder(
     ahora: datetime,
     cupo_agentico_disponible: bool,
     calidad_cliente: tuple[str, ...] = (),
+    latencia_ms: int | None = None,
 ) -> RespuestaIA:
     """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
     # Las pistas del cliente (borrosa/oscura/sobreexpuesta) también topan la confianza: nunca autollena.
@@ -246,6 +310,7 @@ async def _responder(
     except Exception as error:
         # El análisis ya quedó en caché: reintentar no vuelve a costar cupo.
         raise HTTPException(503, "El análisis temporal no está disponible") from error
+    await _registrar_oferta_ia(usuario, respuesta, decision, latencia_ms=latencia_ms)
     return respuesta
 
 
@@ -348,6 +413,7 @@ async def analizar(
         logger.warning("Redis no disponible al consumir el cupo de IA", exc_info=True)
         raise HTTPException(503, "El análisis con IA no está disponible en este momento") from exc
 
+    inicio = time.perf_counter()
     try:
         # El reintento queda dentro: si todo falla el cupo se devuelve una sola vez.
         analisis = await ia_service.con_reintento_transitorio(
@@ -366,12 +432,15 @@ async def analizar(
         except Exception:
             logger.error("No se pudo devolver el cupo tras un fallo del proveedor de IA", exc_info=True)
         raise HTTPException(503, "No fue posible analizar la imagen; llena el formulario manualmente") from e
+    latencia_ms = round((time.perf_counter() - inicio) * 1000)
 
     try:
         await redis.set(clave_cache, analisis.model_dump_json(), ex=CACHE_TTL)
     except Exception:
         logger.warning("Redis no disponible al guardar la caché de IA", exc_info=True)
-    return await _responder(redis, usuario, validada.datos, analisis, cache=False, **contexto_respuesta)
+    return await _responder(
+        redis, usuario, validada.datos, analisis, cache=False, latencia_ms=latencia_ms, **contexto_respuesta
+    )
 
 
 @router.post(

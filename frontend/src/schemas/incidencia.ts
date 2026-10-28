@@ -140,6 +140,8 @@ export const incidenciaSchema = z.object({
   detalle_especifico: detalleEspecificoSchema,
   tags: z.array(tagSchema).max(15, 'Máximo 15 tags').transform(ordenarUnicos),
   ia_sugerencia: iaSugerenciaSchema.optional(),
+  /** Análisis de POST /ia/analizar-imagen del que parte el reporte; el servidor cierra con él la oferta en ia_eventos. */
+  analisis_id: z.uuidv4().optional(),
 })
 export type IncidenciaForm = z.infer<typeof incidenciaSchema>
 export type IncidenciaIn = IncidenciaForm
