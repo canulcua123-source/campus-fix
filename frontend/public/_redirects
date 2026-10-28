@@ -1,2 +1,4 @@
 # SPA: toda ruta del cliente (/bandeja, /incidencias/abc…) sirve index.html con 200.
+# /api/* NO pasa por aquí: lo atiende la Pages Function functions/api/[[path]].ts (las Functions,
+# limitadas por _routes.json, tienen prioridad y los _redirects no se aplican a sus rutas).
 /*    /index.html   200
