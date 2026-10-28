@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator, model_validator
+from pydantic import UUID4, BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator, model_validator
 
 from app.dominio.categorias import CATEGORIAS_SISTEMA
 from app.dominio.estados import TRANSICIONES as _TRANSICIONES
@@ -92,6 +92,13 @@ class IncidenciaIn(BaseModel):
     )
     tags: list[str] = Field(default_factory=list, max_length=15)
     ia_sugerencia: IASugerencia | None = None
+    analisis_id: UUID4 | None = Field(
+        default=None,
+        description=(
+            "Análisis de POST /ia/analizar-imagen del que parte el reporte. No se guarda en la incidencia: "
+            "el servidor lo usa para cerrar la oferta en ia_eventos (enviado, editado o fallback)."
+        ),
+    )
 
     @field_validator("tags")
     @classmethod

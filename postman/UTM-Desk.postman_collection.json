@@ -2596,6 +2596,53 @@
           }
         },
         {
+          "name": "Crear incidencia desde el análisis de IA (cierra la telemetría)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 con analisis_id', function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Envía el analisis_id de «Analizar imagen»: el servidor cierra la oferta en ia_eventos como enviado (o editado si cambian título, prioridad o categoría). Un analisis_id ajeno o vencido no impide crear la incidencia (201).",
+            "url": {
+              "raw": "{{base_url}}/incidencias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Filtración de agua reportada con IA\",\n  \"descripcion\": \"Hay una filtración constante de agua en el techo del salón durante lluvias.\",\n  \"prioridad\": \"media\",\n  \"ubicacion\": {\n    \"edificio\": \"Edificio B\",\n    \"piso\": 1,\n    \"aula\": \"Aula 105\"\n  },\n  \"detalle_especifico\": {\n    \"categoria\": \"infraestructura\",\n    \"tipo_dano\": \"filtracion\",\n    \"riesgo_seguridad\": \"medio\",\n    \"requiere_insumos\": true,\n    \"insumos\": [\n      \"sellador\"\n    ],\n    \"requiere_contratista\": false\n  },\n  \"tags\": [\n    \"filtracion\"\n  ],\n  \"ia_sugerencia\": {\n    \"modo\": \"asistido\",\n    \"modelo\": \"claude-opus-5-5\",\n    \"version_prompt\": \"v1\",\n    \"confianza\": 0.91,\n    \"accion\": \"autollenar\",\n    \"campos_autollenados\": [\n      \"titulo\",\n      \"descripcion\",\n      \"tags\"\n    ]\n  },\n  \"analisis_id\": \"{{analisis_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Consultar análisis temporal propio",
           "event": [
             {

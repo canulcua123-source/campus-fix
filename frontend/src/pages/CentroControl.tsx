@@ -113,13 +113,13 @@ function SaludPanel({ consulta }: { consulta: UseQueryResult<SaludSistema> }) {
 
 function Alertas({ alertas }: { alertas: AlertaSistema[] }) {
   if (alertas.length === 0) {
-    return <EmptyState compacto icono={CheckCircle2} titulo="Sin alertas" descripcion="No hay nada que requiera tu atención ahora." />
+    return <EmptyState compacto icono={CheckCircle2} titulo="Todo en orden" descripcion="No hay alertas: la operación y el sistema están al día." />
   }
   return (
     <ul className="m-0 list-none divide-y divide-line p-0">
       {alertas.map((a) => (
         <li key={a.tipo}>
-          <Link to={a.enlace} className="flex min-h-11 items-center gap-3 px-4 py-3 text-ink no-underline hover:bg-panel-2">
+          <Link to={a.enlace} className="flex min-h-11 items-center gap-3 px-4 py-3 text-ink no-underline hover:bg-panel-2 lg:px-5">
             {a.severidad === 'critica'
               ? <Siren size={20} aria-hidden className="shrink-0 text-bad" />
               : <TriangleAlert size={20} aria-hidden className="shrink-0 text-warn" />}
@@ -169,14 +169,14 @@ export default function CentroControl() {
 
   const KPIS: { etiqueta: string; valor: string; icono: ReactNode; tono: 'brand' | 'danger' | 'warning' | 'success' | 'neutral'; pista: string }[] = [
     { etiqueta: 'Abiertas', valor: kpis ? numero.format(kpis.abiertas) : '', icono: <FolderOpen />, tono: 'brand', pista: 'Activas en el campus' },
-    { etiqueta: 'Críticas sin asignar', valor: kpis ? numero.format(kpis.criticas_sin_asignar) : '', icono: <Siren />, tono: 'danger', pista: 'Sin técnico' },
+    { etiqueta: 'Sin asignar', valor: kpis ? numero.format(kpis.criticas_sin_asignar) : '', icono: <Siren />, tono: 'danger', pista: 'Críticas sin técnico' },
     { etiqueta: 'Vencidas', valor: kpis ? numero.format(kpis.vencidas) : '', icono: <AlarmClock />, tono: 'warning', pista: 'Más de 24 h activas' },
     {
       etiqueta: 'Resueltas hoy', valor: kpis ? numero.format(kpis.resueltas_hoy) : '', icono: <CheckCircle2 />, tono: 'success',
       pista: kpis ? `${numero.format(kpis.resueltas_semana)} en 7 días` : '',
     },
     {
-      etiqueta: 'Tiempo prom. resolución', icono: <Clock />, tono: 'neutral', pista: 'Últimos 30 días',
+      etiqueta: 'Resolución prom.', icono: <Clock />, tono: 'neutral', pista: 'Últimos 30 días',
       valor: kpis ? (kpis.horas_resolucion_prom !== undefined ? `${numero.format(kpis.horas_resolucion_prom)} h` : 'Sin datos') : '',
     },
   ]
@@ -200,24 +200,36 @@ export default function CentroControl() {
       ) : (
         <StatGrid columnas={5} etiqueta="Indicadores principales">
           {KPIS.map((k) => (
-            <StatTile key={k.etiqueta} etiqueta={k.etiqueta} valor={k.valor} icono={k.icono} tono={k.tono} pista={k.pista} cargando={resumen.isPending} />
+            <StatTile key={k.etiqueta} etiqueta={k.etiqueta} valor={k.valor} icono={k.icono} tono={k.tono} pista={k.pista} cargando={resumen.isPending} sobrio />
           ))}
         </StatGrid>
       )}
 
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <Seccion titulo="Alertas" descripcion="Lo que requiere acción; toca una para ir a resolverla." sinPadding>
-          {resumen.isPending ? <SkeletonLista etiqueta="Cargando alertas" />
-            : resumen.isError ? <p className="m-0 p-4 text-sm text-muted">Las alertas no están disponibles mientras el resumen falle.</p>
-              : <Alertas alertas={resumen.data.alertas} />}
-        </Seccion>
+      {/* Columna izquierda: alertas (crece) + accesos rápidos; así ambas columnas miden lo mismo sin huecos. */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Seccion titulo="Alertas" descripcion="Lo que requiere acción; toca una para ir a resolverla." sinPadding className="flex-1">
+            {resumen.isPending ? <SkeletonLista etiqueta="Cargando alertas" />
+              : resumen.isError ? <p className="m-0 px-4 py-3 text-sm text-muted lg:px-5">Las alertas no están disponibles mientras el resumen falle.</p>
+                : <Alertas alertas={resumen.data.alertas} />}
+          </Seccion>
+          <Seccion titulo="Accesos rápidos">
+            <nav aria-label="Accesos rápidos" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {ACCESOS.map(({ to, etiqueta, icono: Icono }) => (
+                <Link key={to} to={to} className="ui-btn ui-btn--secundario justify-start">
+                  <Icono size={18} aria-hidden />{etiqueta}
+                </Link>
+              ))}
+            </nav>
+          </Seccion>
+        </div>
         <Seccion titulo="Salud del sistema" descripcion="Se actualiza cada minuto.">
           <SaludPanel consulta={salud} />
         </Seccion>
       </div>
 
       {resumen.isSuccess && (
-        <div className="grid items-start gap-4 xl:grid-cols-3">
+        <div className="grid gap-4 xl:grid-cols-3">
           <Seccion titulo="Edificios con más reportes" descripcion="Últimos 30 días." sinPadding>
             {resumen.data.top_edificios.length === 0
               ? <EmptyState compacto titulo="Sin reportes" descripcion="No hay incidencias en los últimos 30 días." />
@@ -252,35 +264,24 @@ export default function CentroControl() {
         </div>
       )}
 
-      <div className="grid items-start gap-4 xl:grid-cols-3">
-        <Seccion titulo="Actividad reciente" descripcion="Últimos 10 cambios administrativos." className="xl:col-span-2" sinPadding
-          acciones={<Link to="/admin/auditoria" className="text-sm font-semibold text-brand">Ver auditoría</Link>}>
-          {actividad.isPending ? <SkeletonLista etiqueta="Cargando actividad" />
-            : actividad.isError
-              ? <ErrorState compacto mensaje={mensajeDeError(actividad.error)} onReintentar={() => { void actividad.refetch() }} reintentando={actividad.isFetching} />
-              : actividad.data.resultados.length === 0
-                ? <EmptyState compacto icono={History} titulo="Sin actividad" descripcion="Aún no hay cambios administrativos registrados." />
-                : (
-                  <ul className="m-0 list-none divide-y divide-line p-0">
-                    {actividad.data.resultados.map((e) => (
-                      <li key={e._id} className="flex flex-wrap items-baseline justify-between gap-x-3 px-4 py-3">
-                        <span className="text-ink">{textoEvento(e)}</span>
-                        <time dateTime={e.fecha} className="text-sm text-muted">{haceCuanto(e.fecha)}</time>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-        </Seccion>
-        <Seccion titulo="Accesos rápidos">
-          <nav aria-label="Accesos rápidos" className="grid grid-cols-2 gap-2">
-            {ACCESOS.map(({ to, etiqueta, icono: Icono }) => (
-              <Link key={to} to={to} className="ui-btn ui-btn--secundario justify-start">
-                <Icono size={18} aria-hidden />{etiqueta}
-              </Link>
-            ))}
-          </nav>
-        </Seccion>
-      </div>
+      <Seccion titulo="Actividad reciente" descripcion="Últimos 10 cambios administrativos." sinPadding
+        acciones={<Link to="/admin/auditoria" className="text-sm font-semibold text-brand">Ver auditoría</Link>}>
+        {actividad.isPending ? <SkeletonLista etiqueta="Cargando actividad" />
+          : actividad.isError
+            ? <ErrorState compacto mensaje={mensajeDeError(actividad.error)} onReintentar={() => { void actividad.refetch() }} reintentando={actividad.isFetching} />
+            : actividad.data.resultados.length === 0
+              ? <EmptyState compacto icono={History} titulo="Sin actividad" descripcion="Aún no hay cambios administrativos registrados." />
+              : (
+                <ul className="m-0 list-none divide-y divide-line p-0">
+                  {actividad.data.resultados.map((e) => (
+                    <li key={e._id} className="flex flex-wrap items-baseline justify-between gap-x-3 px-4 py-3 lg:px-5">
+                      <span className="text-ink">{textoEvento(e)}</span>
+                      <time dateTime={e.fecha} className="text-sm text-muted">{haceCuanto(e.fecha)}</time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+      </Seccion>
     </div>
   )
 }

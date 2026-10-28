@@ -19,15 +19,17 @@ interface StatTileProps {
   pista?: ReactNode
   /** Muestra skeleton en lugar del valor. */
   cargando?: boolean
+  /** Variante sobria: valor en color de texto (el tono queda solo en el ícono) y etiqueta en una línea. */
+  sobrio?: boolean
 }
 
 /** Indicador (KPI) compacto: etiqueta, valor grande, delta/pista opcional e ícono con tono de tokens. */
-export function StatTile({ etiqueta, valor, icono, tono = 'neutral', delta, pista, cargando = false }: StatTileProps) {
+export function StatTile({ etiqueta, valor, icono, tono = 'neutral', delta, pista, cargando = false, sobrio = false }: StatTileProps) {
   const Flecha = delta?.direccion === 'baja' ? ArrowDownRight : ArrowUpRight
   return (
-    <div className={clsx('ui-stat', `ui-stat--${tono}`)}>
+    <div className={clsx('ui-stat', `ui-stat--${tono}`, sobrio && 'ui-stat--sobrio')}>
       <div className="ui-stat__cabecera">
-        <p className="ui-stat__etiqueta">{etiqueta}</p>
+        <p className="ui-stat__etiqueta" title={sobrio ? etiqueta : undefined}>{etiqueta}</p>
         {icono && <span className="ui-stat__icono" aria-hidden>{icono}</span>}
       </div>
       {cargando ? <Skeleton ancho="50%" alto={28} /> : <p className="ui-stat__valor">{valor}</p>}

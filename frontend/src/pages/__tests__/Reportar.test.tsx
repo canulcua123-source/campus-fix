@@ -13,10 +13,11 @@ import Reportar from '../Reportar'
 
 const dobles = vi.hoisted(() => ({
   analizarImagen: vi.fn(),
+  registrarEventoIA: vi.fn(),
   procesarFoto: vi.fn(),
 }))
 
-vi.mock('../../api/ia', () => ({ analizarImagen: dobles.analizarImagen }))
+vi.mock('../../api/ia', () => ({ analizarImagen: dobles.analizarImagen, registrarEventoIA: dobles.registrarEventoIA }))
 vi.mock('../../lib/fotoEnSegundoPlano', () => ({ procesarFotoEnSegundoPlano: dobles.procesarFoto }))
 
 function renderReportar() {
@@ -37,6 +38,8 @@ function seleccionarFoto() {
 
 beforeEach(() => {
   dobles.analizarImagen.mockReset()
+  dobles.registrarEventoIA.mockReset()
+  dobles.registrarEventoIA.mockResolvedValue({})
   dobles.procesarFoto.mockReset()
   dobles.procesarFoto.mockImplementation(async (archivo: File) => ({ evidencia: archivo, ia: archivo, miniatura: archivo, calidad: { nitidez: 500, brillo: 120, borrosa: false, oscura: false, sobreexpuesta: false }, ancho: 1, alto: 1 }))
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:foto') })
@@ -431,5 +434,67 @@ describe('Reportar completo (T-049)', () => {
     expect(vlan).toHaveAccessibleDescription(new RegExp(esperado['detalle_especifico.vlan']))
     expect(screen.getByRole('alert')).toHaveTextContent(esperado._general)
     expect(screen.queryByText('INC-2026-1026-RED-0001')).not.toBeInTheDocument()
+  })
+})
+
+describe('Reportar: telemetría de la oferta de IA', () => {
+  it('"Llenar sin IA" reporta fallback y limpia lo que llenó la IA', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Llenar sin IA' }))
+
+    expect(dobles.registrarEventoIA).toHaveBeenCalledExactlyOnceWith({ analisis_id: ID_ANALISIS, evento: 'fallback' })
+    expect(screen.getByLabelText('Título')).toHaveValue('')
+    expect(screen.queryByText(/confianza 90%/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Descartaste la sugerencia de IA/)).toBeInTheDocument()
+  })
+
+  it('tomar otra foto reporta la sugerencia anterior como deshecha', async () => {
+    dobles.analizarImagen.mockResolvedValueOnce(respuestaIA()).mockReturnValueOnce(new Promise(() => undefined))
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+
+    seleccionarFoto()
+
+    await waitFor(() => expect(dobles.registrarEventoIA).toHaveBeenCalledExactlyOnceWith({ analisis_id: ID_ANALISIS, evento: 'deshecho' }))
+  })
+
+  it('si falla el registro del evento la persona sigue sin ver errores', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    dobles.registrarEventoIA.mockRejectedValue(new ApiError(503, 'red', 'caído'))
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Llenar sin IA' }))
+
+    expect(dobles.registrarEventoIA).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('envía el analisis_id al crear el reporte y no reporta eventos desde el cliente', async () => {
+    let cuerpo: Record<string, unknown> = {}
+    servidor.use(http.post(`${BASE}/incidencias`, async ({ request }) => {
+      cuerpo = await request.json() as Record<string, unknown>
+      return HttpResponse.json({ _id: 'inc1', codigo: 'INC-2026-1026-RED-0001', estado: 'abierta' }, { status: 201 })
+    }))
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Edificio'), 'Edificio A')
+    await user.type(screen.getByLabelText('Aula'), 'A-301')
+    await user.type(screen.getByLabelText('IP'), '10.0.0.5')
+
+    await user.click(screen.getByRole('button', { name: 'Enviar reporte' }))
+
+    expect(await screen.findByText('INC-2026-1026-RED-0001')).toBeInTheDocument()
+    expect(cuerpo).toMatchObject({ analisis_id: ID_ANALISIS, titulo: 'Proyector no enciende' })
+    expect(dobles.registrarEventoIA).not.toHaveBeenCalled()
   })
 })

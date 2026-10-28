@@ -506,13 +506,23 @@
   .ui-seccion__cuerpo {
     padding: 14px 16px 16px;
   }
+  /* A sangre: el cuerpo recorta su contenido (filas con hover, tablas) a las esquinas de la tarjeta. */
   .ui-seccion__cuerpo--sin-padding {
     padding: 12px 0 0;
+    overflow: hidden;
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
   }
   .ui-seccion__cuerpo--sin-padding > .ui-tabla {
     border: 0;
     border-top: 1px solid var(--color-border);
     border-radius: 0 0 var(--radius-card) var(--radius-card);
+  }
+  /* Primera/última columna alineadas con el padding de la cabecera de la tarjeta. */
+  .ui-seccion__cuerpo--sin-padding > .ui-tabla:not(.ui-tabla--apilada) :is(th, td):first-child {
+    padding-left: 16px;
+  }
+  .ui-seccion__cuerpo--sin-padding > .ui-tabla:not(.ui-tabla--apilada) :is(th, td):last-child {
+    padding-right: 16px;
   }
   @media (min-width: 1024px) {
     .ui-seccion__cabecera {
@@ -523,6 +533,12 @@
     }
     .ui-seccion__cuerpo--sin-padding {
       padding: 14px 0 0;
+    }
+    .ui-seccion__cuerpo--sin-padding > .ui-tabla:not(.ui-tabla--apilada) :is(th, td):first-child {
+      padding-left: 20px;
+    }
+    .ui-seccion__cuerpo--sin-padding > .ui-tabla:not(.ui-tabla--apilada) :is(th, td):last-child {
+      padding-right: 20px;
     }
   }
 
@@ -609,6 +625,15 @@
   .ui-stat--warning .ui-stat__valor,
   .ui-stat--danger .ui-stat__valor {
     color: var(--stat-text);
+  }
+  /* Sobrio: el número en color de texto (el tono vive solo en el ícono) y etiqueta en una línea para alinear la fila. */
+  .ui-stat--sobrio .ui-stat__valor {
+    color: var(--color-text);
+  }
+  .ui-stat--sobrio .ui-stat__etiqueta {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .ui-stat__pie {
     margin: 0;
@@ -1236,6 +1261,34 @@
     background: var(--estado-abierta-bg);
     color: var(--estado-abierta-text);
     font-weight: 600;
+  }
+  /* Encabezado de grupo del menú: texto pequeño en mayúsculas; los plegables son botones (≥ 44 px). */
+  .sidebar__grupo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 12px 0 0;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .sidebar__grupo--plegable {
+    width: 100%;
+    min-height: var(--tap-min);
+    border: 0;
+    border-radius: var(--radius-input);
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .sidebar__grupo--plegable:hover {
+    background: var(--color-surface-2);
+    color: var(--color-text);
   }
   .sidebar--estatica {
     display: flex;

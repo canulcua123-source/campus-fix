@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ROLES_BASE, type RolBase } from '../test/roles'
-import { ACCESO_RUTA, accesoDe, cumpleAcceso, navegacionPara, perfilDe, REPORTAR, rutaInicio, type RutaApp } from './navegacion'
+import { ACCESO_RUTA, accesoDe, cumpleAcceso, navegacionPara, perfilDe, REPORTAR, rutaDentroDe, rutaInicio, type RutaApp } from './navegacion'
 
 /** Matriz «Pantallas por rol» (docs/TAREAS.md, doc §6.5). «Reportar» es el botón central de cámara. */
 const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
@@ -15,13 +15,13 @@ const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
     // Roles y Configuración pasaron al superadmin.
     movil: ['Usuarios', 'Categorías', 'Perfil'],
     // + Dashboard (acceso a analítica:ver) y Métricas IA (T-030, exclusiva de admin/superadmin), fuera de la tabla original.
-    lateral: ['Dashboard', 'Usuarios', 'Categorías', 'Edificios', 'Auditoría', 'Métricas IA'],
+    lateral: ['Dashboard', 'Métricas IA', 'Usuarios', 'Categorías', 'Edificios', 'Auditoría'],
   },
   superadmin: {
     movil: ['Control', 'Incidencias', 'Usuarios', 'Perfil'],
     lateral: [
-      'Centro de control', 'Dashboard', 'Incidencias', 'Tablero', 'Técnicos', 'Reportes', 'Usuarios', 'Roles', 'Categorías',
-      'Edificios', 'Auditoría', 'Configuración', 'Métricas IA',
+      'Centro de control', 'Incidencias', 'Tablero', 'Técnicos', 'Dashboard', 'Reportes', 'Métricas IA', 'Usuarios', 'Roles',
+      'Categorías', 'Edificios', 'Auditoría', 'Configuración',
     ],
   },
 }
@@ -96,5 +96,44 @@ describe('navegacion', () => {
     const permisos = [...ROLES_BASE.admin.permisos]
     expect(perfilDe(permisos)).toBe('admin')
     expect(etiquetas(navegacionPara(permisos, 'admin_campus').lateral)).not.toContain('Métricas IA')
+  })
+
+  it('superadmin y admin ven el menú lateral agrupado; Administración y Sistema son plegables', () => {
+    const resumen = (rol: RolBase) => navegacionPara(ROLES_BASE[rol].permisos, rol).grupos
+      .map((g) => ({ titulo: g.titulo, plegable: !!g.plegable, items: etiquetas(g.items) }))
+    expect(resumen('superadmin')).toEqual([
+      { titulo: undefined, plegable: false, items: ['Centro de control'] },
+      { titulo: 'Operación', plegable: false, items: ['Incidencias', 'Tablero', 'Técnicos'] },
+      { titulo: 'Análisis', plegable: false, items: ['Dashboard', 'Reportes', 'Métricas IA'] },
+      { titulo: 'Administración', plegable: true, items: ['Usuarios', 'Roles', 'Categorías', 'Edificios'] },
+      { titulo: 'Sistema', plegable: true, items: ['Auditoría', 'Configuración'] },
+    ])
+    expect(resumen('admin')).toEqual([
+      { titulo: 'Análisis', plegable: false, items: ['Dashboard', 'Métricas IA'] },
+      { titulo: 'Administración', plegable: true, items: ['Usuarios', 'Categorías', 'Edificios'] },
+      { titulo: 'Sistema', plegable: true, items: ['Auditoría'] },
+    ])
+  })
+
+  it.each(['reportante', 'tecnico', 'coordinador', 'directivo'] as RolBase[])('%s (≤ 6 elementos) conserva el menú sin encabezados', (rol) => {
+    const { grupos, lateral } = navegacionPara(ROLES_BASE[rol].permisos, rol)
+    expect(lateral.length).toBeLessThanOrEqual(6)
+    expect(grupos).toHaveLength(1)
+    expect(grupos[0].titulo).toBeUndefined()
+  })
+
+  it('omite grupos sin elementos permitidos', () => {
+    // Rol personalizado de perfil admin sin auditoría ni edificios (usuarios:gestionar ausente).
+    const { grupos } = navegacionPara(['categorias:gestionar'], 'admin_campus')
+    expect(grupos.map((g) => g.titulo)).toEqual(['Administración'])
+    expect(etiquetas(grupos[0].items)).toEqual(['Categorías'])
+  })
+
+  it('rutaDentroDe reconoce subrutas pero «/» solo exacta', () => {
+    const usuarios = navegacionPara(ROLES_BASE.superadmin.permisos, 'superadmin').lateral.find((i) => i.to === '/admin/usuarios')!
+    expect(rutaDentroDe(usuarios, '/admin/usuarios')).toBe(true)
+    expect(rutaDentroDe(usuarios, '/admin/usuarios/abc')).toBe(true)
+    expect(rutaDentroDe(usuarios, '/admin/usuarios-x')).toBe(false)
+    expect(rutaDentroDe({ ...usuarios, to: '/' }, '/control')).toBe(false)
   })
 })

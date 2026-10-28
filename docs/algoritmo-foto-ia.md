@@ -283,6 +283,15 @@ Notas de idempotencia:
 
 Un ticket deshecho **nunca llega a existir**, así que `deshecho` no se puede medir en el documento. Los eventos van a una colección `ia_eventos` (`analisis_id`, usuario, evento: `ofrecido | deshecho | editado | enviado | duplicado_sumado | fallback`, motivo, timestamp, TTL 180 días), enviados por `POST /ia/eventos`.
 
+Cableado actual (una fila por `analisis_id`, sin datos personales; `actor_clave` = HMAC del usuario):
+
+- **Oferta** (`ofrecido`): la registra el servidor en `POST /ia/analizar-imagen` justo después de guardar el análisis temporal, con `proveedor`, `modelo`, `version_prompt`, `confianza` efectiva, `categoria`, `modo`, `accion` (`agentico`/`duplicado` o la acción asistida), `campos_autollenados`, `compuertas_fallidas` y, si hubo llamada al proveedor, `latencia_ia_ms` y `resultado_ia: ok`. Vigencia = TTL del análisis (30 min). Si Mongo falla o tarda > 2 s solo se registra un aviso en el log: el análisis no se rompe.
+- **Caché:** una respuesta desde caché sí cuenta como oferta (la persona ve una sugerencia que puede aceptar o descartar), pero sin `latencia_ia_ms` ni `resultado_ia`, para no sesgar latencia ni errores.
+- **Resultado confiable:** `POST /incidencias` acepta `analisis_id` (no se guarda en la incidencia). El servidor compara con la sugerencia guardada en Redis: `enviado` (con `editado: true` y `campos_editados_por_usuario` si cambió título, prioridad o categoría; «alta» cuenta como aceptar una «crítica») o `fallback` si la sugerencia fue `preguntar`/`rechazar`. Un `analisis_id` ajeno, vencido o ya cerrado se ignora sin afectar la creación.
+- **Cliente:** la PWA envía `POST /ia/eventos` con `fallback` («Llenar sin IA» tras la sugerencia) o `deshecho` (otra foto reemplaza la sugerencia).
+- **Sin respuesta:** la oferta que vence sin evento final queda como `ofrecido` y cuenta en el denominador de las tasas.
+- Pendiente: errores/timeouts del proveedor (`resultado_ia: error|timeout`), tokens, costo y `duracion_toque_folio_ms` aún no se registran.
+
 - **Métricas para ajustar umbrales** (semanales, por categoría):
 
 | Métrica | Definición | Acción |

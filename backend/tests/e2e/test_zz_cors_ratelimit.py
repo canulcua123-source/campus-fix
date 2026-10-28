@@ -12,16 +12,20 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 PREFLIGHT = {"Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,content-type"}
 
 
-async def test_cors_origen_permitido(api):
+async def test_cors_permite_origen_pwa(api):
     r = await api.c.options("/incidencias", headers={"Origin": "http://localhost:5173", **PREFLIGHT})
     assert r.status_code == 200
     assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    # La cookie HttpOnly de refresh exige credenciales (T-014).
+    assert r.headers.get("access-control-allow-credentials") == "true"
+    assert r.headers.get("access-control-allow-origin") != "*"
     r = await api.c.get("/health", headers={"Origin": "http://localhost:5173"})
     assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
 
 
-async def test_cors_origen_ajeno(api):
+async def test_cors_rechaza_origen_no_listado(api):
     r = await api.c.options("/incidencias", headers={"Origin": "http://evil.example", **PREFLIGHT})
+    assert r.status_code == 400
     assert "access-control-allow-origin" not in r.headers
     r = await api.c.get("/health", headers={"Origin": "http://evil.example"})
     assert "access-control-allow-origin" not in r.headers

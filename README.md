@@ -184,6 +184,21 @@ docker run --rm -p 8000:8000 -e MONGODB_URI=mongodb://host.docker.internal:27017
 
 **Proxy same-origin `/api/*`** ([`frontend/functions/api/[[path]].ts`](frontend/functions/api/%5B%5Bpath%5D%5D.ts), lógica en `frontend/src/proxy/reenviar.ts`): una Pages Function (gratis, 100 000 peticiones/día) reenvía `/api/<ruta>` a `${API_ORIGIN}/<ruta>` con método, query, cabeceras (`Cookie`, `Authorization`, `Content-Type`, `Origin`…) y cuerpo en streaming, quita las cabeceras hop-by-hop, pone `X-Forwarded-For` con la IP real (`CF-Connecting-IP`) y devuelve la respuesta con sus `Set-Cookie`. Como la API emite la cookie de refresh con `Path=/auth` y el navegador la ve bajo `/api/auth/...`, **el proxy reescribe `Path=/auth` → `Path=/api/auth`** (y quita `Domain=`); así la API no cambia y sigue funcionando sin proxy en local. `public/_routes.json` limita la Function a `/api/*` (el resto se sirve estático); las Functions tienen prioridad sobre `_redirects`, así que el fallback SPA no intercepta `/api`. En local `npm run dev` sigue usando `http://localhost:8000`; con `VITE_API_URL=/api` usa el proxy equivalente de Vite.
 
+## CORS del bucket de evidencias (Backblaze B2)
+
+Las fotos y PDF **no pasan por la API**: la PWA pide una URL firmada y hace `PUT` directo al bucket. Si el bucket no permite el origen de la PWA, el navegador bloquea la subida y la app muestra «No se pudo adjuntar la foto · Sin conexión con el servidor». La regla está versionada en [`docs/infra/b2-cors.json`](docs/infra/b2-cors.json) (solo `PUT`/`GET`/`HEAD`, cabecera `content-type`, orígenes exactos sin `*`).
+
+La interfaz web de B2 solo crea reglas de descarga; el `PUT` exige la CLI (llave con `writeBuckets`, p. ej. la *Master Application Key*, nunca la que usa la API):
+
+```bash
+pip3 install b2
+b2 account authorize                      # pide keyID y applicationKey
+b2 bucket update --cors-rules "$(cat docs/infra/b2-cors.json)" <bucket> allPrivate
+b2 bucket get <bucket>                    # verifica corsRules
+```
+
+Verificación (debe responder 200 con `Access-Control-Allow-Origin`): `curl -i -X OPTIONS "<upload_url firmada>" -H "Origin: https://<proyecto>.pages.dev" -H "Access-Control-Request-Method: PUT" -H "Access-Control-Request-Headers: content-type"`. Si agregas un dominio de despliegue, actualiza **a la vez** `CORS_ORIGINS` en Render y este archivo (FB-17).
+
 ## CI
 
 GitHub Actions ejecuta el pipeline en cada Pull Request hacia `dev` o `main` y en cada push a `dev`. Los jobs se filtran por las rutas modificadas y el check final obligatorio es `ci-ok`.

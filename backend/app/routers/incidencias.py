@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import math
 import re
 import uuid
@@ -48,8 +49,19 @@ from app.schemas.incidencia import (
     TomarIncidenciaOut,
 )
 from app.services.duplicados import actualizar_elegibilidad_huella
+from app.services.ia_eventos import (
+    EventoIAConflictivo,
+    OfertaIAAjena,
+    OfertaIANoEncontrada,
+    OfertaIAVencida,
+    registrar_resultado_confiable,
+)
+from app.schemas.ia import AnalisisImagen
+from app.services.vision.analisis_temporal import cargar_analisis
 
 router = APIRouter(prefix="/incidencias", tags=["incidencias"])
+logger = logging.getLogger(__name__)
+TIMEOUT_TELEMETRIA_SEGUNDOS = 2.0
 _STORAGE_DIRECTO = get_storage()
 
 TipoMime = Literal[
@@ -187,6 +199,65 @@ async def _validar_detalle(datos: IncidenciaIn) -> tuple[dict[str, Any], dict[st
     return detalle, categoria
 
 
+def campos_editados_ia(analisis: AnalisisImagen, datos: IncidenciaIn, categoria: str) -> list[str]:
+    """Campos sugeridos que la persona cambió antes de enviar (categoría, título y prioridad).
+
+    "critica" nunca se autollena: la PWA deja "alta" hasta que la persona la confirma, así que ambas cuentan
+    como aceptar la sugerencia.
+    """
+    editados: list[str] = []
+    if datos.titulo.strip() != analisis.titulo[:120].strip():
+        editados.append("titulo")
+    aceptadas = {analisis.prioridad_sugerida} | ({"alta"} if analisis.prioridad_sugerida == "critica" else set())
+    if datos.prioridad not in aceptadas:
+        editados.append("prioridad")
+    if analisis.categoria != "no_determinada" and categoria != analisis.categoria:
+        editados.append("detalle_especifico.categoria")
+    return editados
+
+
+async def _cerrar_oferta_ia(
+    usuario: dict, analisis_id: str, datos: IncidenciaIn, categoria: str, incidencia_id
+) -> None:
+    """Resultado final confiable de la oferta: lo decide el servidor al crear la incidencia, nunca el cliente.
+
+    Sugerencia aplicada (autollenar/sugerir) → ``enviado`` (con ``editado`` si cambió algún campo sugerido);
+    preguntar/rechazar → ``fallback`` (la persona llenó a mano). Cualquier fallo solo se registra en el log:
+    la incidencia ya existe y la telemetría no debe romper su creación.
+    """
+    try:
+        registro = None
+        try:
+            registro = await cargar_analisis(get_redis(), analisis_id, str(usuario["_id"]))
+        except Exception:
+            logger.warning("Redis no disponible al cerrar la oferta de IA", exc_info=True)
+        evento, motivo, editados = "enviado", None, []
+        if registro is not None:
+            respuesta = registro.respuesta
+            if respuesta.accion_asistida in ("autollenar", "sugerir"):
+                editados = campos_editados_ia(respuesta.analisis, datos, categoria)
+                motivo = "usuario_edito" if editados else None
+            else:
+                evento, motivo = "fallback", "continuo_manual"
+        await asyncio.wait_for(
+            registrar_resultado_confiable(
+                get_db(),
+                analisis_id=analisis_id,
+                evento=evento,
+                actor_id=usuario["_id"],
+                secreto=settings.jwt_secret,
+                motivo=motivo,
+                incidencia_id=incidencia_id if evento == "enviado" else None,
+                campos_editados=editados or None,
+            ),
+            timeout=TIMEOUT_TELEMETRIA_SEGUNDOS,
+        )
+    except (OfertaIANoEncontrada, OfertaIAAjena, OfertaIAVencida, EventoIAConflictivo) as exc:
+        logger.info("La oferta de IA no se cerró al crear la incidencia: %s", type(exc).__name__)
+    except Exception:
+        logger.warning("No se pudo cerrar la oferta de IA en ia_eventos", exc_info=True)
+
+
 @router.post(
     "",
     status_code=201,
@@ -260,6 +331,13 @@ async def crear_incidencia(
             await _resincronizar_contador(categoria, ahora, prefijo_categoria)
     else:
         raise HTTPException(409, "No fue posible generar un folio único; intenta de nuevo")
+    analisis_id = (
+        str(datos.analisis_id)
+        if datos.analisis_id is not None
+        else (datos.ia_sugerencia.analisis_id if datos.ia_sugerencia is not None else None)
+    )
+    if analisis_id is not None:
+        await _cerrar_oferta_ia(usuario, analisis_id, datos, categoria, res.inserted_id)
     return {"_id": str(res.inserted_id), "codigo": doc["codigo"], "estado": doc["estado"]}
 
 
