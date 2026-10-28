@@ -32,6 +32,8 @@ export const claves = {
   catalogoAulas: ['aulas', 'catalogo'] as const,
   ubicacionesAula: ['aulas', 'ubicaciones'] as const,
   configIA: ['config', 'ia'] as const,
+  sistemaSalud: ['sistema', 'salud'] as const,
+  sistemaResumen: ['sistema', 'resumen'] as const,
 }
 
 /** Quita filtros vacíos para que {} y {estado: undefined} compartan caché. */

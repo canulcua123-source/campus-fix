@@ -28,26 +28,29 @@ la tabla 3.3 de permisos (`docs/revision-acceso/roles.md`). Código revisado: `f
 
 ✔ permitido · — bloqueado (si se abre por URL redirige a la pantalla principal del rol).
 
-| Ruta | Acceso | REP | TEC | COO | DIR | ADM | Pantalla |
-|---|---|---|---|---|---|---|---|
-| `/`, `/perfil` | sesión | ✔ | ✔ | ✔ | ✔ | ✔ | Inicio, Perfil (cerrar sesión) |
-| `/reportar` | `incidencias:crear` | ✔ | ✔ | ✔ | — | ✔ | Reportar |
-| `/mis-reportes` | `incidencias:ver` | ✔ | ✔ | ✔ | ✔ ¹ | ✔ | Mis reportes (`/mis-tickets` redirige) |
-| `/incidencias/:id` | `incidencias:ver` | ✔ | ✔ | ✔ | ✔ | ✔ | Detalle |
-| `/bandeja` | `seguimiento:registrar` | — | ✔ | ✔ | — | ✔ | Bandeja |
-| `/buscar` | `incidencias:buscar` | — | ✔ | ✔ | ✔ | ✔ | Buscar / Incidencias |
-| `/tablero`, `/tecnicos` | `incidencias:asignar` | — | — | ✔ | — | ✔ | pendiente (T-054) |
-| `/dashboard`, `/reportes` | `analitica:ver` | — | — | ✔ | ✔ | ✔ | Dashboard / Métricas; Reportes pendiente |
-| `/admin/usuarios` | `usuarios:gestionar` | — | — | — | — | ✔ | Usuarios |
-| `/admin/roles` | `roles:gestionar` | — | — | — | — | ✔ | Roles (GET/POST/PATCH/DELETE `/roles`) |
-| `/admin/categorias` | `categorias:gestionar` | — | — | — | — | ✔ | Categorías |
-| `/admin/edificios`, `/admin/auditoria` | `usuarios:gestionar` ² | — | — | — | — | ✔ | pendiente |
-| `/admin/configuracion` | `configuracion:gestionar` | — | — | — | — | ✔ | pendiente |
-| `/admin/metricas-ia` | `analitica:ver` + rol `admin` | — | — | — | — | ✔ | Métricas IA (igual que `require_admin`) |
+| Ruta | Acceso | REP | TEC | COO | DIR | ADM | SUP | Pantalla |
+|---|---|---|---|---|---|---|---|---|
+| `/`, `/perfil` | sesión | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ ³ | Inicio, Perfil (cerrar sesión) |
+| `/control` | `sistema:administrar` | — | — | — | — | — | ✔ | Centro de control |
+| `/reportar` | `incidencias:crear` | ✔ | ✔ | ✔ | — | ✔ | ✔ | Reportar |
+| `/mis-reportes` | `incidencias:ver` | ✔ | ✔ | ✔ | ✔ ¹ | ✔ | ✔ | Mis reportes (`/mis-tickets` redirige) |
+| `/incidencias/:id` | `incidencias:ver` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | Detalle |
+| `/bandeja` | `seguimiento:registrar` | — | ✔ | ✔ | — | ✔ | ✔ | Bandeja |
+| `/buscar` | `incidencias:buscar` | — | ✔ | ✔ | ✔ | ✔ | ✔ | Buscar / Incidencias |
+| `/tablero`, `/tecnicos` | `incidencias:asignar` | — | — | ✔ | — | ✔ | ✔ | Tablero, Técnicos |
+| `/dashboard`, `/reportes` | `analitica:ver` | — | — | ✔ | ✔ | ✔ | ✔ | Dashboard / Métricas; Reportes |
+| `/admin/usuarios` | `usuarios:gestionar` | — | — | — | — | ✔ ⁴ | ✔ | Usuarios |
+| `/admin/roles` | `roles:gestionar` | — | — | — | — | — | ✔ | Roles (GET/POST/PATCH/DELETE `/roles`) |
+| `/admin/categorias` | `categorias:gestionar` | — | — | — | — | ✔ | ✔ | Categorías |
+| `/admin/edificios`, `/admin/auditoria` | `usuarios:gestionar` ² | — | — | — | — | ✔ | ✔ | Edificios, Auditoría |
+| `/admin/configuracion` | `configuracion:gestionar` | — | — | — | — | — | ✔ | Configuración |
+| `/admin/metricas-ia` | `analitica:ver` + rol `admin`/`superadmin` | — | — | — | — | ✔ | ✔ | Métricas IA (igual que `require_admin`) |
 
 ¹ La matriz no lista «Mis reportes» para el directivo y no aparece en su menú; la ruta exige
 `incidencias:ver` (permiso de la tabla) y, como el directivo no puede crear incidencias, la lista
-sale vacía. ² Mismo permiso que `GET /auditoria` en la API; la tabla solo dice «admin».
+sale vacía. ² Mismo permiso que `GET /auditoria` en la API; la tabla solo dice «admin». ³ El superadmin
+que entra a `/` (o inicia sesión) aterriza en `/control`. ⁴ Admin no ve ni edita cuentas admin/superadmin
+(la API responde 404) ni puede asignar esos roles (403); `GET /roles` le sigue respondiendo para el selector.
 
 ## Pestañas por rol
 
@@ -57,7 +60,8 @@ sale vacía. ² Mismo permiso que `GET /auditoria` en la API; la tabla solo dice
 | Técnico | Bandeja · Buscar · **Reportar** · Perfil | Bandeja, Buscar, Mis reportes |
 | Coordinador | Tablero · Bandeja · **Reportar** · Métricas · Perfil | Tablero, Incidencias, Técnicos, Métricas |
 | Directivo | Dashboard · Buscar · Perfil | Dashboard, Incidencias, Reportes |
-| Admin | Usuarios · Roles · Categorías · Perfil | Usuarios, Roles, Categorías, Edificios, Auditoría, Configuración, Métricas IA |
+| Admin | Usuarios · Categorías · Perfil | Dashboard, Usuarios, Categorías, Edificios, Auditoría, Métricas IA |
+| Superadmin | Control · Incidencias · Usuarios · Perfil | Centro de control, Dashboard, Incidencias, Tablero, Técnicos, Reportes, Usuarios, Roles, Categorías, Edificios, Auditoría, Configuración, Métricas IA |
 
 Diferencias con la tabla original, justificadas: para reportante y técnico la tabla no define menú
 lateral; se usan sus pestañas sin Reportar/Perfil (que van aparte en el lateral) y el técnico conserva
@@ -66,13 +70,14 @@ En escritorio Perfil y «Salir» van al pie del menú lateral.
 
 ## Acciones × rol
 
-| Acción | Guarda en la PWA | Permiso API | REP | TEC | COO | DIR | ADM |
-|---|---|---|---|---|---|---|---|
-| Subir evidencia | `incidencias:crear`/detalle | `evidencias:subir` | ✔ | ✔ | ✔ | — | ✔ |
-| Registrar seguimiento | `puedeRegistrar` en detalle | `seguimiento:registrar` | — | ✔ | ✔ | — | ✔ |
-| Cerrar incidencia | `puedeCerrar` en detalle | `seguimiento:registrar` + `incidencias:asignar` | — | — | ✔ | — | ✔ |
-| Etiquetas | `EditorTags` | `tags:gestionar` | — | ✔ | ✔ | — | ✔ |
-| Crear/editar/eliminar rol | `SiPermiso roles:gestionar` + `puedeOtorgar` | `roles:gestionar` | — | — | — | — | ✔ |
+| Acción | Guarda en la PWA | Permiso API | REP | TEC | COO | DIR | ADM | SUP |
+|---|---|---|---|---|---|---|---|---|
+| Subir evidencia | `incidencias:crear`/detalle | `evidencias:subir` | ✔ | ✔ | ✔ | — | ✔ | ✔ |
+| Registrar seguimiento | `puedeRegistrar` en detalle | `seguimiento:registrar` | — | ✔ | ✔ | — | ✔ | ✔ |
+| Cerrar incidencia | `puedeCerrar` en detalle | `seguimiento:registrar` + `incidencias:asignar` | — | — | ✔ | — | ✔ | ✔ |
+| Etiquetas | `EditorTags` | `tags:gestionar` | — | ✔ | ✔ | — | ✔ | ✔ |
+| Crear/editar/eliminar rol | `SiPermiso roles:gestionar` + `puedeOtorgar` | `roles:gestionar` | — | — | — | — | — | ✔ |
+| Asignar rol admin/superadmin | `esRolPrivilegiado` en Usuarios | `sistema:administrar` | — | — | — | — | — | ✔ |
 
 En la pantalla de roles, los roles del sistema son de solo lectura (la API responde 409) y no se
 ofrecen acciones sobre roles con permisos o alcance mayores a los del actor (`puedeOtorgar`, espejo
@@ -80,9 +85,11 @@ de `puede_otorgar`; la API responde 403).
 
 ## Pruebas
 
-- `components/navegacion.test.ts`: pestañas por rol igual a la matriz (5 roles), cada pestaña con el
+- `components/navegacion.test.ts`: pestañas por rol igual a la matriz (6 roles), cada pestaña con el
   acceso de su ruta y ruta × rol de la tabla anterior.
 - `auth/__tests__/RequirePermiso.test.tsx`: «bloquea ruta por url» renderiza `App` en cada ruta
   prohibida de cada rol base y espera la redirección a su pantalla principal; `SiPermiso` oculta acciones.
 - `pages/__tests__/AdminRoles.test.tsx`: listado, alta, edición parcial, 409 al eliminar y acciones
   ocultas para roles no otorgables.
+- `pages/__tests__/CentroControl.test.tsx`: KPIs, alertas con enlace, salud con texto, vacío, error con
+  Reintentar y aterrizaje del superadmin en `/control` desde `/`.

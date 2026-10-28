@@ -67,6 +67,15 @@ export function puedeOtorgar(actor: { permisos: readonly string[]; alcance: Alca
   return alcance === 'propio' || alcance === actor.alcance
 }
 
+/**
+ * Espejo de `_es_rol_privilegiado` (backend/app/routers/usuarios.py): roles que administran el sistema completo.
+ * Solo el superadmin (`sistema:administrar`) los ve, crea, edita o asigna.
+ */
+export function esRolPrivilegiado(rol: { clave: string; permisos: readonly string[]; alcance: AlcanceRol }): boolean {
+  return rol.clave === 'admin' || rol.clave === 'superadmin' || rol.permisos.includes('sistema:administrar') ||
+    (rol.permisos.includes('usuarios:gestionar') && rol.alcance === 'global')
+}
+
 /** Selectores de asignación: excluir cuentas desactivadas y roles sin permiso de seguimiento. */
 export function tecnicosActivos(usuarios: UsuarioApi[], roles: Rol[]): UsuarioApi[] {
   const rolesTecnicos = new Set(roles.filter((rol) => rol.permisos.includes('seguimiento:registrar')).map((rol) => rol.clave))

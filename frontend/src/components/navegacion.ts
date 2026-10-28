@@ -1,6 +1,6 @@
 import {
-  BarChart3, BrainCircuit, Building2, Camera, ClipboardList, FileText, History, Home, Inbox, KanbanSquare, LayoutDashboard, ListChecks,
-  Search, Settings, Shield, Tags, UserRound, Users, Wrench, type LucideIcon,
+  BarChart3, BrainCircuit, Building2, Camera, ClipboardList, FileText, Gauge, History, Home, Inbox, KanbanSquare, LayoutDashboard,
+  ListChecks, Search, Settings, Shield, Tags, UserRound, Users, Wrench, type LucideIcon,
 } from 'lucide-react'
 
 /**
@@ -8,7 +8,7 @@ import {
  * El perfil se deduce de los permisos del usuario (no del nombre del rol) y cada
  * elemento se filtra además por su propio permiso (UX-31). La seguridad real está en la API.
  */
-export type PerfilNav = 'reportante' | 'tecnico' | 'coordinador' | 'directivo' | 'admin'
+export type PerfilNav = 'reportante' | 'tecnico' | 'coordinador' | 'directivo' | 'admin' | 'superadmin'
 
 export interface ItemNav {
   to: string
@@ -16,17 +16,23 @@ export interface ItemNav {
   icono: LucideIcon
   /** Permiso requerido; sin permiso = basta con tener sesión. */
   permiso?: string
-  /** Rol exigido además del permiso (solo Métricas IA, igual que `require_admin`). */
-  rol?: string
+  /** Rol(es) exigido(s) además del permiso (solo Métricas IA, igual que `require_admin`). */
+  rol?: string | readonly string[]
 }
+
+/** Roles de sistema que pasan `require_admin` en el backend (security.py::ROLES_ADMINISTRADORES). */
+export const ROLES_ADMINISTRADORES = ['admin', 'superadmin'] as const
+/** Permiso exclusivo del superadmin (backend: security.py::PERMISO_SUPERADMIN). */
+export const PERMISO_SUPERADMIN = 'sistema:administrar'
 
 /**
  * Matriz ruta → acceso (docs/revision-acceso/pantallas.md). App.tsx protege cada ruta con estos
  * mismos valores y el menú los reutiliza: una sola fuente para guardas y pestañas.
- * Sin `permiso` = basta con tener sesión. `rol` replica `require_admin` del backend.
+ * Sin `permiso` = basta con tener sesión. `rol` replica `require_admin` del backend (admin o superadmin).
  */
 export const ACCESO_RUTA = {
   '/': {},
+  '/control': { permiso: 'sistema:administrar' },
   '/perfil': {},
   '/reportar': { permiso: 'incidencias:crear' },
   '/mis-reportes': { permiso: 'incidencias:ver' },
@@ -44,12 +50,12 @@ export const ACCESO_RUTA = {
   '/admin/edificios': { permiso: 'usuarios:gestionar' },
   '/admin/auditoria': { permiso: 'usuarios:gestionar' },
   '/admin/configuracion': { permiso: 'configuracion:gestionar' },
-  '/admin/metricas-ia': { permiso: 'analitica:ver', rol: 'admin' },
+  '/admin/metricas-ia': { permiso: 'analitica:ver', rol: ROLES_ADMINISTRADORES },
 } as const satisfies Record<string, Acceso>
 
 export interface Acceso {
   permiso?: string
-  rol?: string
+  rol?: string | readonly string[]
 }
 export type RutaApp = keyof typeof ACCESO_RUTA
 
@@ -64,7 +70,10 @@ export function accesoDe(pathname: string): Acceso | null {
 /** true si unos permisos y rol cumplen un acceso de la matriz. */
 export function cumpleAcceso(acceso: Acceso, permisos: readonly string[], rol?: string): boolean {
   if (acceso.permiso && !permisos.includes(acceso.permiso)) return false
-  if (acceso.rol && acceso.rol !== rol) return false
+  if (acceso.rol) {
+    const roles: readonly string[] = typeof acceso.rol === 'string' ? [acceso.rol] : acceso.rol
+    if (!rol || !roles.includes(rol)) return false
+  }
   return true
 }
 
@@ -75,6 +84,8 @@ export const REPORTAR: ItemNav = item('/reportar', 'Reportar', Camera)
 
 const I = {
   inicio: item('/', 'Inicio', Home),
+  control: item('/control', 'Centro de control', Gauge),
+  controlCorto: item('/control', 'Control', Gauge),
   misReportes: item('/mis-reportes', 'Mis reportes', ClipboardList),
   perfil: item('/perfil', 'Perfil', UserRound),
   bandeja: item('/bandeja', 'Bandeja', Inbox),
@@ -110,9 +121,17 @@ export const NAVEGACION: Record<PerfilNav, Config> = {
     lateral: [I.tablero, I.incidencias, I.tecnicos, I.metricas],
   },
   directivo: { movil: [I.dashboard, I.buscar, I.perfil], lateral: [I.dashboard, I.incidencias, I.reportes] },
+  // Admin opera el día a día; Roles y Configuración son del superadmin (el filtro por permiso las oculta).
   admin: {
-    movil: [I.usuarios, I.roles, I.categorias, I.perfil],
-    lateral: [I.dashboard, I.usuarios, I.roles, I.categorias, I.edificios, I.auditoria, I.configuracion, I.metricasIA],
+    movil: [I.usuarios, I.categorias, I.perfil],
+    lateral: [I.dashboard, I.usuarios, I.categorias, I.edificios, I.auditoria, I.metricasIA],
+  },
+  superadmin: {
+    movil: [I.controlCorto, I.incidencias, I.usuarios, I.perfil],
+    lateral: [
+      I.control, I.dashboard, I.incidencias, I.tablero, I.tecnicos, I.reportes, I.usuarios, I.roles, I.categorias,
+      I.edificios, I.auditoria, I.configuracion, I.metricasIA,
+    ],
   },
 }
 
@@ -121,6 +140,7 @@ export const PERFIL_ITEM = I.perfil
 /** Deduce el perfil de navegación a partir de los permisos (del más amplio al más acotado). */
 export function perfilDe(permisos: readonly string[]): PerfilNav {
   const p = new Set(permisos)
+  if (p.has(PERMISO_SUPERADMIN)) return 'superadmin'
   if (p.has('usuarios:gestionar') || p.has('roles:gestionar') || p.has('categorias:gestionar')) return 'admin'
   if (p.has('incidencias:asignar')) return 'coordinador'
   if (p.has('seguimiento:registrar')) return 'tecnico'

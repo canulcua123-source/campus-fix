@@ -126,3 +126,24 @@ frontend no es suficiente.
 
 Antes de ejecutar `init_db.py` en producción se sigue BD-19 (respaldo previo con
 `mongodump`). Prueba: `test_sembrar_base_repara_rol_base_conservando_id`.
+
+## Adenda: rol `superadmin` (28 de octubre de 2026)
+
+Decisión del usuario: un sexto rol de sistema, `superadmin` («Superadministrador»), alcance
+`global`, **por encima** de `admin`. Tiene todo el catálogo, incluido el permiso nuevo
+`sistema:administrar`. Son exclusivos del superadmin y se retiran de `admin`:
+
+| Permiso | ADM | SUP | Protege |
+|---|---:|---:|---|
+| `configuracion:gestionar` | — | Sí | `GET/PATCH /config/ia` |
+| `roles:gestionar` | — | Sí | `POST/PATCH/DELETE /roles` (`GET /roles` también admite `usuarios:gestionar`) |
+| `sistema:administrar` | — | Sí | `GET /sistema/salud`, `GET /sistema/resumen`, cuentas privilegiadas |
+
+Cuentas privilegiadas (`_es_rol_privilegiado` en `routers/usuarios.py`): rol `admin` o `superadmin`,
+cualquier rol con `sistema:administrar` o con `usuarios:gestionar` y alcance `global`. Sin
+`sistema:administrar` no se ven en `GET /usuarios` (salvo la propia), editarlas responde 404 y
+asignarlas 403. Invariantes: nadie cambia su propio rol ni se desactiva (400) y no se puede
+desactivar ni degradar al último superadmin activo (409). `require_admin` (Métricas IA) acepta
+`admin` y `superadmin`. Pruebas: `tests/e2e/test_superadmin.py` y la columna `SUP` de
+`test_alcance_matriz.py`.
+

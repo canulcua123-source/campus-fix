@@ -617,13 +617,13 @@ async def test_ia_sin_imagen(api, ia_falsa):
 
 
 async def test_ia_apagada_503(api, ia_falsa):
-    apagada = await api.c.patch("/config/ia", json={"habilitada": False}, headers=api.h("admin"))
+    apagada = await api.c.patch("/config/ia", json={"habilitada": False}, headers=api.h("superadmin"))
     assert apagada.status_code == 200, apagada.text
     try:
         assert (await _post(api)).status_code == 503
         assert ia_falsa == []
     finally:
-        restaurada = await api.c.patch("/config/ia", json={"habilitada": True}, headers=api.h("admin"))
+        restaurada = await api.c.patch("/config/ia", json={"habilitada": True}, headers=api.h("superadmin"))
         assert restaurada.status_code == 200, restaurada.text
 
 
@@ -787,13 +787,13 @@ async def test_payload_ia_sin_datos_personales(api, monkeypatch):
 
 
 async def test_config_ia_lectura_actualizacion_persistencia_y_cache(api):
-    inicial = await api.c.get("/config/ia", headers=api.h("admin"))
+    inicial = await api.c.get("/config/ia", headers=api.h("superadmin"))
     assert inicial.status_code == 200, inicial.text
     try:
         r = await api.c.patch(
             "/config/ia",
             json={"habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301},
-            headers=api.h("admin"),
+            headers=api.h("superadmin"),
         )
         assert r.status_code == 200, r.text
         esperado = {**inicial.json(), "habilitada": False, "limite_diario_usuario": 21, "limite_diario_global": 301}
@@ -804,17 +804,19 @@ async def test_config_ia_lectura_actualizacion_persistencia_y_cache(api):
         assert json.loads(cache) == esperado
         ttl = await config_ia_service.get_redis().ttl(config_ia_service.CLAVE_CACHE)
         assert 0 < ttl <= 60
-        assert (await api.c.get("/config/ia", headers=api.h("admin"))).json() == esperado
+        assert (await api.c.get("/config/ia", headers=api.h("superadmin"))).json() == esperado
     finally:
-        restaurada = await api.c.patch("/config/ia", json=inicial.json(), headers=api.h("admin"))
+        restaurada = await api.c.patch("/config/ia", json=inicial.json(), headers=api.h("superadmin"))
         assert restaurada.status_code == 200, restaurada.text
 
 
 async def test_config_ia_403_no_admin(api):
-    for metodo in ("get", "patch"):
-        kwargs = {"json": {"habilitada": False}} if metodo == "patch" else {}
-        r = await getattr(api.c, metodo)("/config/ia", headers=api.h("directivo"), **kwargs)
-        assert r.status_code == 403, r.text
+    # Configuración del sistema: exclusiva del superadmin; el admin también recibe 403.
+    for quien in ("directivo", "admin"):
+        for metodo in ("get", "patch"):
+            kwargs = {"json": {"habilitada": False}} if metodo == "patch" else {}
+            r = await getattr(api.c, metodo)("/config/ia", headers=api.h(quien), **kwargs)
+            assert r.status_code == 403, r.text
 
 
 async def test_config_ia_401(api):
@@ -835,7 +837,7 @@ async def test_config_ia_401(api):
     ],
 )
 async def test_config_ia_400_limites_invalidos(api, body):
-    assert (await api.c.patch("/config/ia", json=body, headers=api.h("admin"))).status_code == 400
+    assert (await api.c.patch("/config/ia", json=body, headers=api.h("superadmin"))).status_code == 400
 
 
 async def test_config_ia_sin_redis_usa_mongo(api, monkeypatch):
@@ -849,10 +851,10 @@ async def test_config_ia_sin_redis_usa_mongo(api, monkeypatch):
     inicial = await api.db.configuracion_ia.find_one({"_id": "ia"})
     monkeypatch.setattr(config_ia_service, "get_redis", lambda: RedisCaido())
     try:
-        r = await api.c.get("/config/ia", headers=api.h("admin"))
+        r = await api.c.get("/config/ia", headers=api.h("superadmin"))
         assert r.status_code == 200, r.text
         nuevo_limite = inicial["limite_diario_usuario"] + 1
-        cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": nuevo_limite}, headers=api.h("admin"))
+        cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": nuevo_limite}, headers=api.h("superadmin"))
         assert cambio.status_code == 200, cambio.text
         doc = await api.db.configuracion_ia.find_one({"_id": "ia"})
         assert doc["limite_diario_usuario"] == nuevo_limite
@@ -860,7 +862,7 @@ async def test_config_ia_sin_redis_usa_mongo(api, monkeypatch):
         restaurada = await api.c.patch(
             "/config/ia",
             json={k: inicial[k] for k in ("habilitada", "limite_diario_usuario", "limite_diario_global")},
-            headers=api.h("admin"),
+            headers=api.h("superadmin"),
         )
         assert restaurada.status_code == 200, restaurada.text
 

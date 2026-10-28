@@ -72,6 +72,8 @@ const TIPOS_FECHA: Record<string, string> = {
 export type InputProps = BaseCampo & InputHTMLAttributes<HTMLInputElement> & {
   /** Ícono lucide-react al inicio del campo (decorativo). */
   icono?: ReactNode
+  /** Botón al final del campo (p. ej. mostrar contraseña). Debe medir 44 px y tener `aria-label`. */
+  accion?: ReactNode
 }
 
 /**
@@ -79,7 +81,7 @@ export type InputProps = BaseCampo & InputHTMLAttributes<HTMLInputElement> & {
  * En fechas vacías marca `data-vacio="true"` y muestra el placeholder ("dd/mm/aaaa") en vez de la fecha gris del navegador.
  */
 export function Input({
-  etiqueta, ayuda, error, tamano, etiquetaOculta, claseCampo, icono, id: idPropio, required, 'aria-describedby': db, ref,
+  etiqueta, ayuda, error, tamano, etiquetaOculta, claseCampo, icono, accion, id: idPropio, required, 'aria-describedby': db, ref,
   type, placeholder, onChange, ...resto
 }: InputProps & { ref?: Ref<HTMLInputElement> }) {
   const c = useCampo(idPropio, { ayuda, error }, db)
@@ -102,7 +104,7 @@ export function Input({
 
   return (
     <Envoltura etiqueta={etiqueta} ayuda={ayuda} error={error} requerido={required} tamano={tamano} etiquetaOculta={etiquetaOculta} claseCampo={claseCampo} {...c}>
-      <div className={clsx('ui-campo__control', icono && 'ui-campo__control--icono')}>
+      <div className={clsx('ui-campo__control', icono && 'ui-campo__control--icono', accion && 'ui-campo__control--accion')}>
         {icono && <span className="ui-campo__icono" aria-hidden>{icono}</span>}
         <input
           ref={refCombinado}
@@ -117,6 +119,7 @@ export function Input({
           {...resto}
         />
         {esFecha && <span className="ui-campo__placeholder" aria-hidden>{placeholder ?? placeholderFecha}</span>}
+        {accion && <span className="ui-campo__accion">{accion}</span>}
       </div>
     </Envoltura>
   )

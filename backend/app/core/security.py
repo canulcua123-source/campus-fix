@@ -154,14 +154,38 @@ def require_permiso(permiso: str):
     return require_permisos(permiso)
 
 
+def require_algun_permiso(*permisos: str):
+    """Exige AL MENOS UNO de los permisos (OR); p. ej. listar roles para asignarlos o para gestionarlos."""
+    if not permisos:
+        raise ValueError("require_algun_permiso necesita al menos un permiso")
+
+    async def dependencia(
+        usuario: Annotated[dict[str, Any], Depends(get_usuario_actual)],
+    ) -> dict[str, Any]:
+        info = await permisos_del_usuario(usuario)
+        if not set(permisos) & set(info["permisos"]):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Falta el permiso {permisos[0]}")
+        usuario["_permisos"] = info["permisos"]
+        usuario["_alcance"] = info["alcance"]
+        return usuario
+
+    return dependencia
+
+
+# Roles de sistema con acceso administrativo completo (require_admin). superadmin está por encima de admin.
+ROLES_ADMINISTRADORES = ("admin", "superadmin")
+# Permiso exclusivo del superadmin: gestionar cuentas privilegiadas y el Centro de control.
+PERMISO_SUPERADMIN = "sistema:administrar"
+
+
 def require_admin(permiso: str):
-    """Combina un permiso real con la restricción explícita al rol de sistema admin."""
+    """Combina un permiso real con la restricción explícita a los roles de sistema admin/superadmin."""
     dependencia_permiso = require_permiso(permiso)
 
     async def dependencia(
         usuario: Annotated[dict[str, Any], Depends(dependencia_permiso)],
     ) -> dict[str, Any]:
-        if usuario.get("rol") != "admin":
+        if usuario.get("rol") not in ROLES_ADMINISTRADORES:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso exclusivo del administrador")
         return usuario
 
