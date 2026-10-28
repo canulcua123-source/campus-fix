@@ -17,6 +17,7 @@ export const DESCRIPCION_PERMISO: Record<Permiso, string> = {
   'categorias:gestionar': 'Administrar categorías y catálogos',
   'ia:usar': 'Recibir sugerencias de la IA al reportar',
   'configuracion:gestionar': 'Cambiar ajustes generales del sistema',
+  'sistema:administrar': 'Centro de control y cuentas de administración (solo superadmin)',
 }
 
 export const DESCRIPCION_ALCANCE: Record<AlcanceRol, string> = {
@@ -32,7 +33,7 @@ export const GRUPOS_PERMISOS: { clave: string; titulo: string; permisos: Permiso
   { clave: 'ia', titulo: 'Inteligencia artificial', permisos: ['ia:usar'] },
   { clave: 'seguimiento', titulo: 'Seguimiento', permisos: ['seguimiento:registrar', 'tags:gestionar'] },
   { clave: 'analitica', titulo: 'Analítica', permisos: ['analitica:ver'] },
-  { clave: 'administracion', titulo: 'Administración', permisos: ['usuarios:gestionar', 'roles:gestionar', 'categorias:gestionar', 'configuracion:gestionar'] },
+  { clave: 'administracion', titulo: 'Administración', permisos: ['usuarios:gestionar', 'roles:gestionar', 'categorias:gestionar', 'configuracion:gestionar', 'sistema:administrar'] },
 ]
 
 /** Texto legible de un permiso (o la clave cruda si la API manda uno desconocido). */

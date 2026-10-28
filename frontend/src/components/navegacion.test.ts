@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ROLES_BASE, type RolBase } from '../test/roles'
-import { ACCESO_RUTA, accesoDe, cumpleAcceso, navegacionPara, perfilDe, REPORTAR, type RutaApp } from './navegacion'
+import { ACCESO_RUTA, accesoDe, cumpleAcceso, navegacionPara, perfilDe, REPORTAR, rutaInicio, type RutaApp } from './navegacion'
 
 /** Matriz «Pantallas por rol» (docs/TAREAS.md, doc §6.5). «Reportar» es el botón central de cámara. */
 const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
@@ -12,33 +12,42 @@ const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
   },
   directivo: { movil: ['Dashboard', 'Buscar', 'Perfil'], lateral: ['Dashboard', 'Incidencias', 'Reportes'] },
   admin: {
-    movil: ['Usuarios', 'Roles', 'Categorías', 'Perfil'],
-    // + Dashboard (acceso a analítica:ver) y Métricas IA (T-030, exclusiva del rol admin), fuera de la tabla original.
-    lateral: ['Dashboard', 'Usuarios', 'Roles', 'Categorías', 'Edificios', 'Auditoría', 'Configuración', 'Métricas IA'],
+    // Roles y Configuración pasaron al superadmin.
+    movil: ['Usuarios', 'Categorías', 'Perfil'],
+    // + Dashboard (acceso a analítica:ver) y Métricas IA (T-030, exclusiva de admin/superadmin), fuera de la tabla original.
+    lateral: ['Dashboard', 'Usuarios', 'Categorías', 'Edificios', 'Auditoría', 'Métricas IA'],
+  },
+  superadmin: {
+    movil: ['Control', 'Incidencias', 'Usuarios', 'Perfil'],
+    lateral: [
+      'Centro de control', 'Dashboard', 'Incidencias', 'Tablero', 'Técnicos', 'Reportes', 'Usuarios', 'Roles', 'Categorías',
+      'Edificios', 'Auditoría', 'Configuración', 'Métricas IA',
+    ],
   },
 }
 
 /** Ruta × rol (✔) de docs/revision-acceso/pantallas.md. */
 const RUTAS_POR_ROL: Record<RutaApp, RolBase[]> = {
-  '/': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
-  '/perfil': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
-  '/reportar': ['reportante', 'tecnico', 'coordinador', 'admin'],
-  '/mis-reportes': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
-  '/incidencias': ['tecnico', 'coordinador', 'directivo', 'admin'],
-  '/incidencias/:id': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin'],
-  '/bandeja': ['tecnico', 'coordinador', 'admin'],
-  '/buscar': ['tecnico', 'coordinador', 'directivo', 'admin'],
-  '/tablero': ['coordinador', 'admin'],
-  '/tecnicos': ['coordinador', 'admin'],
-  '/dashboard': ['coordinador', 'directivo', 'admin'],
-  '/reportes': ['coordinador', 'directivo', 'admin'],
-  '/admin/usuarios': ['admin'],
-  '/admin/roles': ['admin'],
-  '/admin/categorias': ['admin'],
-  '/admin/edificios': ['admin'],
-  '/admin/auditoria': ['admin'],
-  '/admin/configuracion': ['admin'],
-  '/admin/metricas-ia': ['admin'],
+  '/': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin', 'superadmin'],
+  '/control': ['superadmin'],
+  '/perfil': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin', 'superadmin'],
+  '/reportar': ['reportante', 'tecnico', 'coordinador', 'admin', 'superadmin'],
+  '/mis-reportes': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin', 'superadmin'],
+  '/incidencias': ['tecnico', 'coordinador', 'directivo', 'admin', 'superadmin'],
+  '/incidencias/:id': ['reportante', 'tecnico', 'coordinador', 'directivo', 'admin', 'superadmin'],
+  '/bandeja': ['tecnico', 'coordinador', 'admin', 'superadmin'],
+  '/buscar': ['tecnico', 'coordinador', 'directivo', 'admin', 'superadmin'],
+  '/tablero': ['coordinador', 'admin', 'superadmin'],
+  '/tecnicos': ['coordinador', 'admin', 'superadmin'],
+  '/dashboard': ['coordinador', 'directivo', 'admin', 'superadmin'],
+  '/reportes': ['coordinador', 'directivo', 'admin', 'superadmin'],
+  '/admin/usuarios': ['admin', 'superadmin'],
+  '/admin/roles': ['superadmin'],
+  '/admin/categorias': ['admin', 'superadmin'],
+  '/admin/edificios': ['admin', 'superadmin'],
+  '/admin/auditoria': ['admin', 'superadmin'],
+  '/admin/configuracion': ['superadmin'],
+  '/admin/metricas-ia': ['admin', 'superadmin'],
 }
 
 const etiquetas = (items: { etiqueta: string }[]) => items.map((i) => i.etiqueta)
@@ -74,6 +83,13 @@ describe('navegacion', () => {
     expect(accesoDe('/incidencias/abc123')).toEqual({ permiso: 'incidencias:ver' })
     expect(accesoDe('/bandeja/')).toEqual({ permiso: 'seguimiento:registrar' })
     expect(accesoDe('/no-existe')).toBeNull()
+  })
+
+  it('superadmin se detecta antes que admin y aterriza en el Centro de control', () => {
+    expect(perfilDe(ROLES_BASE.superadmin.permisos)).toBe('superadmin')
+    expect(perfilDe(ROLES_BASE.admin.permisos)).toBe('admin')
+    expect(rutaInicio(ROLES_BASE.superadmin.permisos, 'superadmin')).toBe('/control')
+    expect(rutaInicio(ROLES_BASE.admin.permisos, 'admin')).toBe('/dashboard')
   })
 
   it('un rol personalizado con analítica pero sin rol admin no ve Métricas IA', () => {

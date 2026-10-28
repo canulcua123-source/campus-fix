@@ -69,6 +69,7 @@ export const ETIQUETAS_PERMISO: Record<Permiso, string> = {
   'categorias:gestionar': 'Gestionar categorías',
   'ia:usar': 'Usar IA',
   'configuracion:gestionar': 'Gestionar configuración',
+  'sistema:administrar': 'Administrar el sistema',
 }
 
 export const ETIQUETAS_MIME = {
