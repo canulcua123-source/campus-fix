@@ -73,8 +73,13 @@ describe('CentroControl', () => {
   it('muestra KPIs, alertas con enlace, salud con texto y actividad', async () => {
     mocks()
     montar()
-    expect(await screen.findByText('Críticas sin asignar', { selector: '.ui-stat__etiqueta' })).toBeInTheDocument()
+    expect(await screen.findByText('Sin asignar', { selector: '.ui-stat__etiqueta' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('6.5 h')).toBeInTheDocument())
+    // KPI sobrios: etiquetas cortas de una línea y el número sin color de tono.
+    const tiles = screen.getAllByRole('group', { name: 'Indicadores principales' })[0].querySelectorAll('.ui-stat')
+    expect(tiles).toHaveLength(5)
+    tiles.forEach((t) => expect(t).toHaveClass('ui-stat--sobrio'))
+    expect(screen.getByText('Resolución prom.', { selector: '.ui-stat__etiqueta' })).toHaveAttribute('title', 'Resolución prom.')
     const alerta = screen.getByRole('link', { name: /Críticas sin asignar/ })
     expect(alerta).toHaveAttribute('href', '/tablero')
     expect(screen.getByRole('link', { name: /Cupo diario de IA/ })).toHaveAttribute('href', '/admin/configuracion')
@@ -89,10 +94,11 @@ describe('CentroControl', () => {
     expect(within(accesos).getByRole('link', { name: /Configuración/ })).toHaveAttribute('href', '/admin/configuracion')
   })
 
-  it('sin alertas muestra estado vacío', async () => {
+  it('sin alertas muestra estado vacío positivo', async () => {
     mocks({ sinAlertas: true })
     montar()
-    expect(await screen.findByText('Sin alertas')).toBeInTheDocument()
+    expect(await screen.findByText('Todo en orden')).toBeInTheDocument()
+    expect(screen.getByText(/No hay alertas/)).toBeInTheDocument()
   })
 
   it('error del resumen ofrece Reintentar', async () => {
