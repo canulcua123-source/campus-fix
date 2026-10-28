@@ -105,34 +105,57 @@ const I = {
   metricasIA: item('/admin/metricas-ia', 'Métricas IA', BrainCircuit),
 }
 
+/** Grupo del menú lateral: encabezado opcional; los `plegable` se colapsan (salvo que contengan la ruta activa). */
+export interface GrupoNav {
+  titulo?: string
+  plegable?: boolean
+  items: ItemNav[]
+}
+
 interface Config {
   /** Barra inferior (< 1024 px), en orden; REPORTAR es el botón central de cámara. Máx. 5 (UX-03). */
   movil: ItemNav[]
-  /** Menú lateral (≥ 1024 px). Perfil y Reportar van aparte. */
-  lateral: ItemNav[]
+  /** Menú lateral (≥ 1024 px), en grupos. Perfil y Reportar van aparte. */
+  lateral: GrupoNav[]
 }
 
+/** Menú sin encabezados: los roles con pocos elementos (≤ 6) no se agrupan. */
+const plano = (...items: ItemNav[]): GrupoNav[] => [{ items }]
+
 export const NAVEGACION: Record<PerfilNav, Config> = {
-  reportante: { movil: [I.inicio, REPORTAR, I.misReportes, I.perfil], lateral: [I.inicio, I.misReportes] },
+  reportante: { movil: [I.inicio, REPORTAR, I.misReportes, I.perfil], lateral: plano(I.inicio, I.misReportes) },
   // En escritorio la barra superior ya busca: «Buscar» solo queda en la barra inferior (móvil).
-  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: [I.bandeja, I.misReportes] },
+  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: plano(I.bandeja, I.misReportes) },
   coordinador: {
     movil: [I.tablero, I.bandeja, REPORTAR, I.metricas, I.perfil],
-    lateral: [I.tablero, I.incidencias, I.tecnicos, I.metricas],
+    lateral: plano(I.tablero, I.incidencias, I.tecnicos, I.metricas),
   },
-  directivo: { movil: [I.dashboard, I.buscar, I.perfil], lateral: [I.dashboard, I.incidencias, I.reportes] },
+  directivo: { movil: [I.dashboard, I.buscar, I.perfil], lateral: plano(I.dashboard, I.incidencias, I.reportes) },
   // Admin opera el día a día; Roles y Configuración son del superadmin (el filtro por permiso las oculta).
   admin: {
     movil: [I.usuarios, I.categorias, I.perfil],
-    lateral: [I.dashboard, I.usuarios, I.categorias, I.edificios, I.auditoria, I.metricasIA],
+    lateral: [
+      { titulo: 'Análisis', items: [I.dashboard, I.metricasIA] },
+      { titulo: 'Administración', plegable: true, items: [I.usuarios, I.categorias, I.edificios] },
+      { titulo: 'Sistema', plegable: true, items: [I.auditoria] },
+    ],
   },
   superadmin: {
     movil: [I.controlCorto, I.incidencias, I.usuarios, I.perfil],
     lateral: [
-      I.control, I.dashboard, I.incidencias, I.tablero, I.tecnicos, I.reportes, I.usuarios, I.roles, I.categorias,
-      I.edificios, I.auditoria, I.configuracion, I.metricasIA,
+      { items: [I.control] },
+      { titulo: 'Operación', items: [I.incidencias, I.tablero, I.tecnicos] },
+      { titulo: 'Análisis', items: [I.dashboard, I.reportes, I.metricasIA] },
+      { titulo: 'Administración', plegable: true, items: [I.usuarios, I.roles, I.categorias, I.edificios] },
+      { titulo: 'Sistema', plegable: true, items: [I.auditoria, I.configuracion] },
     ],
   },
+}
+
+/** true si `pathname` es la ruta del elemento o una subruta suya («/» solo coincide exacta). */
+export function rutaDentroDe(i: ItemNav, pathname: string): boolean {
+  if (i.to === '/') return pathname === '/'
+  return pathname === i.to || pathname.startsWith(`${i.to}/`)
 }
 
 export const PERFIL_ITEM = I.perfil
@@ -153,10 +176,15 @@ export function navegacionPara(permisos: readonly string[], rol?: string) {
   const permitido = (i: ItemNav) => cumpleAcceso(i, permisos, rol)
   const perfil = perfilDe(permisos)
   const { movil, lateral } = NAVEGACION[perfil]
+  const grupos = lateral
+    .map((g) => ({ ...g, items: g.items.filter(permitido) }))
+    .filter((g) => g.items.length > 0)
   return {
     perfil,
     movil: movil.filter(permitido),
-    lateral: lateral.filter(permitido),
+    /** Menú lateral en orden, sin grupos (para rutas de inicio y comprobaciones). */
+    lateral: grupos.flatMap((g) => g.items),
+    grupos,
     puedeReportar: permitido(REPORTAR),
   }
 }
