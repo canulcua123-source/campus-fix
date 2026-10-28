@@ -175,11 +175,11 @@ pytest tests/e2e -q                       # la suite recrea utm_desk_test con el
 
 | Comando | Efecto |
 |---|---|
-| `python scripts/init_db.py` | Esquema, índices, roles y categorías de sistema, usuario `admin@utm.local` |
-| `python scripts/init_db.py --seed-demo` | Además 24 incidencias con `demo: true` (≥ 8 resueltas, 18 con evidencia, fechas de los últimos 5–30 días, folios `…-9000` a `…-9023`). Si ya existen, no hace nada |
+| `python scripts/init_db.py` | Esquema, índices, roles de sistema (incluido `superadmin`, sincronizados sin duplicar) y categorías, usuario `admin@utm.local` |
+| `python scripts/init_db.py --seed-demo` | Además 24 incidencias con `demo: true` (≥ 8 resueltas, 18 con evidencia, fechas de los últimos 5–30 días, folios `…-9000` a `…-9023`) y el usuario demo `superadmin@<DOMINIO_CORREO>` (rol `superadmin`). Si ya existen, no hace nada |
 | `python scripts/init_db.py --reset-demo` | Borra **solo** `{"demo": true}` y las vuelve a crear |
 
-Reglas: todo dato sintético lleva `demo: true` (así se borra sin tocar datos reales); nunca marques datos reales como demo; los datos demo son deterministas (`random.Random(42)`). Fuera de `localhost`, el script exige `SEED_ADMIN_PASSWORD` para crear el admin. También conviene definirla explícitamente en local. Si no la defines, el script genera una clave aleatoria, **no la muestra en consola** y la guarda en `backend/.admin-local` (permisos 600, ignorado por git): léela con `cat backend/.admin-local`, inicia sesión, cámbiala y borra el archivo.
+Reglas: todo dato sintético lleva `demo: true` (así se borra sin tocar datos reales); nunca marques datos reales como demo; los datos demo son deterministas (`random.Random(42)`). Fuera de `localhost`, el script exige `SEED_ADMIN_PASSWORD` para crear el admin. También conviene definirla explícitamente en local. Si no la defines, el script genera una clave aleatoria, **no la muestra en consola** y la guarda en `backend/.admin-local` (permisos 600, ignorado por git): léela con `cat backend/.admin-local`, inicia sesión, cámbiala y borra el archivo. El superadmin demo sigue la misma regla con `SEED_SUPERADMIN_PASSWORD` y `backend/.superadmin-local`.
 
 ## 6. Acceso a Atlas
 

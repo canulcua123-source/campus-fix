@@ -17,6 +17,7 @@ export const PERMISOS = [
   'categorias:gestionar',
   'ia:usar',
   'configuracion:gestionar',
+  'sistema:administrar',
 ] as const
 export const ALCANCES = ['propio', 'area', 'edificio', 'global'] as const
 export const TIPOS_REPORTANTE = ['docente', 'estudiante', 'administrativo'] as const

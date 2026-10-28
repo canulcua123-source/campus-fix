@@ -1,0 +1,26 @@
+# Mantiene despierta la API del plan gratuito de Render (se duerme tras ~15 min sin tráfico).
+# Variable de repositorio API_HEALTH_URL = https://<servicio>.onrender.com/health. Si no existe, no hace nada.
+name: keepalive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping a /health
+        env:
+          API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+        run: |
+          if [ -z "$API_HEALTH_URL" ]; then
+            echo "API_HEALTH_URL no está definida; nada que hacer."
+            exit 0
+          fi
+          curl -sS -o /dev/null -w "HTTP %{http_code} en %{time_total}s\n" --max-time 90 --retry 2 "$API_HEALTH_URL" \
+            || echo "::warning::La API no respondió (puede estar arrancando)."

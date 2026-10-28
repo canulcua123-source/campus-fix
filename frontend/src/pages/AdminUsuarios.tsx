@@ -1,8 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { Check, Circle, Lock, Pencil, Plus, Search, UserCheck, UserX, Users } from 'lucide-react'
+import { Check, Circle, Lock, Pencil, Plus, Search, ShieldCheck, UserCheck, UserX, Users } from 'lucide-react'
 import { ApiError, mensajeDeError } from '../api/client'
 import { useCrearUsuario, useEditarUsuario, useRoles, useUsuarios } from '../api/hooks/admin'
-import { errorFortalezaPassword } from '../api/usuarios'
+import { errorFortalezaPassword, esRolPrivilegiado } from '../api/usuarios'
 import { useAuth } from '../auth/store'
 import { Aviso, Chip, Paso } from '../components/admin/PiezasAdmin'
 import { DESCRIPCION_ALCANCE, etiquetaPermiso, iniciales, permisosAgrupados } from '../components/admin/permisos'
@@ -184,6 +184,11 @@ export default function AdminUsuarios() {
     const limpiarFiltros = () => { setBusqueda(''); setRolFiltro(''); setEstadoFiltro('todos') }
 
     const rolSeleccionado = roles.data?.find((r) => r.clave === form.rol)
+    // Solo el superadmin asigna roles de administración (admin/superadmin); la API responde 403 igualmente.
+    const esSuperadmin = usuarioActual?.permisos.includes('sistema:administrar') ?? false
+    const opcionesRol = (roles.data ?? [])
+        .filter((r) => esSuperadmin || !esRolPrivilegiado(r) || r.clave === original?.rol)
+        .map((r) => ({ valor: r.clave, texto: r.nombre }))
     const actualizar = <K extends keyof Formulario,>(campo: K, valor: Formulario[K]) => {
         setForm((f) => ({ ...f, [campo]: valor }))
         setErrores((e) => {
@@ -290,7 +295,12 @@ export default function AdminUsuarios() {
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td data-label="Rol"><Chip tono="marca">{rol?.nombre ?? u.rol}</Chip></td>
+                                            <td data-label="Rol">
+                                                <span className="flex flex-wrap gap-1">
+                                                    <Chip tono="marca">{rol?.nombre ?? u.rol}</Chip>
+                                                    {u.rol === 'superadmin' && <Chip tono="neutro" icono={<ShieldCheck size={12} aria-hidden />}>Superadmin</Chip>}
+                                                </span>
+                                            </td>
                                             <td data-label="Alcance" className="text-sm">{alcanceDeUsuario(u, rol)}</td>
                                             <td data-label="Estado"><Chip tono={activo ? 'ok' : 'apagado'}>{activo ? 'Activo' : 'Inactivo'}</Chip></td>
                                             <td>
@@ -324,7 +334,7 @@ export default function AdminUsuarios() {
 
                         <Paso numero={2} titulo="Acceso y rol" ayuda="El rol define qué puede hacer en la app.">
                             <Select etiqueta="Rol" required value={form.rol} error={errores.rol} placeholder="Elige un rol"
-                                opciones={(roles.data ?? []).map((r) => ({ valor: r.clave, texto: r.nombre }))}
+                                opciones={opcionesRol}
                                 onChange={(e) => { actualizar('rol', e.target.value); setForm((f) => ({ ...f, rol: e.target.value, areas: [], edificiosTexto: '' })) }} />
                             {rolSeleccionado && <ResumenRol rol={rolSeleccionado} />}
                             {modo === 'crear' && <>

@@ -89,12 +89,12 @@ def ia_falsa(monkeypatch):
 async def agentico_verificable(api, monkeypatch):
     """Simula lo que aportarán T17/T18/T22 (ubicación por QR y sin duplicados) y enciende el kill switch."""
     monkeypatch.setattr(ia_router, "_estado_por_verificar", lambda _usuario: (UBICACION, "no_encontrado"))
-    inicial = (await api.c.get("/config/ia", headers=api.h("admin"))).json()
-    r = await api.c.patch("/config/ia", json={"modo_agentico_habilitado": True}, headers=api.h("admin"))
+    inicial = (await api.c.get("/config/ia", headers=api.h("superadmin"))).json()
+    r = await api.c.patch("/config/ia", json={"modo_agentico_habilitado": True}, headers=api.h("superadmin"))
     assert r.status_code == 200, r.text
     yield
     await api.c.patch(
-        "/config/ia", json={"modo_agentico_habilitado": inicial["modo_agentico_habilitado"]}, headers=api.h("admin")
+        "/config/ia", json={"modo_agentico_habilitado": inicial["modo_agentico_habilitado"]}, headers=api.h("superadmin")
     )
 
 
@@ -220,7 +220,7 @@ async def test_cupo_por_aula_y_hora_agotado_degrada_a_formulario(api, ia_falsa, 
 async def test_kill_switch_apagado_siempre_devuelve_formulario(api, ia_falsa, monkeypatch):
     monkeypatch.setattr(ia_router, "_estado_por_verificar", lambda _usuario: (UBICACION, "no_encontrado"))
     clave_usuario, clave_aula = _claves(api)
-    assert (await api.c.get("/config/ia", headers=api.h("admin"))).json()["modo_agentico_habilitado"] is False
+    assert (await api.c.get("/config/ia", headers=api.h("superadmin"))).json()["modo_agentico_habilitado"] is False
 
     r = await _post(api)
 
@@ -230,7 +230,7 @@ async def test_kill_switch_apagado_siempre_devuelve_formulario(api, ia_falsa, mo
 
 
 async def test_config_agentica_por_defecto_y_validacion(api):
-    config = (await api.c.get("/config/ia", headers=api.h("admin"))).json()
+    config = (await api.c.get("/config/ia", headers=api.h("superadmin"))).json()
     assert config["modo_agentico_habilitado"] is False
     assert config["categorias_agenticas"] == ["infraestructura"]
     assert (config["cupo_agentico_usuario_diario"], config["cupo_agentico_aula_hora"]) == (10, 3)
@@ -240,7 +240,7 @@ async def test_config_agentica_por_defecto_y_validacion(api):
         {"cupo_agentico_aula_hora": 0},
         {"modo_agentico_habilitado": None},
     ):
-        assert (await api.c.patch("/config/ia", json=cuerpo, headers=api.h("admin"))).status_code == 400
+        assert (await api.c.patch("/config/ia", json=cuerpo, headers=api.h("superadmin"))).status_code == 400
 
 
 async def test_cupo_agotado_explica_que_hacer():

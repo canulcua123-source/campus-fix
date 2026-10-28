@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { RequirePermiso } from './auth/RequirePermiso'
 import { AppShell } from './components/AppShell'
 import { ACCESO_RUTA as A } from './components/navegacion'
+import CentroControl from './pages/CentroControl'
 import AdminAuditoria from './pages/AdminAuditoria'
 import AdminCategorias from './pages/AdminCategorias'
 import AdminConfiguracion from './pages/AdminConfiguracion'
@@ -14,7 +15,7 @@ import Buscar from './pages/Buscar'
 import Dashboard from './pages/Dashboard'
 import DetalleIncidencia from './pages/DetalleIncidencia'
 import Incidencias from './pages/Incidencias'
-import Inicio from './pages/Inicio'
+import InicioPorRol from './pages/InicioPorRol'
 import Login from './pages/Login'
 import MisTickets from './pages/MisTickets'
 import MetricasIA from './pages/MetricasIA'
@@ -35,7 +36,8 @@ export default function App() {
       {Estilos && <Route path="/_estilos" element={<Suspense fallback={null}><Estilos /></Suspense>} />}
       <Route element={<RequirePermiso><AppShell /></RequirePermiso>}>
         {/* Cada guarda usa la matriz ACCESO_RUTA (docs/revision-acceso/pantallas.md). */}
-        <Route index element={<Inicio />} />
+        <Route index element={<InicioPorRol />} />
+        <Route path="control" element={<RequirePermiso {...A['/control']}><CentroControl /></RequirePermiso>} />
         <Route path="perfil" element={<Perfil />} />
         <Route path="reportar" element={<RequirePermiso {...A['/reportar']}><Reportar /></RequirePermiso>} />
         <Route path="mis-reportes" element={<RequirePermiso {...A['/mis-reportes']}><MisTickets /></RequirePermiso>} />

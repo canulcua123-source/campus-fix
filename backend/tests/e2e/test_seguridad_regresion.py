@@ -205,8 +205,8 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
         return ANALISIS
 
     monkeypatch.setattr(ia_router, "analizar_imagen", fake)
-    inicial = (await api.c.get("/config/ia", headers=api.h("admin"))).json()
-    cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": 2}, headers=api.h("admin"))
+    inicial = (await api.c.get("/config/ia", headers=api.h("superadmin"))).json()
+    cambio = await api.c.patch("/config/ia", json={"limite_diario_usuario": 2}, headers=api.h("superadmin"))
     assert cambio.status_code == 200, cambio.text
     u = await api.usuario_temporal()
 
@@ -222,7 +222,7 @@ async def test_cupo_diario_de_ia(api, monkeypatch):
         restaurada = await api.c.patch(
             "/config/ia",
             json={"limite_diario_usuario": inicial["limite_diario_usuario"]},
-            headers=api.h("admin"),
+            headers=api.h("superadmin"),
         )
         assert restaurada.status_code == 200, restaurada.text
 

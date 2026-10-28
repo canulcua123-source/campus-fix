@@ -145,3 +145,37 @@ describe('AdminUsuarios (T-057)', () => {
         expect(screen.queryByRole('button', { name: 'Nuevo usuario' })).not.toBeInTheDocument()
     })
 })
+
+describe('AdminUsuarios: roles privilegiados (superadmin)', () => {
+    const SUPER_ROL: Rol = {
+        _id: '664f1c2e9b1e8a3d4c5b6a76', clave: 'superadmin', nombre: 'Superadministrador', alcance: 'global',
+        permisos: ['usuarios:gestionar', 'sistema:administrar'],
+    }
+    const SUPER: UsuarioApi = { _id: '664f1c2e9b1e8a3d4c5b6a77', nombre: 'Sofía Root', correo: 'sofia@utm.edu.mx', rol: 'superadmin', activo: true }
+
+    function montar(permisos: string[], rol: string) {
+        servidor.use(
+            http.get(BASE_USUARIOS, () => HttpResponse.json([ANA, SUPER])),
+            http.get(BASE_ROLES, () => HttpResponse.json([...ROLES, SUPER_ROL])),
+        )
+        useAuth.setState({ token: 't', usuario: { nombre: 'Yo', rol, permisos, alcance: 'global' } })
+        const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        render(<QueryClientProvider client={cliente}><MemoryRouter><AdminUsuarios /></MemoryRouter></QueryClientProvider>)
+    }
+    const opciones = () => within(screen.getByRole('combobox', { name: /^Rol/i })).getAllByRole('option').map((o) => o.textContent)
+
+    it('admin no puede asignar Administrador ni Superadministrador', async () => {
+        montar(['usuarios:gestionar'], 'admin')
+        await userEvent.setup().click(await screen.findByRole('button', { name: 'Nuevo usuario' }))
+        expect(opciones()).toContain('Técnico')
+        expect(opciones()).not.toContain('Administrador')
+        expect(opciones()).not.toContain('Superadministrador')
+    })
+
+    it('superadmin asigna roles privilegiados y ve la insignia Superadmin', async () => {
+        montar(['usuarios:gestionar', 'sistema:administrar'], 'superadmin')
+        expect(await screen.findByText('Superadmin')).toBeInTheDocument()
+        await userEvent.setup().click(screen.getByRole('button', { name: 'Nuevo usuario' }))
+        expect(opciones()).toEqual(expect.arrayContaining(['Administrador', 'Superadministrador', 'Técnico']))
+    })
+})

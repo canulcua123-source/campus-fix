@@ -3,8 +3,17 @@ import { useAuth } from '../auth/store'
 import { refreshOutSchema } from '../schemas/usuario'
 
 /** Cliente HTTP único hacia la API (FB-02). Ninguna página llama a `fetch` directamente. */
-export const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000'
+/**
+ * Origen de la API. En producción `VITE_API_URL=/api`: misma origen que la PWA vía el proxy de
+ * Cloudflare Pages Functions (`functions/api/[[path]].ts`), así la cookie de refresh es de primera parte.
+ */
+export const BASE = ((import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000').replace(/\/+$/, '')
 export const TIMEOUT_MS = 20_000
+/** /auth/refresh espera más: el plan gratuito de Render tarda 30–60 s en despertar. */
+export const TIMEOUT_REFRESH_MS = 45_000
+/** Tiempo total máximo para renovar la sesión (todos los intentos). */
+export const PLAZO_REFRESH_MS = 60_000
+export const INTENTOS_REFRESH = 3
 export const TIMEOUT_IA_MS = 30_000
 export const MENSAJE_SESION_EXPIRADA = 'Tu sesión expiró. Inicia sesión de nuevo'
 
@@ -232,25 +241,69 @@ const esRutaSesion = (ruta: string) => RUTAS_SESION.some((r) => ruta === r || ru
 
 let refrescoEnCurso: Promise<string | null> | null = null
 
+/** Fallo pasajero (red, timeout, 429, 5xx): se reintenta y NUNCA cierra la sesión. */
+export function esErrorTransitorio(e: unknown): boolean {
+  if (!(e instanceof ApiError)) return true
+  if (e.codigo === 'red' || e.codigo === 'timeout') return true
+  return e.status === 429 || e.status >= 500
+}
+
+const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/**
+ * Serializa la renovación entre pestañas con Web Locks: dos pestañas con la misma cookie no rotan a
+ * la vez (el backend lo tomaría como reutilización y revocaría la familia). La segunda pestaña entra
+ * cuando la primera terminó y renueva con la cookie ya rotada. Sin Web Locks, ejecuta directo.
+ */
+function conCandadoEntrePestanas<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined
+  if (!locks?.request) return fn()
+  return locks.request('utm-desk-refresh', fn) as Promise<T>
+}
+
+async function refrescarConReintentos(): Promise<string | null> {
+  const limite = Date.now() + PLAZO_REFRESH_MS
+  let ultimo: unknown = null
+  for (let intento = 0; intento < INTENTOS_REFRESH; intento++) {
+    if (intento > 0) {
+      const pausa = Math.min(1000 * 3 ** (intento - 1), limite - Date.now()) // 1 s, 3 s
+      if (pausa <= 0) break
+      await esperar(pausa)
+    }
+    const restante = limite - Date.now()
+    if (restante <= 0) break
+    try {
+      const r = await api('/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+        schema: refreshOutSchema,
+        timeoutMs: Math.min(TIMEOUT_REFRESH_MS, restante),
+      })
+      useAuth.getState().actualizarToken(r.access_token)
+      return r.access_token
+    } catch (e) {
+      if (!esErrorTransitorio(e)) {
+        if (import.meta.env.DEV) console.info('[api] sesión no renovable', e)
+        return null // 401/403/400: cookie ausente, expirada o revocada
+      }
+      ultimo = e
+    }
+  }
+  throw ultimo
+}
+
 /**
  * POST /auth/refresh con la cookie HttpOnly (`credentials: 'include'`). Un solo refresh a la vez:
- * las peticiones que reciben 401 en paralelo comparten la misma promesa. Devuelve el nuevo
- * access token (ya guardado en memoria) o null si la cookie no existe, expiró o fue revocada.
+ * las peticiones que reciben 401 en paralelo comparten la misma promesa, y entre pestañas se
+ * serializa con Web Locks. Devuelve el nuevo access token (ya guardado en memoria) o null si la
+ * cookie no existe, expiró o fue revocada. Si el servidor no responde (red, timeout, 5xx, p. ej.
+ * arranque en frío) reintenta con espera y, si se agota, LANZA el ApiError: no es sesión inválida.
  */
 export function refrescarSesion(): Promise<string | null> {
   if (!refrescoEnCurso) {
-    refrescoEnCurso = (async () => {
-      try {
-        const r = await api('/auth/refresh', { method: 'POST', credentials: 'include', schema: refreshOutSchema })
-        useAuth.getState().actualizarToken(r.access_token)
-        return r.access_token
-      } catch (e) {
-        if (import.meta.env.DEV) console.info('[api] no fue posible renovar la sesión', e)
-        return null
-      } finally {
-        refrescoEnCurso = null
-      }
-    })()
+    refrescoEnCurso = conCandadoEntrePestanas(refrescarConReintentos).finally(() => {
+      refrescoEnCurso = null
+    })
   }
   return refrescoEnCurso
 }
@@ -346,6 +399,7 @@ export async function api(ruta: string, init: Opciones & { schema?: ZodType } = 
       if (!reintentoSesion) {
         // Otra petición ya renovó el token: basta con reintentar; si no, se renueva una sola vez.
         const vigente = useAuth.getState().token
+        // Si el refresh falla por red/timeout lanza ese error: no se cierra la sesión por un servidor dormido.
         const nuevo = vigente && vigente !== token ? vigente : await refrescarSesion()
         if (nuevo) return api(ruta, { ...init, reintentoSesion: true })
       }

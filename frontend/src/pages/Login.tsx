@@ -1,11 +1,13 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, Camera, CircleAlert, Eye, EyeOff, ListChecks, Lock, LogIn, Mail, Wrench } from 'lucide-react'
-import { mensajeDeError } from '../api/client'
+import { BarChart3, Camera, CircleAlert, Eye, EyeOff, Info, ListChecks, Lock, LogIn, Mail, TriangleAlert } from 'lucide-react'
+import { ApiError, mensajeDeError } from '../api/client'
 import { useLogin } from '../api/hooks/auth'
 import { useAuth } from '../auth/store'
+import { InstallPrompt } from '../components/InstallPrompt'
 import { accesoDe, cumpleAcceso, rutaInicio } from '../components/navegacion'
 import { Button, Input } from '../components/ui'
+import { DOMINIO_CORREO } from '../schemas/usuario'
 
 const VENTAJAS = [
   { icono: Camera, titulo: 'Reporta con una foto', texto: 'La IA reconoce la falla y llena el reporte por ti.' },
@@ -13,12 +15,25 @@ const VENTAJAS = [
   { icono: BarChart3, titulo: 'Decide con datos', texto: 'Tiempos de resolución y fallas recurrentes por edificio.' },
 ]
 
-function Logo({ grande = false }: { grande?: boolean }) {
-  const lado = grande ? 'size-14' : 'size-12'
+/** Tras este tiempo sin respuesta se explica el arranque en frío del servidor (Render gratuito). */
+export const MS_SERVIDOR_LENTO = 5000
+
+type CamposLogin = Partial<Record<'correo' | 'password', string>>
+
+/** Ícono de la PWA (public/logo.svg): el mismo que aparece en la pantalla de inicio del teléfono. */
+function Logo() {
+  return <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={48} height={48} className="size-12 shrink-0 rounded-2xl shadow-sm" />
+}
+
+function Marca({ claro = false }: { claro?: boolean }) {
   return (
-    <span className={`${lado} grid place-items-center rounded-2xl bg-brand text-on-brand shadow-sm`} aria-hidden>
-      <Wrench size={grande ? 28 : 24} strokeWidth={2.2} />
-    </span>
+    <div className="flex items-center gap-3">
+      <Logo />
+      <span className="flex flex-col">
+        <span className={`text-xl font-bold tracking-tight ${claro ? '' : 'text-ink'}`}>UTM Desk</span>
+        <span className={`text-sm ${claro ? 'opacity-85' : 'text-muted'}`}>Campus Fix</span>
+      </span>
+    </div>
   )
 }
 
@@ -26,7 +41,12 @@ export default function Login() {
   const [correo, setCorreo] = useState('')
   const [password, setPassword] = useState('')
   const [verPassword, setVerPassword] = useState(false)
+  const [bloqMayus, setBloqMayus] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errores, setErrores] = useState<CamposLogin>({})
+  const [lento, setLento] = useState(false)
+  const refCorreo = useRef<HTMLInputElement>(null)
+  const refPassword = useRef<HTMLInputElement>(null)
   const entrar = useLogin()
   const usuario = useAuth((s) => s.usuario)
   const aviso = useAuth((s) => s.aviso)
@@ -35,12 +55,31 @@ export default function Login() {
   const candidato = (location.state as { desde?: unknown } | null)?.desde
   // Solo rutas internas: evita redirecciones abiertas (`//dominio`).
   const destino = typeof candidato === 'string' && candidato.startsWith('/') && !candidato.startsWith('//') ? candidato : '/'
+  const enviando = entrar.isPending
+
+  // Si la API tarda (arranque en frío), se explica la espera en vez de dejar el botón girando sin contexto.
+  useEffect(() => {
+    if (!enviando) return
+    const t = setTimeout(() => setLento(true), MS_SERVIDOR_LENTO)
+    return () => {
+      clearTimeout(t)
+      setLento(false)
+    }
+  }, [enviando])
+
+  function revisarBloqMayus(e: KeyboardEvent<HTMLInputElement>) {
+    if (typeof e.getModifierState === 'function') setBloqMayus(e.getModifierState('CapsLock'))
+  }
 
   function enviar(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    setErrores({})
+    // Se puede escribir solo el usuario: se completa con el dominio institucional.
+    const limpio = correo.trim()
+    const correoCompleto = limpio && !limpio.includes('@') ? `${limpio}@${DOMINIO_CORREO}` : correo
     entrar.mutate(
-      { correo, password },
+      { correo: correoCompleto, password },
       {
         onSuccess: () => {
           // La ruta previa puede ser de otra cuenta (p. ej. /tablero del coordinador): si no es de este rol, va a su inicio.
@@ -50,13 +89,22 @@ export default function Login() {
           const final = !actual ? destino : destino === '/' || !permitido ? rutaInicio(actual.permisos, actual.rol) : destino
           navigate(final, { replace: true })
         },
-        onError: (err) => setError(mensajeDeError(err, 'No fue posible iniciar sesión')),
+        onError: (err) => {
+          // Errores de validación (Zod local o 400 de la API) van bajo su campo; el resto, en el aviso general.
+          const campos: CamposLogin = err instanceof ApiError ? { correo: err.campos.correo, password: err.campos.password } : {}
+          if (campos.correo || campos.password) {
+            setErrores(campos)
+            ;(campos.correo ? refCorreo : refPassword).current?.focus()
+            return
+          }
+          setError(mensajeDeError(err, 'No fue posible iniciar sesión'))
+        },
       },
     )
   }
 
   // Sesión restaurada con el refresh silencioso (o ya iniciada): no tiene caso mostrar el formulario.
-  if (usuario && !entrar.isPending) return <Navigate to={destino} replace />
+  if (usuario && !enviando) return <Navigate to={destino} replace />
 
   return (
     <div className="flex min-h-dvh bg-canvas" style={{ paddingTop: 'var(--safe-top)', paddingBottom: 'var(--safe-bottom)' }}>
@@ -70,11 +118,8 @@ export default function Login() {
           </defs>
           <rect width="100%" height="100%" fill="url(#puntos)" />
         </svg>
-        <div className="relative flex items-center gap-3">
-          <span className="grid size-12 place-items-center rounded-2xl bg-on-brand/15" aria-hidden>
-            <Wrench size={24} strokeWidth={2.2} />
-          </span>
-          <span className="text-xl font-semibold tracking-tight">UTM Desk</span>
+        <div className="relative">
+          <Marca claro />
         </div>
         <div className="relative max-w-md">
           <h2 className="text-4xl font-bold leading-tight tracking-tight">Incidencias del campus, resueltas más rápido.</h2>
@@ -95,69 +140,114 @@ export default function Login() {
         <p className="relative text-sm opacity-80">Bases de Datos en la Nube · MongoDB Atlas</p>
       </aside>
 
-      {/* Formulario */}
-      <main className="flex flex-1 items-center justify-center px-4 py-10 lg:max-w-xl lg:bg-panel">
-        <div className="w-full max-w-sm rounded-card border border-line bg-panel p-6 shadow-sm sm:p-8 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-          <div className="mb-8 flex flex-col items-center text-center lg:items-start lg:text-left">
-            <span className="lg:hidden"><Logo grande /></span>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-ink lg:mt-0">Bienvenido</h1>
-            <p className="mt-2 text-muted">Inicia sesión para reportar y dar seguimiento a las incidencias del campus.</p>
-          </div>
+      {/* Formulario: en móvil ocupa la pantalla (marca arriba, pie abajo); desde 640 px es una tarjeta centrada. */}
+      <main
+        className="flex flex-1 flex-col sm:items-center sm:justify-center sm:py-10 lg:max-w-xl lg:bg-panel"
+        style={{ paddingLeft: 'calc(16px + var(--safe-left))', paddingRight: 'calc(16px + var(--safe-right))' }}
+      >
+        <div className="mx-auto flex w-full max-w-sm flex-1 flex-col py-6 sm:flex-none sm:rounded-card sm:border sm:border-line sm:bg-panel sm:p-8 sm:shadow-sm lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+          <header className="lg:hidden">
+            <Marca />
+          </header>
 
-          <form onSubmit={enviar} className="flex flex-col gap-4" noValidate>
-            <Input
-              etiqueta="Correo institucional"
-              type="email"
-              inputMode="email"
-              autoComplete="username"
-              placeholder="nombre@utm.edu.mx"
-              ayuda="Usa tu correo de la universidad (termina en .edu.mx)."
-              icono={<Mail size={18} />}
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              required
-            />
-            <div className="flex flex-col gap-1">
-              <Input
-                etiqueta="Contraseña"
-                type={verPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                icono={<Lock size={18} />}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setVerPassword((v) => !v)}
-                className="flex min-h-11 items-center gap-2 self-end rounded-lg px-2 text-sm font-medium text-brand"
-                aria-pressed={verPassword}
-              >
-                {verPassword ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
-                {verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-              </button>
-            </div>
+          <div className="flex flex-1 flex-col justify-center py-8 sm:flex-none lg:py-0">
+            <h1 className="m-0 text-3xl font-bold tracking-tight text-ink">Inicia sesión</h1>
+            <p className="mb-6 mt-2 text-muted">Reporta y da seguimiento a las incidencias del campus.</p>
 
             {aviso && !error && (
-              <p role="status" className="flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 p-3 text-sm text-warn">
-                <CircleAlert size={18} className="mt-px shrink-0" aria-hidden />
+              <p role="status" className="mb-4 mt-0 flex items-start gap-2 rounded-xl border border-note/30 bg-note/10 p-3 text-sm text-ink">
+                <Info size={18} className="mt-px shrink-0 text-note" aria-hidden />
                 {aviso}
               </p>
             )}
 
-            {error && (
-              <p role="alert" className="flex items-start gap-2 rounded-xl border border-bad/30 bg-bad/10 p-3 text-sm text-bad">
-                <CircleAlert size={18} className="mt-px shrink-0" aria-hidden />
-                {error}
+            <form onSubmit={enviar} className="flex flex-col gap-4" noValidate>
+              <Input
+                ref={refCorreo}
+                etiqueta="Correo institucional"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="next"
+                placeholder={`nombre@${DOMINIO_CORREO}`}
+                ayuda={`Termina en @${DOMINIO_CORREO}. Puedes escribir solo tu usuario.`}
+                error={errores.correo}
+                icono={<Mail size={18} />}
+                value={correo}
+                onChange={(e) => {
+                  setCorreo(e.target.value)
+                  if (errores.correo) setErrores((p) => ({ ...p, correo: undefined }))
+                }}
+                onKeyDown={(e) => {
+                  // "Siguiente" del teclado: pasa a la contraseña mientras siga vacía.
+                  if (e.key === 'Enter' && !password) {
+                    e.preventDefault()
+                    refPassword.current?.focus()
+                  }
+                }}
+                required
+              />
+              <Input
+                ref={refPassword}
+                etiqueta="Contraseña"
+                type={verPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="go"
+                error={errores.password}
+                ayuda={bloqMayus ? (
+                  <span role="status" className="flex items-center gap-1 font-medium text-warn">
+                    <TriangleAlert size={14} aria-hidden /> Bloq Mayús está activado.
+                  </span>
+                ) : undefined}
+                icono={<Lock size={18} />}
+                accion={(
+                  <button
+                    type="button"
+                    onClick={() => setVerPassword((v) => !v)}
+                    className="grid min-h-11 min-w-11 place-items-center rounded-input text-muted transition-transform hover:text-ink active:scale-[0.97]"
+                    aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    aria-pressed={verPassword}
+                  >
+                    {verPassword ? <EyeOff size={20} aria-hidden /> : <Eye size={20} aria-hidden />}
+                  </button>
+                )}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  if (errores.password) setErrores((p) => ({ ...p, password: undefined }))
+                }}
+                onKeyDown={revisarBloqMayus}
+                onKeyUp={revisarBloqMayus}
+                onBlur={() => setBloqMayus(false)}
+                required
+              />
+
+              {error && (
+                <p role="alert" className="m-0 flex items-start gap-2 rounded-xl border border-bad/30 bg-bad/10 p-3 text-sm text-bad">
+                  <CircleAlert size={18} className="mt-px shrink-0" aria-hidden />
+                  {error}
+                </p>
+              )}
+
+              <Button type="submit" tamano="lg" bloque cargando={enviando} textoCargando="Entrando…" icono={<LogIn size={18} aria-hidden />}>
+                Entrar
+              </Button>
+              <p role="status" className="m-0 min-h-5 text-center text-sm text-muted">
+                {lento ? 'Despertando el servidor, puede tardar hasta un minuto…' : ''}
               </p>
-            )}
+            </form>
+          </div>
 
-            <Button type="submit" tamano="lg" bloque cargando={entrar.isPending} textoCargando="Entrando…" icono={<LogIn size={18} aria-hidden />}>
-              Entrar
-            </Button>
-          </form>
-
-          <p className="mb-0 mt-8 text-center text-sm text-muted">¿Problemas para entrar? Pide a tu coordinación que revise tu cuenta.</p>
+          <footer className="flex flex-col gap-3 text-center text-sm text-muted sm:mt-6">
+            <p className="m-0">¿Olvidaste tu contraseña o no puedes entrar? Contacta a la administración del sistema.</p>
+            <InstallPrompt />
+          </footer>
         </div>
       </main>
     </div>

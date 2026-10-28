@@ -131,6 +131,7 @@ async def sembrar_usuarios(db, admin: dict) -> dict[str, dict]:
         "inactivo": ("reportante", [], [], False),
         "jefe_a": ("jefe_edificio", [], ["Edificio A"], True),
         "gestor": ("gestor_roles", [], [], True),
+        "superadmin": ("superadmin", [], [], True),
     }
     usuarios: dict[str, dict] = {}
     for nombre, (rol, areas, edificios, activo) in defs.items():

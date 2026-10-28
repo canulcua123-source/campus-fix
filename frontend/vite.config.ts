@@ -4,6 +4,17 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Opcional en local: con VITE_API_URL=/api se imita el proxy de Cloudflare Pages (functions/api).
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (ruta) => ruta.replace(/^\/api/, ''),
+        cookiePathRewrite: { '/auth': '/api/auth' },
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
