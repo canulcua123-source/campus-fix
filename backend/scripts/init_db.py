@@ -888,11 +888,17 @@ async def crear_indices(db) -> None:
     )
 
 
+# Permisos que solo tiene el superadmin (rol de sistema por encima de admin).
+PERMISOS_EXCLUSIVOS_SUPERADMIN = ("configuracion:gestionar", "roles:gestionar", "sistema:administrar")
+
+
 def roles_sistema() -> list[dict]:
     reportante = ["incidencias:crear", "incidencias:ver", "evidencias:subir", "ia:usar"]
     tecnico = [*reportante, "seguimiento:registrar", "tags:gestionar", "incidencias:buscar"]
     coordinador = [*tecnico, "incidencias:asignar", "analitica:ver"]
     directivo = ["incidencias:ver", "incidencias:buscar", "analitica:ver"]
+    # Admin opera el día a día; configuración, roles y cuentas privilegiadas quedan al superadmin.
+    admin = [p for p in CATALOGO_PERMISOS if p not in PERMISOS_EXCLUSIVOS_SUPERADMIN]
     d = lambda clave, nombre, permisos, alcance: {  # noqa: E731
         "clave": clave,
         "nombre": nombre,
@@ -906,7 +912,8 @@ def roles_sistema() -> list[dict]:
         d("tecnico", "Técnico", tecnico, "area"),
         d("coordinador", "Coordinador", coordinador, "area"),
         d("directivo", "Directivo", directivo, "global"),
-        d("admin", "Administrador", list(CATALOGO_PERMISOS), "global"),
+        d("admin", "Administrador", admin, "global"),
+        d("superadmin", "Superadministrador", list(CATALOGO_PERMISOS), "global"),
     ]
 
 
@@ -967,25 +974,65 @@ def categorias_sistema() -> list[dict]:
 ARCHIVO_CLAVE_ADMIN_LOCAL = Path(__file__).resolve().parent.parent / ".admin-local"
 
 
-def _guardar_clave_admin_local(valor: str) -> Path:
+ARCHIVO_CLAVE_SUPERADMIN_LOCAL = Path(__file__).resolve().parent.parent / ".superadmin-local"
+
+
+def _guardar_clave_admin_local(valor: str, ruta: Path | None = None) -> Path:
     """Guarda la clave generada en un archivo ignorado por git con permisos 600, en vez de mostrarla en consola."""
-    descriptor = os.open(ARCHIVO_CLAVE_ADMIN_LOCAL, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    ruta = ruta or ARCHIVO_CLAVE_ADMIN_LOCAL
+    descriptor = os.open(ruta, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as archivo:
         archivo.write(valor + "\n")
-    os.chmod(ARCHIVO_CLAVE_ADMIN_LOCAL, 0o600)
-    return ARCHIVO_CLAVE_ADMIN_LOCAL
+    os.chmod(ruta, 0o600)
+    return ruta
+
+
+def correo_superadmin_demo() -> str:
+    return f"superadmin@{settings.dominio_correo}"
+
+
+async def sembrar_superadmin_demo(db) -> dict:
+    """Usuario demo con rol superadmin (solo con --seed-demo). Idempotente: si ya existe, no lo toca.
+
+    Clave: SEED_SUPERADMIN_PASSWORD o, si no se define, una aleatoria guardada en backend/.superadmin-local (600).
+    """
+    correo = correo_superadmin_demo()
+    existente = await db.usuarios.find_one({"correo": correo})
+    if existente is not None:
+        print(f"= superadmin demo {correo} ya existe")
+        return existente
+    local = es_uri_mongodb_local(settings.mongodb_admin_uri or settings.mongodb_uri)
+    password = os.environ.get("SEED_SUPERADMIN_PASSWORD") or ""
+    if not local and not password:
+        raise SystemExit("Define SEED_SUPERADMIN_PASSWORD para crear el superadmin demo fuera del entorno local")
+    generado = not password
+    password = password or secrets.token_urlsafe(12)
+    doc = {
+        "schema_version": 1,
+        "correo": correo,
+        "nombre": "Superadministrador demo",
+        "rol": "superadmin",
+        "password_hash": hashear_password(password),
+        "activo": True,
+        "areas": [],
+        "edificios": [],
+        "fecha_alta": datetime.now(timezone.utc),
+    }
+    doc["_id"] = (await db.usuarios.insert_one(doc)).inserted_id
+    print(f"+ usuario superadmin demo {correo}")
+    if generado:
+        ruta = _guardar_clave_admin_local(password, ARCHIVO_CLAVE_SUPERADMIN_LOCAL)
+        print(f"! clave local del superadmin guardada en {ruta} (solo lectura del dueño)")
+    return doc
 
 
 async def sembrar_base(db) -> dict:
     for rol in roles_sistema():
-        # Los cinco roles base son parte del contrato de seguridad: se sincronizan
+        # Los roles base son parte del contrato de seguridad: se sincronizan
         # sin cambiar su _id ni las referencias de usuarios existentes.
         await db.roles.update_one({"clave": rol["clave"]}, {"$set": rol}, upsert=True)
     for cat in categorias_sistema():
         await db.categorias.update_one({"clave": cat["clave"]}, {"$setOnInsert": cat}, upsert=True)
-    await db.roles.update_one(
-        {"clave": "admin", "sistema": True}, {"$addToSet": {"permisos": "configuracion:gestionar"}}
-    )
     await db.configuracion_ia.update_one(
         {"_id": "ia"},
         {
@@ -1250,6 +1297,7 @@ async def main() -> None:
         admin = await sembrar_base(db)
         if "--seed-demo" in sys.argv or "--reset-demo" in sys.argv:
             await sembrar_demo(db, admin, reiniciar="--reset-demo" in sys.argv)
+            await sembrar_superadmin_demo(db)
         print("OK: base de datos lista")
     finally:
         await cliente.close()

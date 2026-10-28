@@ -14,3 +14,4 @@ utm_desk_*.archive.gz.part.*
 
 # Clave local del admin generada por scripts/init_db.py (nunca se versiona).
 backend/.admin-local
+backend/.superadmin-local

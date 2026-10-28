@@ -41,7 +41,9 @@ PERMISOS_ESPERADOS = {
         "incidencias:buscar",
         "analitica:ver",
     },
-    "admin": set(CATALOGO_PERMISOS),
+    # Admin pierde lo exclusivo del superadmin: configuración, roles y cuentas privilegiadas.
+    "admin": set(CATALOGO_PERMISOS) - {"configuracion:gestionar", "roles:gestionar", "sistema:administrar"},
+    "superadmin": set(CATALOGO_PERMISOS),
 }
 
 ALCANCES_ESPERADOS = {
@@ -50,6 +52,7 @@ ALCANCES_ESPERADOS = {
     "coordinador": "area",
     "directivo": "global",
     "admin": "global",
+    "superadmin": "global",
 }
 
 PERMISOS_ESCRITURA = {
@@ -73,7 +76,7 @@ def test_permisos_igual_tabla_3_3():
     roles = roles_sistema()
     por_clave = _por_clave()
 
-    assert len(roles) == 5
+    assert len(roles) == 6
     assert set(por_clave) == set(PERMISOS_ESPERADOS)
 
     catalogo = set(CATALOGO_PERMISOS)
@@ -117,3 +120,11 @@ def test_api_roles_expone_edicion_y_eliminacion_pero_no_put():
 
     assert {"GET", "POST", "PATCH", "DELETE"} <= metodos
     assert "PUT" not in metodos
+
+
+def test_superadmin_esta_por_encima_de_admin():
+    roles = _por_clave()
+    admin, superadmin = set(roles["admin"]["permisos"]), set(roles["superadmin"]["permisos"])
+
+    assert admin < superadmin
+    assert superadmin - admin == {"configuracion:gestionar", "roles:gestionar", "sistema:administrar"}

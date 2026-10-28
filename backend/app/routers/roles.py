@@ -6,7 +6,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.core.auditoria import registrar_auditoria
 from app.core.db import get_db
-from app.core.security import puede_otorgar, require_permiso
+from app.core.security import puede_otorgar, require_algun_permiso, require_permiso
 from app.core.serial import a_json
 from app.schemas.rol import RolIn, RolPatch
 
@@ -14,7 +14,11 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 
 
 @router.get("")
-async def listar_roles(_: Annotated[dict, Depends(require_permiso("roles:gestionar"))]):
+async def listar_roles(
+    _: Annotated[dict, Depends(require_algun_permiso("roles:gestionar", "usuarios:gestionar"))],
+):
+    # Lectura también para quien gestiona usuarios (el selector de rol la necesita); crear/editar/borrar
+    # exige roles:gestionar, exclusivo del superadmin entre los roles de sistema.
     roles = [r async for r in get_db().roles.find({}).sort("clave", 1)]
     return a_json(roles)
 

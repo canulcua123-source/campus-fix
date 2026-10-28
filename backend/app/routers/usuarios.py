@@ -10,7 +10,7 @@ from pymongo.errors import DuplicateKeyError
 from app.core.auditoria import registrar_auditoria
 from app.core.db import get_db
 from app.core.config import PATRON_CORREO, validar_dominio_correo
-from app.core.security import hashear_password, puede_otorgar, require_permiso
+from app.core.security import PERMISO_SUPERADMIN, ROLES_ADMINISTRADORES, hashear_password, puede_otorgar, require_permiso
 from app.core.serial import a_json
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
@@ -49,11 +49,28 @@ class UsuarioIn(UsuarioPatch):
         return validar_dominio_correo(v)
 
 
+def _es_rol_privilegiado(rol: dict) -> bool:
+    """Roles que administran el sistema completo: admin, superadmin, cualquier rol con el permiso exclusivo del
+    superadmin o que gestione usuarios con alcance global. Solo el superadmin los ve, crea, edita o asigna."""
+    permisos = set(rol.get("permisos", []))
+    return (
+        rol.get("clave") in ROLES_ADMINISTRADORES
+        or PERMISO_SUPERADMIN in permisos
+        or ("usuarios:gestionar" in permisos and rol.get("alcance") == "global")
+    )
+
+
+def _es_superadmin(actor: dict) -> bool:
+    return PERMISO_SUPERADMIN in actor["_permisos"]
+
+
 async def _validar_asignacion(rol: str, areas: list | None, edificios: list | None, creador: dict) -> dict[str, Any]:
     """Valida el rol y devuelve los campos de alcance a guardar (solo los que aplican al alcance del rol)."""
     doc_rol = await get_db().roles.find_one({"clave": rol})
     if doc_rol is None:
         raise HTTPException(400, "El rol indicado no existe")
+    if _es_rol_privilegiado(doc_rol) and not _es_superadmin(creador):
+        raise HTTPException(403, "Solo el superadministrador puede asignar roles de administración")
     alcance = doc_rol.get("alcance", "propio")
     campos: dict[str, Any] = {}
     if alcance == "area":
@@ -76,10 +93,11 @@ async def _filtro_usuarios_gestionables(actor: dict) -> dict[str, Any]:
     alcance_actor = actor["_alcance"]
     roles_permitidos: list[str] = []
     roles_prohibidos: list[str] = []
+    es_superadmin = _es_superadmin(actor)
     cursor = get_db().roles.find({}, {"clave": 1, "permisos": 1, "alcance": 1})
     async for rol in cursor:
         permisos_objetivo = set(rol.get("permisos", []))
-        if not permisos_objetivo <= permisos_actor:
+        if not permisos_objetivo <= permisos_actor or (not es_superadmin and _es_rol_privilegiado(rol)):
             roles_prohibidos.append(rol["clave"])
             continue
         if alcance_actor != "global" and (
@@ -90,7 +108,8 @@ async def _filtro_usuarios_gestionables(actor: dict) -> dict[str, Any]:
 
     if alcance_actor == "global":
         # Un usuario con rol inexistente no tiene permisos: el gestor global puede verlo y corregirlo.
-        return {"rol": {"$nin": roles_prohibidos}}
+        # Admin no ve cuentas privilegiadas (otros admin, superadmin) salvo la suya: 404 al editarlas.
+        return {"$or": [{"_id": actor["_id"]}, {"rol": {"$nin": roles_prohibidos}}]}
 
     gestionables: dict[str, Any] = {"rol": {"$in": roles_permitidos}}
 
@@ -217,6 +236,13 @@ async def editar(
         unsets = {k: "" for k in ("areas", "edificios") if k not in alcance}
     if not sets and not unsets:
         raise HTTPException(400, "No hay cambios")
+    pierde_superadmin = sets.get("activo") is False or sets.get("rol", actual["rol"]) != actual["rol"]
+    if actual["rol"] == "superadmin" and actual.get("activo", True) and pierde_superadmin:
+        otros = await get_db().usuarios.count_documents(
+            {"rol": "superadmin", "activo": True, "_id": {"$ne": oid}}, limit=1
+        )
+        if otros == 0:
+            raise HTTPException(409, "No se puede desactivar ni degradar al último superadministrador activo")
     update: dict[str, Any] = {"$set": sets}
     if unsets:
         update["$unset"] = unsets
