@@ -19,6 +19,7 @@ ROLES = {
     "COO": "coordinador_infra",
     "DIR": "directivo",
     "ADM": "admin",
+    "SUP": "superadmin",
 }
 ENDPOINTS = (
     "crear",
@@ -169,7 +170,10 @@ async def test_rol_endpoint_alcance(api, recursos_alcance, rol, endpoint):
             )
             assert r.status_code == 403
         else:
-            clave = {"TEC": "propio", "COO": "misma_area", "ADM": "otra_area"}[rol]
+            clave = {"TEC": "propio", "COO": "misma_area", "ADM": "otra_area", "SUP": "otra_area"}[rol]
+            if rol == "SUP":
+                # ADM ya llevó «otra_area» a en_proceso en esta misma matriz: SUP avanza a en_espera.
+                payload = {**payload, "estado_nuevo": "en_espera"}
             permitido = recursos[clave]["_id"]
             assert (
                 await api.c.patch(f"/incidencias/{permitido}/seguimiento", json=payload, headers=api.h(quien))
@@ -186,7 +190,7 @@ async def test_rol_endpoint_alcance(api, recursos_alcance, rol, endpoint):
             r = await api.c.post(f"/incidencias/{recursos['propio']['_id']}/tags", json=payload, headers=api.h(quien))
             assert r.status_code == 403
         else:
-            permitido = recursos["propio"]["_id"] if rol != "ADM" else recursos["otra_area"]["_id"]
+            permitido = recursos["propio"]["_id"] if rol not in {"ADM", "SUP"} else recursos["otra_area"]["_id"]
             assert (
                 await api.c.post(f"/incidencias/{permitido}/tags", json=payload, headers=api.h(quien))
             ).status_code == 200
@@ -198,7 +202,7 @@ async def test_rol_endpoint_alcance(api, recursos_alcance, rol, endpoint):
 
     if endpoint == "asignacion":
         payload = {"tecnico_id": str(api.oid("tecnico_infra"))}
-        if rol not in {"COO", "ADM"}:
+        if rol not in {"COO", "ADM", "SUP"}:
             r = await api.c.patch(
                 f"/incidencias/{recursos['propio']['_id']}/asignacion", json=payload, headers=api.h(quien)
             )

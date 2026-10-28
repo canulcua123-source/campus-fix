@@ -160,11 +160,11 @@ La API se publica en Render como servicio Docker gratuito definido en [`render.y
 
 1. En Render: **New → Blueprint**, conecta el repositorio y elige la rama `main`. Render lee `render.yaml`.
 2. Captura en el panel las variables marcadas `sync: false` (nunca en el repo): `MONGODB_URI` (usuario Atlas con permisos mínimos, no el admin), `REDIS_URL` (Upstash, `rediss://…`), `JWT_SECRET` (`openssl rand -hex 32`), `CORS_ORIGINS` (dominio exacto de la PWA, sin `*`), credenciales del bucket (`R2_*`, `STORAGE_*`) e IA (`IA_PROVEEDOR`, `ANTHROPIC_API_KEY`/`GEMINI_API_KEY`).
-3. La PWA y la API están en dominios distintos, por eso `render.yaml` fija `REFRESH_COOKIE_SAMESITE=none` y `REFRESH_COOKIE_SECURE=true`.
-4. IA: el despliegue usa **Gemini con llave gratuita** (`IA_PROVEEDOR=gemini`, `IA_PERMITIR_CAPA_GRATUITA=true`). En esa capa Google puede usar las fotos para mejorar sus productos; la PWA lo avisa al reportar. Ajusta el cupo diario global en **Configuración** (admin) al límite que muestre la consola de AI Studio.
+3. La PWA llama a la API por el **proxy same-origin** de Cloudflare Pages (`/api/*`, ver abajo), así que la cookie de refresh es de primera parte: `render.yaml` fija `REFRESH_COOKIE_SAMESITE=lax` y `REFRESH_COOKIE_SECURE=true` (con `none` Safari/iOS y la PWA instalada la bloquean y la sesión "se vence a cada rato"). Si el servicio ya existe, cambia `REFRESH_COOKIE_SAMESITE` a `lax` en el panel de Render.
+4. IA: el despliegue usa **Gemini con llave gratuita** (`IA_PROVEEDOR=gemini`, `IA_PERMITIR_CAPA_GRATUITA=true`). En esa capa Google puede usar las fotos para mejorar sus productos; la PWA lo avisa al reportar. Ajusta el cupo diario global en **Configuración** (superadmin) al límite que muestre la consola de AI Studio.
 5. Verifica: `GET https://<servicio>.onrender.com/health` → 200 y `/docs` accesible. Postman: carpetas *Auth* e *Incidencias* con el environment `UTM-Desk.prod`.
 
-**Arranque en frío:** el plan gratuito duerme el servicio tras ~15 min sin tráfico; la primera petición tarda ~30–60 s. Antes de la demo, despiértalo abriendo `/health` unos minutos antes.
+**Arranque en frío:** el plan gratuito duerme el servicio tras ~15 min sin tráfico; la primera petición tarda ~30–60 s. La PWA lo tolera: el refresh de sesión espera hasta 45 s por intento y reintenta (3 intentos, ≤ 60 s) sin cerrar la sesión por red/timeout/5xx. Para evitarlo, el workflow [`keepalive.yml`](.github/workflows/keepalive.yml) hace ping cada 10 min: crea la **variable de repositorio** `API_HEALTH_URL=https://<servicio>.onrender.com/health` (*Settings → Secrets and variables → Actions → Variables*). Los `schedule` solo corren desde la rama por defecto del repo.
 
 Prueba local de la imagen (sin el `.env` real):
 
@@ -178,9 +178,11 @@ docker run --rm -p 8000:8000 -e MONGODB_URI=mongodb://host.docker.internal:27017
 
 1. Cloudflare → **Workers & Pages → Create → Pages → Connect to Git**, repositorio `campus-fix`, rama `main`.
 2. Configuración de build: *Root directory* `frontend`, *Build command* `npm ci && npm run build`, *Output* `dist`, variable `NODE_VERSION` = la de `.nvmrc`.
-3. Variables de entorno (Production): `VITE_API_URL=https://<servicio>.onrender.com` y `VITE_DOMINIO_CORREO=utm.edu.mx`. Se leen **al compilar**: si cambian, vuelve a desplegar.
-4. Copia el dominio que te da Pages (`https://<proyecto>.pages.dev`) a `CORS_ORIGINS` en Render y redepliega la API.
-5. `frontend/public/_redirects` sirve la SPA en cualquier ruta y `_headers` añade cabeceras de seguridad y evita cachear `sw.js`/`index.html` (para que lleguen las actualizaciones).
+3. Variables de entorno (Production): `VITE_API_URL=/api`, `API_ORIGIN=https://<servicio>.onrender.com` y `VITE_DOMINIO_CORREO=utm.edu.mx`. Las `VITE_*` se leen **al compilar**: si cambian, vuelve a desplegar.
+4. Copia el dominio que te da Pages (`https://<proyecto>.pages.dev`) a `CORS_ORIGINS` en Render y redepliega la API (el proxy reenvía el `Origin` del navegador y la API lo valida contra CSRF).
+5. `frontend/public/_redirects` sirve la SPA en cualquier ruta y `_headers` añade cabeceras de seguridad y evita cachear `sw.js`/`index.html` (para que lleguen las actualizaciones). `_headers` no define CSP; si se agrega, `connect-src` debe incluir `'self'`.
+
+**Proxy same-origin `/api/*`** ([`frontend/functions/api/[[path]].ts`](frontend/functions/api/%5B%5Bpath%5D%5D.ts), lógica en `frontend/src/proxy/reenviar.ts`): una Pages Function (gratis, 100 000 peticiones/día) reenvía `/api/<ruta>` a `${API_ORIGIN}/<ruta>` con método, query, cabeceras (`Cookie`, `Authorization`, `Content-Type`, `Origin`…) y cuerpo en streaming, quita las cabeceras hop-by-hop, pone `X-Forwarded-For` con la IP real (`CF-Connecting-IP`) y devuelve la respuesta con sus `Set-Cookie`. Como la API emite la cookie de refresh con `Path=/auth` y el navegador la ve bajo `/api/auth/...`, **el proxy reescribe `Path=/auth` → `Path=/api/auth`** (y quita `Domain=`); así la API no cambia y sigue funcionando sin proxy en local. `public/_routes.json` limita la Function a `/api/*` (el resto se sirve estático); las Functions tienen prioridad sobre `_redirects`, así que el fallback SPA no intercepta `/api`. En local `npm run dev` sigue usando `http://localhost:8000`; con `VITE_API_URL=/api` usa el proxy equivalente de Vite.
 
 ## CI
 
@@ -228,7 +230,7 @@ Frontend: `VITE_API_URL` (por defecto `http://localhost:8000`) y `VITE_DOMINIO_C
 `IA_HABILITADA`, `IA_LIMITE_DIARIO=20` e `IA_LIMITE_GLOBAL_DIARIO=300` son únicamente los valores
 iniciales que `scripts/init_db.py` inserta la primera vez. Después, MongoDB (`configuracion_ia`, documento
 `ia`) es la fuente de verdad. `GET/PATCH /config/ia` requieren `configuracion:gestionar`, permiso sembrado
-solo para el rol administrador. Redis guarda una copia con TTL de 60 segundos; si la caché falla se lee
+solo para el rol superadministrador (`superadmin`). Redis guarda una copia con TTL de 60 segundos; si la caché falla se lee
 MongoDB y una actualización sigue persistiendo.
 
 El modo agéntico (T-034) también se administra ahí, no en `.env`: `modo_agentico_habilitado` (*kill switch*,

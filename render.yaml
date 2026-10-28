@@ -24,11 +24,13 @@ services:
         sync: false
       - key: DOMINIO_CORREO
         value: utm.edu.mx
-      # PWA (Cloudflare Pages) y API (onrender.com) son sitios distintos: la cookie de refresh exige None + Secure.
+      # La PWA llama a la API por el proxy same-origin de Cloudflare Pages (/api/* → esta API), así la
+      # cookie de refresh es de primera parte: basta Lax + Secure (None la bloquean Safari/iOS/PWA).
+      # El proxy reescribe Path=/auth → /api/auth. CORS_ORIGINS debe incluir el dominio de Pages.
       - key: REFRESH_COOKIE_SECURE
         value: "true"
       - key: REFRESH_COOKIE_SAMESITE
-        value: none
+        value: lax
       - key: R2_ACCESS_KEY_ID
         sync: false
       - key: R2_SECRET_ACCESS_KEY

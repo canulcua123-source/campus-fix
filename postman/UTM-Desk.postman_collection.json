@@ -2896,11 +2896,11 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT de administrador"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               }
             ],
-            "description": "Solo usuarios con configuracion:gestionar.",
+            "description": "Solo usuarios con configuracion:gestionar (exclusivo del superadmin).",
             "url": {
               "raw": "{{base_url}}/config/ia",
               "host": [
@@ -2932,8 +2932,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT de administrador"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -2980,8 +2980,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT de administrador"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -3061,6 +3061,115 @@
       ]
     },
     {
+      "name": "Sistema (Centro de control)",
+      "item": [
+        {
+          "name": "Salud del sistema",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Componentes con estado', function () { const j = pm.response.json(); ['mongo','redis','almacenamiento','ia'].forEach(k => pm.expect(j[k].estado).to.be.oneOf(['ok','advertencia','error'])); pm.expect(j.estado).to.be.oneOf(['ok','degradado','caido']); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_superadmin}}"
+              }
+            ],
+            "description": "Centro de control: requiere sistema:administrar (solo superadmin).",
+            "url": {
+              "raw": "{{base_url}}/sistema/salud",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sistema",
+                "salud"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resumen operativo y alertas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('KPIs y alertas', function () { const j = pm.response.json(); pm.expect(j.kpis.abiertas).to.be.a('number'); pm.expect(j.alertas).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_superadmin}}"
+              }
+            ],
+            "description": "Centro de control: requiere sistema:administrar (solo superadmin).",
+            "url": {
+              "raw": "{{base_url}}/sistema/resumen",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sistema",
+                "resumen"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Salud del sistema - admin sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "description": "Centro de control: requiere sistema:administrar (solo superadmin).",
+            "url": {
+              "raw": "{{base_url}}/sistema/salud",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sistema",
+                "salud"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Roles",
       "description": "Gestión de roles y permisos.",
       "item": [
@@ -3129,8 +3238,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -3177,8 +3286,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -3225,8 +3334,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -3274,8 +3383,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               }
             ],
             "description": "Elimina un rol personalizado sin usuarios asignados; roles base o asignados responden 409.",
@@ -3309,8 +3418,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -3357,8 +3466,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               }
             ],
             "description": "Un administrador no puede eliminar un rol con sistema=true.",
@@ -3392,8 +3501,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -3488,8 +3597,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               },
               {
                 "key": "Content-Type",
@@ -3571,8 +3680,8 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "description": "Token JWT"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               }
             ],
             "description": "Rol inexistente: 404.",

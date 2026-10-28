@@ -1,4 +1,4 @@
-import { Lock, Pencil, Plus, Shield, Trash2 } from 'lucide-react'
+import { Lock, Pencil, Plus, Shield, ShieldCheck, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError, mensajeDeError } from '../api/client'
 import { useCrearRol, useEditarRol, useEliminarRol, useRoles } from '../api/hooks/admin'
@@ -164,7 +164,10 @@ export default function AdminRoles() {
                       <h2 className="text-lg font-semibold text-ink">{rol.nombre}</h2>
                       <p className="break-all font-mono text-xs text-muted">{rol.clave}</p>
                     </div>
-                    {rol.sistema && <Chip tono="apagado" icono={<Lock size={12} aria-hidden />}>Rol del sistema</Chip>}
+                    <span className="flex flex-wrap gap-1">
+                      {rol.clave === 'superadmin' && <Chip tono="neutro" icono={<ShieldCheck size={12} aria-hidden />}>Superadmin</Chip>}
+                      {rol.sistema && <Chip tono="apagado" icono={<Lock size={12} aria-hidden />}>Rol del sistema</Chip>}
+                    </span>
                   </div>
                   {rol.descripcion && <p className="text-sm text-muted">{rol.descripcion}</p>}
                   <div className="flex flex-wrap items-center gap-2 text-sm">
