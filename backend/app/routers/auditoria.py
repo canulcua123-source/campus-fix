@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.db import get_db
-from app.core.security import require_permiso
+from app.core.security import ROLES_ADMINISTRADORES, require_permiso
 from app.core.serial import a_json
 from app.schemas.auditoria import PaginaAuditoriaOut, RecursoAuditoria
 
@@ -28,7 +28,7 @@ PROYECCION_AUDITORIA = {
     response_model_exclude_none=True,
     summary="Consultar la bitácora administrativa",
     description=(
-        "Solo el rol administrador puede consultar eventos de usuarios, roles, categorías y aulas. "
+        "Solo los roles administrador y superadministrador pueden consultar eventos de usuarios, roles, categorías y aulas. "
         "Los resultados se ordenan por fecha e identificador descendentes y admiten filtro por recurso."
     ),
     responses={
@@ -43,7 +43,7 @@ async def listar_auditoria(
     limite: Annotated[int, Query(ge=1, le=100)] = 20,
     recurso: RecursoAuditoria | None = None,
 ):
-    if usuario.get("rol") != "admin":
+    if usuario.get("rol") not in ROLES_ADMINISTRADORES:
         raise HTTPException(403, "La bitácora de auditoría es exclusiva del administrador")
 
     filtro = {"recurso": recurso} if recurso is not None else {}

@@ -66,6 +66,11 @@ async def test_auditoria_403_no_admin(api):
     assert (await api.c.get("/auditoria")).status_code == 401
 
 
+async def test_auditoria_superadmin_200(api):
+    respuesta = await api.c.get("/auditoria", headers=api.h("superadmin"))
+    assert respuesta.status_code == 200, respuesta.text
+
+
 async def test_auditoria_paginada(api):
     fecha = datetime(2099, 1, 1, tzinfo=timezone.utc)
     documentos = [
