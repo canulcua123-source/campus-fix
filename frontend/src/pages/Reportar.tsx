@@ -1,12 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Camera, Check, ImagePlus, Lock, PencilLine, Send, ShieldAlert, Sparkles } from 'lucide-react'
+import { Camera, Check, ImagePlus, Lock, PencilLine, Send, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { aulaQuery } from '../api/aulas'
 import { ApiError } from '../api/client'
-import { analizarImagen } from '../api/ia'
+import { analizarImagen, registrarEventoIA } from '../api/ia'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import { AvisoCalidad } from '../components/AvisoCalidad'
@@ -18,7 +18,7 @@ import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
 import { ETIQUETAS_PRIORIDAD, OPCIONES_CATEGORIA } from '../lib/etiquetas'
 import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
-import type { RespuestaIA } from '../schemas/ia'
+import type { EventoIAIn, RespuestaIA } from '../schemas/ia'
 import { incidenciaSchema, LIMITES, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
 import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
 
@@ -98,6 +98,8 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const montado = useRef(false)
   const operacionIA = useRef<AbortController | null>(null)
   const vistaUrl = useRef<string | null>(null)
+  /** Oferta de IA aún sin resolver: se cierra al enviar (servidor) o al descartarla (POST /ia/eventos). */
+  const ofertaPendiente = useRef<string | null>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
   const [foto, setFoto] = useState<Blob | null>(null)
@@ -160,6 +162,32 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const sinEditar = (campo: 'titulo' | 'descripcion' | 'prioridad' | 'tags' | 'detalle_especifico') =>
     !getFieldState(campo).isDirty
 
+  /** Reporta que la persona dejó la sugerencia; la telemetría nunca bloquea ni muestra errores al reportar. */
+  function resolverOferta(evento: Exclude<EventoIAIn['evento'], 'editado'>) {
+    const analisisId = ofertaPendiente.current
+    ofertaPendiente.current = null
+    if (!analisisId) return
+    // Sin respuesta útil para la persona: si falla, la oferta vence sola y cuenta como sin respuesta.
+    void Promise.resolve().then(() => registrarEventoIA({ analisis_id: analisisId, evento })).catch(() => undefined)
+  }
+
+  /** "Llenar sin IA" tras la sugerencia: limpia lo que llenó la IA (sin tocar lo editado) y sigue a mano. */
+  function descartarSugerencia() {
+    resolverOferta('fallback')
+    if (camposIA.includes('titulo') && sinEditar('titulo')) setValue('titulo', '')
+    if (camposIA.includes('descripcion') && sinEditar('descripcion')) setValue('descripcion', '')
+    if (camposIA.includes('prioridad') && sinEditar('prioridad')) setValue('prioridad', 'media')
+    if (camposIA.includes('tags') && sinEditar('tags')) {
+      setValue('tags', [])
+      setTagsTexto('')
+    }
+    if (camposIA.includes('detalle_especifico') && sinEditar('detalle_especifico')) cambiarCategoria('computo_redes')
+    setIa(null)
+    setCamposIA([])
+    setCriticaPendiente(false)
+    setAviso('Descartaste la sugerencia de IA. Completa el formulario manualmente.')
+  }
+
   function cancelarAnalisis() {
     operacionIA.current?.abort()
     operacionIA.current = null
@@ -210,6 +238,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     setAviso(null)
     setCriticaPendiente(false)
     setCamposIA([])
+    resolverOferta('deshecho') // otra foto reemplaza la sugerencia anterior sin usarla
     setIa(null) // no deja visible la sugerencia de la foto anterior
     try {
       await tarea(control)
@@ -235,6 +264,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
       { signal: control.signal },
     )
     if (!vigente(control)) return
+    ofertaPendiente.current = sugerencia.analisis_id
     setIa(sugerencia)
     // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
     if (sugerencia.accion_asistida === 'autollenar' || sugerencia.accion_asistida === 'sugerir') {
@@ -352,7 +382,10 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     cancelarAnalisis()
     setErrorEnvio(null)
     try {
-      const nueva = await crear(datos)
+      // El servidor compara con la sugerencia guardada y cierra la oferta como enviada, editada o fallback.
+      const analisisId = ofertaPendiente.current
+      const nueva = await crear(analisisId ? { ...datos, analisis_id: analisisId } : datos)
+      ofertaPendiente.current = null
       setCreada(nueva)
       if (foto) await adjuntarFoto(nueva._id)
     } catch (e) {
@@ -525,6 +558,9 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
           {ia.analisis.campos_detectados.map((c) => (
             <span key={c.nombre} className="rounded-full border border-line bg-panel px-3 py-1 text-xs">{c.nombre}: {c.valor}</span>
           ))}
+          <Button variante="secundario" tamano="sm" icono={<X size={16} aria-hidden />} onClick={descartarSugerencia}>
+            Llenar sin IA
+          </Button>
         </div>
       )}
 

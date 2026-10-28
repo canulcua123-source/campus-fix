@@ -15,6 +15,7 @@ from app.services.ia_eventos import (
     OfertaIAVencida,
     registrar_evento_cliente,
     registrar_oferta,
+    registrar_resultado_confiable,
 )
 
 SECRETO = "s" * 64
@@ -220,3 +221,35 @@ async def test_oferta_inexistente_ajena_y_vencida_se_rechazan():
             secreto=SECRETO,
             ahora=AHORA + timedelta(seconds=2),
         )
+
+
+@pytest.mark.asyncio
+async def test_resultado_enviado_con_campos_editados_marca_editado():
+    db = BaseFalsa()
+    actor = ObjectId()
+    await registrar_oferta(db, actor_id=actor, secreto=SECRETO, datos=oferta(), analisis_id="e" * 32, ahora=AHORA)
+    with pytest.raises(ValueError):
+        await registrar_resultado_confiable(
+            db,
+            analisis_id="e" * 32,
+            evento="fallback",
+            actor_id=actor,
+            secreto=SECRETO,
+            campos_editados=["titulo"],
+            ahora=AHORA,
+        )
+    resultado = await registrar_resultado_confiable(
+        db,
+        analisis_id="e" * 32,
+        evento="enviado",
+        actor_id=actor,
+        secreto=SECRETO,
+        campos_editados=["titulo", "prioridad", "titulo"],
+        ahora=AHORA + timedelta(seconds=5),
+    )
+    documento = db.ia_eventos.documentos["e" * 32]
+
+    assert resultado.registrado is True
+    assert documento["resultado_final"] == "enviado"
+    assert documento["editado"] is True
+    assert documento["campos_editados_por_usuario"] == ["titulo", "prioridad"]

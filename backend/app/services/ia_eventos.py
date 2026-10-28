@@ -189,15 +189,22 @@ async def registrar_resultado_confiable(
     motivo: str | None = None,
     incidencia_id: ObjectId | None = None,
     duracion_toque_folio_ms: int | None = None,
+    campos_editados: list[str] | None = None,
     ahora: datetime | None = None,
 ) -> ResultadoRegistroEvento:
-    """Interfaz para T-036/T-038; el resultado final se decide una sola vez mediante CAS en MongoDB."""
+    """Interfaz para T-036/T-038; el resultado final se decide una sola vez mediante CAS en MongoDB.
+
+    ``campos_editados`` (solo con ``enviado``) los calcula el servidor comparando con la sugerencia guardada:
+    marca ``editado`` en el mismo CAS para que la tasa de edición no dependa del cliente.
+    """
     if evento not in EVENTOS_FINALES:
         raise ValueError("El evento no es un resultado final")
     if duracion_toque_folio_ms is not None and not 0 <= duracion_toque_folio_ms <= 300_000:
         raise ValueError("La duración toque a folio está fuera de rango")
     if (incidencia_id is not None or duracion_toque_folio_ms is not None) and evento != "enviado":
         raise ValueError("La incidencia y su duración solo corresponden al resultado enviado")
+    if campos_editados and evento != "enviado":
+        raise ValueError("Los campos editados solo corresponden al resultado enviado")
 
     instante = _ahora_utc(ahora)
     oferta = await _cargar_oferta(db, analisis_id)
@@ -219,6 +226,9 @@ async def registrar_resultado_confiable(
         cambios["incidencia_id"] = incidencia_id
     if duracion_toque_folio_ms is not None:
         cambios["duracion_toque_folio_ms"] = duracion_toque_folio_ms
+    if campos_editados:
+        cambios["editado"] = True
+        cambios["campos_editados_por_usuario"] = list(dict.fromkeys(campos_editados))
 
     actualizado = await db.ia_eventos.find_one_and_update(
         {
