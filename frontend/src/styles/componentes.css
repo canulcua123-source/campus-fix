@@ -170,6 +170,17 @@
   .ui-campo__control--icono > select {
     padding-left: 40px;
   }
+  .ui-campo__control--accion > input {
+    padding-right: 48px;
+  }
+  .ui-campo__accion {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+  }
   .ui-campo select {
     -webkit-appearance: none;
     appearance: none;

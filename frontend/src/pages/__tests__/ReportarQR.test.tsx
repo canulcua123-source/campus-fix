@@ -128,7 +128,7 @@ describe('Sesión y ruta QR T-012', () => {
       </QueryClientProvider>,
     )
 
-    await screen.findByRole('heading', { name: 'Bienvenido' })
+    await screen.findByRole('heading', { name: 'Inicia sesión' })
     const usuario = userEvent.setup()
     await usuario.type(screen.getByLabelText(/Correo institucional/), `persona@${DOMINIO_CORREO}`)
     await usuario.type(screen.getByLabelText(/Contraseña/), 'clave-segura')
