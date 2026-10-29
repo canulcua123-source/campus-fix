@@ -33,7 +33,7 @@ Archivos clave: `app/main.py` (manejadores de error, límite de cuerpo, CORS), `
 | `GET /analitica/aulas-cronicas` | `analitica:ver` | 200 lista `{edificio, piso?, aula, total}` |
 | `GET /analitica/carga-tecnicos` | `analitica:ver` | 200 lista `{tecnico_id, incidencias_activas, horas_acumuladas}` |
 | `GET /analitica/tendencia` | `analitica:ver` | 200 lista `{periodo, categoria, total}` |
-| `GET /roles`, `POST /roles`, `PATCH /roles/{rol_id}`, `DELETE /roles/{rol_id}` | `roles:gestionar` | 200 / **201** / 200 / 200; 409 si el rol es del sistema o está asignado a usuarios |
+| `GET /roles`, `POST /roles`, `PATCH /roles/{rol_id}`, `DELETE /roles/{rol_id}` | `roles:gestionar` | 200 / **201** / 200 / 200; 409 si el rol es del sistema o está asignado a usuarios. Excepción: con `sistema:administrar`, `PATCH` del rol `admin` acepta solo `{permisos}` (otros campos 409; permisos exclusivos del superadmin 403) |
 | `GET /usuarios/tecnicos?area` | `incidencias:asignar` | 200 lista `{_id, nombre, areas?, edificios?}` (técnicos activos asignables dentro del alcance; sin correo) |
 | `GET /usuarios`, `POST /usuarios`, `PATCH /usuarios/{id}` | `usuarios:gestionar` | 200 / **201** / 200; `PATCH` a un usuario fuera del alcance gestionable responde **404** idéntico al de un id inexistente (no 403, para no revelar su existencia) |
 | `GET /categorias` | autenticado | 200 |
@@ -287,9 +287,9 @@ alcance responde siempre 404 para no revelar su existencia; por ello el caso his
 
 ## 9. Bitácora administrativa (T-022)
 
-`GET /auditoria` permite exclusivamente al rol `admin` consultar los cambios administrativos ya aplicados sobre
-usuarios, roles, categorías y aulas. Requiere autenticación y el permiso vigente `usuarios:gestionar`; además comprueba el
-rol real para impedir que un gestor delegado consulte la bitácora. No se agregó un permiso ni un rol nuevo.
+`GET /auditoria` permite exclusivamente al superadministrador consultar los cambios administrativos ya aplicados sobre
+usuarios, roles, categorías y aulas. Requiere autenticación y el permiso `sistema:administrar` (`PERMISO_SUPERADMIN`);
+el admin y cualquier gestor delegado reciben 403.
 
 La consulta acepta `pagina` (desde 1), `limite` (1 a 100, por defecto 20) y el filtro opcional `recurso`, limitado a
 `usuarios`, `roles`, `categorias` o `aulas`. Responde `{pagina, limite, total, resultados}` y ordena de forma estable por
@@ -347,7 +347,7 @@ Cada oferta ocupa un único documento de `ia_eventos`. `editado` es una marca in
 ausencia de `resultado_final`: repetir el mismo resultado es idempotente y un resultado incompatible responde 409.
 La colección no guarda nombres, correos, fotos, prompts, respuestas completas ni identificadores directos del actor.
 
-`GET /analitica/ia` requiere el permiso `analitica:ver` y, adicionalmente, el rol real `admin`. Admite `desde`,
+`GET /analitica/ia` requiere el permiso `sistema:administrar` (exclusivo del superadministrador; el admin recibe 403). Admite `desde`,
 `hasta`, `categoria`, `proveedor` y `modelo`; el periodo máximo es de 180 días y el predeterminado son los últimos
 30 días. La respuesta contiene únicamente agregados. Los porcentajes sin denominador y los costos que el proveedor
 no informó se expresan como `null`, nunca como cero inventado. La alerta diaria compara costo estimado confiable con
