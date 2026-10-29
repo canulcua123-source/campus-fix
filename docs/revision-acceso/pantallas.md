@@ -33,9 +33,9 @@ la tabla 3.3 de permisos (`docs/revision-acceso/roles.md`). Código revisado: `f
 | `/`, `/perfil` | sesión | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ ³ | Inicio, Perfil (cerrar sesión) |
 | `/control` | `sistema:administrar` | — | — | — | — | — | ✔ | Centro de control |
 | `/reportar` | `incidencias:crear` | ✔ | ✔ | ✔ | — | ✔ | ✔ | Reportar |
-| `/mis-reportes` | `incidencias:ver` | ✔ | ✔ | ✔ | ✔ ¹ | ✔ | ✔ | Mis reportes (`/mis-tickets` redirige) |
+| `/mis-reportes` | `incidencias:ver` | ✔ | ✔ | ✔ | ✔ ¹ | ✔ | ✔ | Mis reportes (`/mis-tickets` redirige; el técnico va a `/bandeja?vista=reportadas`) |
 | `/incidencias/:id` | `incidencias:ver` | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | Detalle |
-| `/bandeja` | `seguimiento:registrar` | — | ✔ | ✔ | — | ✔ | ✔ | Bandeja |
+| `/bandeja` | `seguimiento:registrar` | — | ✔ | ✔ | — | ✔ | ✔ | Mis incidencias (técnico: asignadas, por tomar, reportadas y resueltas; `?vista=`, `?estado=`) |
 | `/buscar` | `incidencias:buscar` | — | ✔ | ✔ | ✔ | ✔ | ✔ | Buscar / Incidencias |
 | `/tablero`, `/tecnicos` | `incidencias:asignar` | — | — | ✔ | — | ✔ | ✔ | Tablero, Técnicos |
 | `/dashboard`, `/reportes` | `analitica:ver` | — | — | ✔ | ✔ | ✔ | ✔ | Dashboard / Métricas; Reportes |
@@ -58,15 +58,15 @@ que entra a `/` (o inicia sesión) aterriza en `/control`. ⁴ Admin no ve ni ed
 | Rol | Celular (≤ 5, UX-03) | Menú lateral (≥ 1024 px) |
 |---|---|---|
 | Reportante | Inicio · **Reportar** · Mis reportes · Perfil | Inicio, Mis reportes |
-| Técnico | Bandeja · Buscar · **Reportar** · Perfil | Bandeja, Buscar, Mis reportes |
+| Técnico | Mis incidencias · Buscar · **Reportar** · Perfil | Mis incidencias |
 | Coordinador | Tablero · Bandeja · **Reportar** · Métricas · Perfil | Tablero, Incidencias, Técnicos, Métricas |
 | Directivo | Dashboard · Buscar · Perfil | Dashboard, Incidencias, Reportes |
 | Admin | Usuarios · Incidencias · Categorías · Perfil | Análisis: Dashboard, Reportes · Operación: Incidencias · Administración: Usuarios, Categorías, Edificios |
 | Superadmin | Control · Incidencias · Usuarios · Perfil | Centro de control, Dashboard, Incidencias, Tablero, Técnicos, Reportes, Usuarios, Roles, Categorías, Edificios, Auditoría, Configuración, Métricas IA |
 
 Diferencias con la tabla original, justificadas: para reportante y técnico la tabla no define menú
-lateral; se usan sus pestañas sin Reportar/Perfil (que van aparte en el lateral) y el técnico conserva
-«Mis reportes» porque también reporta. Auditoría y «Métricas IA» (T-030) son exclusivas del superadmin.
+lateral; se usan sus pestañas sin Reportar/Perfil (que van aparte en el lateral). El técnico tiene una sola
+pantalla, «Mis incidencias» (`/bandeja`), que une su bandeja y sus reportes con el filtro «Reportadas por mí». Auditoría y «Métricas IA» (T-030) son exclusivas del superadmin.
 En escritorio Perfil y «Salir» van al pie del menú lateral.
 
 ## Acciones × rol

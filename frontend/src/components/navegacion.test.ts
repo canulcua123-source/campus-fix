@@ -5,7 +5,7 @@ import { ACCESO_RUTA, accesoDe, cumpleAcceso, navegacionPara, perfilDe, REPORTAR
 /** Matriz «Pantallas por rol» (docs/TAREAS.md, doc §6.5). «Reportar» es el botón central de cámara. */
 const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
   reportante: { movil: ['Inicio', 'Reportar', 'Mis reportes', 'Perfil'], lateral: ['Inicio', 'Mis reportes'] },
-  tecnico: { movil: ['Bandeja', 'Buscar', 'Reportar', 'Perfil'], lateral: ['Bandeja', 'Mis reportes'] },
+  tecnico: { movil: ['Mis incidencias', 'Buscar', 'Reportar', 'Perfil'], lateral: ['Mis incidencias'] },
   coordinador: {
     movil: ['Tablero', 'Bandeja', 'Reportar', 'Métricas', 'Perfil'],
     lateral: ['Tablero', 'Incidencias', 'Técnicos', 'Métricas'],
