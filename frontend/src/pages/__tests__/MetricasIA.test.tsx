@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BASE } from '../../api/client'
 import { RequirePermiso } from '../../auth/RequirePermiso'
 import { useAuth } from '../../auth/store'
+import { ACCESO_RUTA } from '../../components/navegacion'
 import { rangoUltimosDias } from '../../lib/fechas'
 import type { MetricasIA as RespuestaMetricasIA } from '../../schemas/metricasIA'
 import { servidor } from '../../test/msw/server'
@@ -50,8 +51,8 @@ function preparar(respuesta: typeof RESPUESTA = RESPUESTA, estado = 200) {
     return HttpResponse.json(estado === 200 ? respuesta : { error: 'interno', detalle: 'No disponible' }, { status: estado })
   }))
   useAuth.setState({
-    token: 'token-admin',
-    usuario: { nombre: 'Administradora', rol: 'admin', alcance: 'global', permisos: ['analitica:ver'] },
+    token: 'token-superadmin',
+    usuario: { nombre: 'Superadministradora', rol: 'superadmin', alcance: 'global', permisos: ['analitica:ver', 'sistema:administrar'] },
   })
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={cliente}><MemoryRouter><MetricasIA /></MemoryRouter></QueryClientProvider>)
@@ -139,21 +140,21 @@ describe('Métricas de IA T-035', () => {
     expect(screen.getByText('Sin compuertas fallidas')).toBeInTheDocument()
   })
 
-  it('la ruta no monta el tablero para un usuario no administrador', async () => {
+  it('la ruta no monta el tablero para un admin (exclusiva del superadmin)', async () => {
     let llamadas = 0
     servidor.use(http.get(`${BASE}/analitica/ia`, () => { llamadas += 1; return HttpResponse.json(RESPUESTA) }))
     useAuth.setState({
-      token: 'token-directivo',
-      usuario: { nombre: 'Directivo', rol: 'directivo', alcance: 'global', permisos: ['analitica:ver'] },
+      token: 'token-admin',
+      usuario: { nombre: 'Administradora', rol: 'admin', alcance: 'global', permisos: ['analitica:ver', 'usuarios:gestionar'] },
     })
     const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(<QueryClientProvider client={cliente}><MemoryRouter initialEntries={['/admin/metricas-ia']}><Routes>
       <Route path="/" element={<p>Inicio autorizado</p>} />
-      <Route path="/dashboard" element={<p>Dashboard del directivo</p>} />
-      <Route path="/admin/metricas-ia" element={<RequirePermiso permiso="analitica:ver" rol="admin"><MetricasIA /></RequirePermiso>} />
+      <Route path="/dashboard" element={<p>Dashboard del admin</p>} />
+      <Route path="/admin/metricas-ia" element={<RequirePermiso {...ACCESO_RUTA['/admin/metricas-ia']}><MetricasIA /></RequirePermiso>} />
     </Routes></MemoryRouter></QueryClientProvider>)
-    // Por URL sin el rol no se monta la pantalla: lleva a la principal del rol (antes T-071 mostraba «Sin acceso»).
-    expect(await screen.findByText('Dashboard del directivo')).toBeInTheDocument()
+    // Por URL sin sistema:administrar no se monta la pantalla: lleva a la principal del rol.
+    expect(await screen.findByText('Dashboard del admin')).toBeInTheDocument()
     expect(llamadas).toBe(0)
   })
 })

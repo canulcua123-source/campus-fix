@@ -42,13 +42,14 @@ la tabla 3.3 de permisos (`docs/revision-acceso/roles.md`). Código revisado: `f
 | `/admin/usuarios` | `usuarios:gestionar` | — | — | — | — | ✔ ⁴ | ✔ | Usuarios |
 | `/admin/roles` | `roles:gestionar` | — | — | — | — | — | ✔ | Roles (GET/POST/PATCH/DELETE `/roles`) |
 | `/admin/categorias` | `categorias:gestionar` | — | — | — | — | ✔ | ✔ | Categorías |
-| `/admin/edificios`, `/admin/auditoria` | `usuarios:gestionar` ² | — | — | — | — | ✔ | ✔ | Edificios, Auditoría |
+| `/admin/edificios` | `usuarios:gestionar` | — | — | — | — | ✔ | ✔ | Edificios |
+| `/admin/auditoria` | `sistema:administrar` ² | — | — | — | — | — | ✔ | Auditoría |
 | `/admin/configuracion` | `configuracion:gestionar` | — | — | — | — | — | ✔ | Configuración |
-| `/admin/metricas-ia` | `analitica:ver` + rol `admin`/`superadmin` | — | — | — | — | ✔ | ✔ | Métricas IA (igual que `require_admin`) |
+| `/admin/metricas-ia` | `sistema:administrar` ² | — | — | — | — | — | ✔ | Métricas IA |
 
 ¹ La matriz no lista «Mis reportes» para el directivo y no aparece en su menú; la ruta exige
 `incidencias:ver` (permiso de la tabla) y, como el directivo no puede crear incidencias, la lista
-sale vacía. ² Mismo permiso que `GET /auditoria` en la API; la tabla solo dice «admin». ³ El superadmin
+sale vacía. ² Mismo permiso que `GET /auditoria` y `GET /analitica/ia` en la API: exclusivas del superadmin. ³ El superadmin
 que entra a `/` (o inicia sesión) aterriza en `/control`. ⁴ Admin no ve ni edita cuentas admin/superadmin
 (la API responde 404) ni puede asignar esos roles (403); `GET /roles` le sigue respondiendo para el selector.
 
@@ -60,12 +61,12 @@ que entra a `/` (o inicia sesión) aterriza en `/control`. ⁴ Admin no ve ni ed
 | Técnico | Mis incidencias · Buscar · **Reportar** · Perfil | Mis incidencias |
 | Coordinador | Tablero · Bandeja · **Reportar** · Métricas · Perfil | Tablero, Incidencias, Técnicos, Métricas |
 | Directivo | Dashboard · Buscar · Perfil | Dashboard, Incidencias, Reportes |
-| Admin | Usuarios · Categorías · Perfil | Dashboard, Usuarios, Categorías, Edificios, Auditoría, Métricas IA |
+| Admin | Usuarios · Incidencias · Categorías · Perfil | Análisis: Dashboard, Reportes · Operación: Incidencias · Administración: Usuarios, Categorías, Edificios |
 | Superadmin | Control · Incidencias · Usuarios · Perfil | Centro de control, Dashboard, Incidencias, Tablero, Técnicos, Reportes, Usuarios, Roles, Categorías, Edificios, Auditoría, Configuración, Métricas IA |
 
 Diferencias con la tabla original, justificadas: para reportante y técnico la tabla no define menú
 lateral; se usan sus pestañas sin Reportar/Perfil (que van aparte en el lateral). El técnico tiene una sola
-pantalla, «Mis incidencias» (`/bandeja`), que une su bandeja y sus reportes con el filtro «Reportadas por mí». «Métricas IA» (T-030) se añade al final del lateral del admin.
+pantalla, «Mis incidencias» (`/bandeja`), que une su bandeja y sus reportes con el filtro «Reportadas por mí». Auditoría y «Métricas IA» (T-030) son exclusivas del superadmin.
 En escritorio Perfil y «Salir» van al pie del menú lateral.
 
 ## Acciones × rol
@@ -78,8 +79,10 @@ En escritorio Perfil y «Salir» van al pie del menú lateral.
 | Etiquetas | `EditorTags` | `tags:gestionar` | — | ✔ | ✔ | — | ✔ | ✔ |
 | Crear/editar/eliminar rol | `SiPermiso roles:gestionar` + `puedeOtorgar` | `roles:gestionar` | — | — | — | — | — | ✔ |
 | Asignar rol admin/superadmin | `esRolPrivilegiado` en Usuarios | `sistema:administrar` | — | — | — | — | — | ✔ |
+| Limitar permisos del rol admin | «Editar permisos» en Roles | `roles:gestionar` + `sistema:administrar` | — | — | — | — | — | ✔ |
 
-En la pantalla de roles, los roles del sistema son de solo lectura (la API responde 409) y no se
+En la pantalla de roles, los roles del sistema son de solo lectura (la API responde 409), salvo los
+permisos del rol `admin`, que el superadmin limita con «Editar permisos» (sin ofrecer los exclusivos), y no se
 ofrecen acciones sobre roles con permisos o alcance mayores a los del actor (`puedeOtorgar`, espejo
 de `puede_otorgar`; la API responde 403).
 

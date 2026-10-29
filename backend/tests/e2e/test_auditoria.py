@@ -60,9 +60,11 @@ async def test_auditoria_sin_password(api):
         assert prohibido not in serializado
 
 
-async def test_auditoria_403_no_admin(api):
-    respuesta = await api.c.get("/auditoria", headers=api.h("reportante_a"))
+@pytest.mark.parametrize("quien", ["reportante_a", "directivo", "admin"])
+async def test_auditoria_403_no_superadmin(api, quien):
+    respuesta = await api.c.get("/auditoria", headers=api.h(quien))
     assert respuesta.status_code == 403, respuesta.text
+    assert respuesta.json()["error"] == "sin_permiso"
     assert (await api.c.get("/auditoria")).status_code == 401
 
 
@@ -93,10 +95,10 @@ async def test_auditoria_paginada(api):
     esperados = [str(oid) for oid in reversed(insertados.inserted_ids)]
 
     primera = await api.c.get(
-        "/auditoria", params={"pagina": 1, "limite": 2, "recurso": "roles"}, headers=api.h("admin")
+        "/auditoria", params={"pagina": 1, "limite": 2, "recurso": "roles"}, headers=api.h("superadmin")
     )
     segunda = await api.c.get(
-        "/auditoria", params={"pagina": 2, "limite": 2, "recurso": "roles"}, headers=api.h("admin")
+        "/auditoria", params={"pagina": 2, "limite": 2, "recurso": "roles"}, headers=api.h("superadmin")
     )
 
     assert primera.status_code == 200, primera.text
@@ -113,5 +115,5 @@ async def test_auditoria_paginada(api):
         {"limite": 101},
         {"recurso": "$ne"},
     ):
-        respuesta = await api.c.get("/auditoria", params=parametros, headers=api.h("admin"))
+        respuesta = await api.c.get("/auditoria", params=parametros, headers=api.h("superadmin"))
         assert respuesta.status_code == 400, respuesta.text

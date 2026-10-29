@@ -667,10 +667,10 @@ Navegación esperada (documento de requerimientos §6.5). Estado actual del cód
 | Técnico | area | Mis incidencias (Bandeja + Mis reportes) · Buscar · **Reportar** · Perfil | Mis incidencias |
 | Coordinador | area | Tablero · Bandeja · **Reportar** · Métricas · Perfil | Tablero, Incidencias, Técnicos, Métricas |
 | Directivo | global | Dashboard · Buscar · Perfil | Dashboard, Incidencias, Reportes |
-| Admin | global | Usuarios · Categorías · Perfil | Dashboard, Usuarios, Categorías, Edificios, Auditoría, Métricas IA |
+| Admin | global | Usuarios · Incidencias · Categorías · Perfil | Dashboard, Reportes, Incidencias, Usuarios, Categorías, Edificios |
 | Superadmin | global | Control · Incidencias · Usuarios · Perfil | Centro de control, Dashboard, Incidencias, Tablero, Técnicos, Reportes, Usuarios, Roles, Categorías, Edificios, Auditoría, Configuración, Métricas IA |
 
-Superadmin (rol de sistema por encima de admin) tiene todos los permisos; son **exclusivos** suyos `sistema:administrar` (Centro de control `/control`, cuentas admin/superadmin), `roles:gestionar` y `configuracion:gestionar`. Su pantalla de inicio (al iniciar sesión y al entrar a `/`) es el Centro de control. Admin no ve ni edita cuentas admin/superadmin (404) ni puede asignar esos roles (403).
+Superadmin (rol de sistema por encima de admin) tiene todos los permisos; son **exclusivos** suyos `sistema:administrar` (Centro de control `/control`, cuentas admin/superadmin, Auditoría, Métricas IA y limitar los permisos del rol admin), `roles:gestionar` y `configuracion:gestionar`. Su pantalla de inicio (al iniciar sesión y al entrar a `/`) es el Centro de control. Admin no ve ni edita cuentas admin/superadmin (404) ni puede asignar esos roles (403).
 
 Ruta / acción × rol (✔ = permitido por permiso de la tabla 3.3; la pantalla filtra por alcance):
 
@@ -692,9 +692,10 @@ Ruta / acción × rol (✔ = permitido por permiso de la tabla 3.3; la pantalla 
 | /admin/usuarios | usuarios:gestionar | — | — | — | — | ✔ (sin cuentas admin/superadmin) | ✔ | T-057 |
 | /admin/roles | roles:gestionar | — | — | — | — | — | ✔ | (existe) |
 | /admin/categorias | categorias:gestionar | — | — | — | — | ✔ | ✔ | T-061 |
-| /admin/edificios, /admin/auditoria | usuarios:gestionar | — | — | — | — | ✔ | ✔ | aulas: T-012 ⚑ (edificios sin tarea, RF-ADM-04) · T-022 |
+| /admin/edificios | usuarios:gestionar | — | — | — | — | ✔ | ✔ | aulas: T-012 ⚑ (edificios sin tarea, RF-ADM-04) |
+| /admin/auditoria | sistema:administrar | — | — | — | — | — | ✔ | T-022 |
 | /admin/configuracion | configuracion:gestionar | — | — | — | — | — | ✔ | T-029 |
-| /admin/metricas-ia | analitica:ver + rol admin/superadmin | — | — | — | — | ✔ | ✔ | T-030 |
+| /admin/metricas-ia | sistema:administrar | — | — | — | — | — | ✔ | T-030 |
 
 ## Detalle de tareas
 
