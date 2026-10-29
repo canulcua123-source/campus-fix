@@ -17,7 +17,7 @@ import { Badge, Button, Card, Input, PageHeader, Seccion, Segmentado, Select, Sk
 import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
 import { ETIQUETAS_PRIORIDAD, OPCIONES_CATEGORIA } from '../lib/etiquetas'
-import { ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
+import { ACCEPT_CAMARA, ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
 import type { EventoIAIn, RespuestaIA } from '../schemas/ia'
 import { incidenciaSchema, LIMITES, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
 import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
@@ -415,7 +415,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     <input
       ref={entrada}
       type="file"
-      accept={ACCEPT_FOTO}
+      accept={ACCEPT_CAMARA}
       capture="environment"
       hidden
       aria-label="Foto de la incidencia"

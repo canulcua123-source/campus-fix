@@ -53,7 +53,10 @@ describe('Reportar', () => {
     dobles.analizarImagen.mockReturnValue(new Promise(() => undefined))
     renderReportar()
 
-    expect(screen.getByLabelText('Foto de la incidencia')).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp')
+    expect(screen.getByLabelText('Foto de la incidencia')).toHaveAttribute('accept', 'image/*')
+    // Chrome Android abre la galería en vez de la cámara si accept lista varios tipos.
+    expect(screen.getByLabelText('Foto de la incidencia')).toHaveAttribute('capture', 'environment')
+    expect(screen.getByLabelText('Foto desde la galería')).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp')
     seleccionarFoto()
 
     await waitFor(() => expect(dobles.analizarImagen).toHaveBeenCalled())
