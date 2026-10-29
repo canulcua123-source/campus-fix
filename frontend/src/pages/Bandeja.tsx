@@ -1,14 +1,21 @@
-import { CheckCheck, CircleCheck, Hand, Hourglass, Inbox, RefreshCw, Search, SearchX } from 'lucide-react'
-import { useState } from 'react'
+import {
+  Camera, CheckCheck, CircleCheck, ClipboardList, Hand, Hourglass, Inbox, ListFilter, RefreshCw, Search, SearchX, type LucideIcon,
+} from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMe } from '../api/hooks/auth'
 import { mensajeDeError } from '../api/client'
 import { useIncidencias, useTomar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
-import { Button, EmptyState, ErrorState, Input, PageHeader, SkeletonLista } from '../components/ui'
-import { antiguedad, esMia, filtrarBandeja, ordenarBandeja } from '../lib/bandeja'
-import type { IncidenciaListaItem } from '../schemas/incidencia'
+import {
+  Button, EmptyState, ErrorState, ETIQUETAS, FiltroChips, Input, PageHeader, SkeletonLista, type OpcionChip,
+} from '../components/ui'
+import {
+  antiguedad, esMia, esResueltaPorMi, esVistaBandeja, filtrarVista, unirIncidencias, VISTAS_BANDEJA, type VistaBandeja,
+} from '../lib/bandeja'
+import { ESTADOS, type Estado, type IncidenciaListaItem } from '../schemas/incidencia'
 
 /** Sin acentos ni mayúsculas, para comparar «aire» con «Aire acondicionado». */
 const plegar = (texto: string) => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
@@ -21,79 +28,194 @@ function coincide(t: IncidenciaListaItem, consulta: string) {
   return palabras.every((p) => texto.includes(p))
 }
 
+const esEstado = (valor: string | null): valor is Estado => ESTADOS.includes(valor as Estado)
+const ACTIVOS: readonly string[] = ['abierta', 'en_proceso', 'en_espera']
 
-/** Bandeja del técnico: sus asignadas y las de su área sin técnico, por prioridad y antigüedad. */
+const VISTAS: Record<VistaBandeja, { texto: string; ayuda: string }> = {
+  todas: { texto: 'Todas', ayuda: 'Tus asignadas, las de tu área sin técnico y las que reportaste.' },
+  asignadas: { texto: 'Asignadas a mí', ayuda: 'Pendientes a tu cargo, de la más urgente a la menos urgente.' },
+  por_tomar: { texto: 'Por tomar', ayuda: 'Sin técnico asignado en tu área. Tómala para que pase a «Asignadas a mí».' },
+  reportadas: { texto: 'Reportadas por mí', ayuda: 'Fallas que tú reportaste y su avance.' },
+  resueltas: { texto: 'Resueltas', ayuda: 'Resueltas por ti: esperan que el reportante confirme (7 días).' },
+}
+
+/** «Mis incidencias»: pantalla única del técnico, filtrable por vista (?vista=) y estado (?estado=). */
 export default function Bandeja() {
-  const incidencias = useIncidencias({})
+  const [params, setParams] = useSearchParams()
+  const crudaVista = params.get('vista')
+  const vista: VistaBandeja = esVistaBandeja(crudaVista) ? crudaVista : 'todas'
+  const crudoEstado = params.get('estado')
+  const estado = esEstado(crudoEstado) ? crudoEstado : undefined
+
+  const todas = useIncidencias({})
+  // El listado no trae el reportante: «Reportadas por mí» se arma con ?propias=true.
+  const propias = useIncidencias({ propias: true })
   const me = useMe()
   const tomar = useTomar()
   const [aviso, setAviso] = useState<string | null>(null)
+  const [consulta, setConsulta] = useState('')
   const { abrir, panel } = usePanelIncidencia()
   // Espejo de POST /tomar: solo el rol técnico con permiso de seguimiento puede autoasignarse.
   const puedeTomar = useAuth((s) => s.usuario?.rol === 'tecnico' && s.tiene('seguimiento:registrar'))
-  const { data, refetch, isFetching } = incidencias
-  const isPending = incidencias.isPending || me.isPending
-  const isError = incidencias.isError || me.isError
-  const actualizar = () => {
-    void refetch()
-    void me.refetch()
-  }
+  const puedeReportar = useAuth((s) => s.tiene('incidencias:crear'))
 
-  const [consulta, setConsulta] = useState('')
-  const propias = ordenarBandeja(filtrarBandeja(data ?? [], 'mias', me.data?._id))
-  const porAceptar = ordenarBandeja(filtrarBandeja(data ?? [], 'sin_asignar', me.data?._id))
-  // Resueltas por mí: salen de pendientes pero se muestran aparte hasta que el reportante confirme.
-  const resueltas = (data ?? []).filter((t) => t.estado === 'resuelta' && esMia(t, me.data?._id))
-  const visibles = { resueltas: resueltas.filter((t) => coincide(t, consulta)), propias: propias.filter((t) => coincide(t, consulta)), porAceptar: porAceptar.filter((t) => coincide(t, consulta)) }
-  const hayAlgo = propias.length + porAceptar.length + resueltas.length > 0
-  const sinCoincidencias = consulta.trim() !== '' && hayAlgo && visibles.propias.length + visibles.porAceptar.length + visibles.resueltas.length === 0
+  const consultas = [todas, propias, me]
+  const isPending = consultas.some((q) => q.isPending)
+  const isError = consultas.some((q) => q.isError)
+  const isFetching = consultas.some((q) => q.isFetching)
+  const actualizar = () => consultas.forEach((q) => void q.refetch())
   const listo = !isPending && !isError
 
-  const tarjeta = (t: IncidenciaListaItem, aceptada: boolean | 'resuelta') => (
-    <li key={t._id}>
-      <TarjetaIncidencia
-        incidencia={t}
-        onAbrir={abrir}
-        tonoTiempo={antiguedad(t.fecha_creacion).nivel}
-        accion={aceptada === 'resuelta' ? (
-          <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-muted">
-            <Hourglass size={16} aria-hidden /> Esperando confirmación del reportante
-          </p>
-        ) : aceptada ? (
-          <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-ok">
-            <CircleCheck size={16} aria-hidden /> Aceptada por ti
-          </p>
-        ) : puedeTomar ? (
-          <Button
-            bloque
-            tamano="sm"
-            variante="primario"
-            icono={<Hand size={16} />}
-            aria-label={`Tomar ${t.codigo}`}
-            disabled={tomar.isPending}
-            cargando={tomar.isPending && tomar.variables === t._id}
-            textoCargando="Tomando…"
-            onClick={() => {
-              setAviso(null)
-              tomar.mutate(t._id, { onSuccess: () => setAviso(`Tomaste ${t.codigo}. Ya está en «Asignadas a ti».`) })
-            }}
-          >
-            Tomar
-          </Button>
-        ) : (
-          <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-warn">
-            <Hourglass size={16} aria-hidden /> Por aceptar
-          </p>
-        )}
-      />
-    </li>
+  const cambiar = (cambios: { vista?: VistaBandeja; estado?: Estado | null }) => {
+    const siguiente = new URLSearchParams(params)
+    if (cambios.vista !== undefined) {
+      if (cambios.vista === 'todas') siguiente.delete('vista')
+      else siguiente.set('vista', cambios.vista)
+      siguiente.delete('estado')
+    }
+    if (cambios.estado !== undefined) {
+      if (cambios.estado) siguiente.set('estado', cambios.estado)
+      else siguiente.delete('estado')
+    }
+    setParams(siguiente, { replace: true })
+  }
+
+  const usuarioId = me.data?._id
+  const reportadas = new Set((propias.data ?? []).map((t) => t._id))
+  const coincidentes = unirIncidencias(todas.data ?? [], propias.data ?? []).filter((t) => coincide(t, consulta))
+  const porVista = Object.fromEntries(
+    VISTAS_BANDEJA.map((v) => [v, filtrarVista(coincidentes, v, usuarioId, reportadas)]),
+  ) as Record<VistaBandeja, IncidenciaListaItem[]>
+  const enVista = porVista[vista]
+  const visibles = estado ? enVista.filter((t) => t.estado === estado) : enVista
+
+  const opcionesVista: OpcionChip<VistaBandeja>[] = VISTAS_BANDEJA.map((v) => ({
+    valor: v, texto: VISTAS[v].texto, cuenta: listo ? porVista[v].length : undefined,
+  }))
+  const cuentaEstado = (e: Estado) => enVista.filter((t) => t.estado === e).length
+  const estadosPresentes = ESTADOS.filter((e) => cuentaEstado(e) > 0 || e === estado)
+  const opcionesEstado: OpcionChip<Estado | 'todos'>[] = [
+    { valor: 'todos', texto: 'Todos', cuenta: enVista.length },
+    ...estadosPresentes.map((e) => ({ valor: e, texto: ETIQUETAS.estado[e], cuenta: cuentaEstado(e) })),
+  ]
+
+  const accionDe = (t: IncidenciaListaItem): ReactNode => {
+    if (esResueltaPorMi(t, usuarioId)) {
+      return (
+        <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-muted">
+          <Hourglass size={16} aria-hidden /> Esperando confirmación del reportante
+        </p>
+      )
+    }
+    if (!ACTIVOS.includes(t.estado)) return undefined
+    if (esMia(t, usuarioId)) {
+      return (
+        <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-ok">
+          <CircleCheck size={16} aria-hidden /> Aceptada por ti
+        </p>
+      )
+    }
+    if (t.tecnico_asignado) return undefined
+    if (!puedeTomar) {
+      return (
+        <p className="m-0 inline-flex items-center gap-1.5 text-sm font-semibold text-warn">
+          <Hourglass size={16} aria-hidden /> Por aceptar
+        </p>
+      )
+    }
+    return (
+      <Button
+        bloque
+        tamano="sm"
+        variante="primario"
+        icono={<Hand size={16} />}
+        aria-label={`Tomar ${t.codigo}`}
+        disabled={tomar.isPending}
+        cargando={tomar.isPending && tomar.variables === t._id}
+        textoCargando="Tomando…"
+        onClick={() => {
+          setAviso(null)
+          tomar.mutate(t._id, { onSuccess: () => setAviso(`Tomaste ${t.codigo}. Ya está en «Asignadas a mí».`) })
+        }}
+      >
+        Tomar
+      </Button>
+    )
+  }
+
+  const irA = (v: VistaBandeja, texto: string) => (
+    <Button variante="secundario" tamano="sm" onClick={() => cambiar({ vista: v })}>{texto}</Button>
   )
+  const nPorTomar = porVista.por_tomar.length
+  const nAsignadas = porVista.asignadas.length
+  const VACIOS: Record<VistaBandeja, { titulo: string; descripcion: string; icono: LucideIcon; accion?: ReactNode }> = {
+    todas: {
+      titulo: 'Todo al día',
+      descripcion: 'No tienes incidencias asignadas, no hay pendientes por tomar en tu área y no has reportado fallas.',
+      icono: Inbox,
+    },
+    asignadas: {
+      titulo: 'No tienes incidencias asignadas',
+      descripcion: nPorTomar > 0
+        ? `Hay ${nPorTomar} sin técnico en tu área que puedes tomar.`
+        : 'Cuando te asignen una incidencia o tomes una, aparecerá aquí.',
+      icono: CircleCheck,
+      accion: nPorTomar > 0 ? irA('por_tomar', 'Ver por tomar') : undefined,
+    },
+    por_tomar: {
+      titulo: 'No hay incidencias por tomar',
+      descripcion: 'Todas las incidencias de tu área ya tienen técnico asignado.',
+      icono: Hourglass,
+      accion: nAsignadas > 0 ? irA('asignadas', 'Ver asignadas a mí') : undefined,
+    },
+    reportadas: {
+      titulo: 'No has reportado incidencias',
+      descripcion: 'Si encuentras una falla, repórtala con una foto y aquí verás su avance.',
+      icono: ClipboardList,
+      accion: puedeReportar ? (
+        <Link to="/reportar" className="ui-btn ui-btn--primario ui-btn--sm"><Camera size={16} aria-hidden /> Reportar</Link>
+      ) : undefined,
+    },
+    resueltas: {
+      titulo: 'Sin resueltas por confirmar',
+      descripcion: 'Cuando resuelvas una incidencia, aparecerá aquí hasta que el reportante la confirme.',
+      icono: CheckCheck,
+      accion: nAsignadas > 0 ? irA('asignadas', 'Ver asignadas a mí') : undefined,
+    },
+  }
+
+  const vacio = (): ReactNode => {
+    if (consulta.trim() !== '' && enVista.length === 0) {
+      return (
+        <EmptyState
+          compacto
+          titulo="Sin coincidencias"
+          descripcion={`Ninguna incidencia de «${VISTAS[vista].texto}» coincide con «${consulta.trim()}».`}
+          icono={SearchX}
+          accion={<Button variante="secundario" tamano="sm" onClick={() => setConsulta('')}>Limpiar búsqueda</Button>}
+        />
+      )
+    }
+    if (estado && enVista.length > 0) {
+      return (
+        <EmptyState
+          compacto
+          titulo={`Ninguna en estado ${ETIQUETAS.estado[estado]}`}
+          descripcion={`En «${VISTAS[vista].texto}» no hay incidencias con ese estado.`}
+          icono={ListFilter}
+          accion={<Button variante="secundario" tamano="sm" onClick={() => cambiar({ estado: null })}>Ver todos los estados</Button>}
+        />
+      )
+    }
+    const v = VACIOS[vista]
+    return <EmptyState compacto titulo={v.titulo} descripcion={v.descripcion} icono={v.icono} accion={v.accion} />
+  }
 
   return (
     <div className="pila">
       <PageHeader
-        titulo="Bandeja"
-        subtitulo="Incidencias de tu área por atender"
+        titulo="Mis incidencias"
+        subtitulo="Lo asignado a ti, lo pendiente de tu área y lo que reportaste"
         acciones={(
           <Button
             variante="fantasma"
@@ -105,8 +227,27 @@ export default function Bandeja() {
         )}
       />
 
+      <div className="pila pila--sm">
+        <FiltroChips<VistaBandeja>
+          etiqueta="Mostrar"
+          valor={vista}
+          opciones={opcionesVista}
+          onCambio={(v) => cambiar({ vista: v })}
+        />
+        {listo && (estadosPresentes.length > 1 || estado) && (
+          <FiltroChips<Estado | 'todos'>
+            etiqueta="Filtrar por estado"
+            tamano="sm"
+            valor={estado ?? 'todos'}
+            opciones={opcionesEstado}
+            onCambio={(e) => cambiar({ estado: e === 'todos' ? null : e })}
+          />
+        )}
+        <p className="m-0 text-sm text-muted">{VISTAS[vista].ayuda}</p>
+      </div>
+
       <Input
-        etiqueta="Buscar en la bandeja"
+        etiqueta="Buscar en mis incidencias"
         etiquetaOculta
         type="search"
         icono={<Search size={18} />}
@@ -128,73 +269,33 @@ export default function Bandeja() {
         </p>
       )}
 
-      {isPending && <SkeletonLista etiqueta="Cargando bandeja" />}
+      {isPending && <SkeletonLista etiqueta="Cargando tus incidencias" />}
 
       {isError && (
         <ErrorState
-          titulo="No pudimos cargar la bandeja"
+          titulo="No pudimos cargar tus incidencias"
           mensaje="Revisa tu conexión e intenta de nuevo."
           onReintentar={actualizar}
-          reintentando={isFetching || me.isFetching}
+          reintentando={isFetching}
         />
       )}
 
-      {listo && sinCoincidencias && (
-        <EmptyState
-          compacto
-          titulo="Sin coincidencias"
-          descripcion={`Ninguna incidencia coincide con «${consulta.trim()}».`}
-          icono={SearchX}
-          accion={<Button variante="secundario" tamano="sm" onClick={() => setConsulta('')}>Limpiar búsqueda</Button>}
-        />
-      )}
+      {listo && visibles.length === 0 && vacio()}
 
-      {listo && !hayAlgo && (
-        <EmptyState
-          compacto
-          titulo="Todo al día"
-          descripcion="No tienes incidencias asignadas ni hay pendientes por aceptar en tu área."
-          icono={Inbox}
-        />
-      )}
-
-      {listo && !sinCoincidencias && visibles.propias.length > 0 && (
-        <section aria-labelledby="bandeja-propias" className="pila pila--sm">
-          <h2 id="bandeja-propias" className="m-0 flex items-center gap-2 text-base font-semibold">
-            <CircleCheck size={18} aria-hidden className="text-ok" /> Asignadas a ti
-            <span className="rounded-full bg-panel-2 px-2 text-sm font-medium text-muted">{visibles.propias.length}</span>
-          </h2>
-          <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Asignadas a ti">
-            {visibles.propias.map((t) => tarjeta(t, true))}
-          </ul>
-        </section>
-      )}
-
-      {listo && !sinCoincidencias && visibles.porAceptar.length > 0 && (
-        <section aria-labelledby="bandeja-por-aceptar" className="pila pila--sm">
-          <div>
-            <h2 id="bandeja-por-aceptar" className="m-0 flex items-center gap-2 text-base font-semibold">
-              <Hourglass size={18} aria-hidden className="text-warn" /> Por aceptar
-              <span className="rounded-full bg-panel-2 px-2 text-sm font-medium text-muted">{visibles.porAceptar.length}</span>
-            </h2>
-            {puedeTomar && <p className="m-0 text-sm text-muted">Sin técnico asignado. Tómala para que pase a «Asignadas a ti».</p>}
-          </div>
-          <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Por aceptar">
-            {visibles.porAceptar.map((t) => tarjeta(t, false))}
-          </ul>
-        </section>
-      )}
-      {listo && !sinCoincidencias && visibles.resueltas.length > 0 && (
-        <details className="pila pila--sm" open={consulta.trim() !== ''}>
-          <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-base font-semibold">
-            <CheckCheck size={18} aria-hidden className="text-muted" /> Resueltas
-            <span className="rounded-full bg-panel-2 px-2 text-sm font-medium text-muted">{visibles.resueltas.length}</span>
-            <span className="text-sm font-normal text-muted">· esperan que el reportante confirme (7 días)</span>
-          </summary>
-          <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label="Resueltas">
-            {visibles.resueltas.map((t) => tarjeta(t, 'resuelta'))}
-          </ul>
-        </details>
+      {listo && visibles.length > 0 && (
+        <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 xl:grid-cols-3" aria-label={VISTAS[vista].texto}>
+          {visibles.map((t) => (
+            <li key={t._id}>
+              <TarjetaIncidencia
+                incidencia={t}
+                onAbrir={abrir}
+                mostrarTecnico={Boolean(t.tecnico_asignado) && !esMia(t, usuarioId)}
+                tonoTiempo={antiguedad(t.fecha_creacion).nivel}
+                accion={accionDe(t)}
+              />
+            </li>
+          ))}
+        </ul>
       )}
       {panel}
     </div>

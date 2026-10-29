@@ -664,7 +664,7 @@ Navegación esperada (documento de requerimientos §6.5). Estado actual del cód
 | Rol | Alcance | Pestañas en celular | Menú lateral en computadora |
 | --- | --- | --- | --- |
 | Reportante | propio | Inicio · **Reportar** · Mis reportes · Perfil | — |
-| Técnico | area | Bandeja · Buscar · **Reportar** · Perfil | — |
+| Técnico | area | Mis incidencias (Bandeja + Mis reportes) · Buscar · **Reportar** · Perfil | Mis incidencias |
 | Coordinador | area | Tablero · Bandeja · **Reportar** · Métricas · Perfil | Tablero, Incidencias, Técnicos, Métricas |
 | Directivo | global | Dashboard · Buscar · Perfil | Dashboard, Incidencias, Reportes |
 | Admin | global | Usuarios · Categorías · Perfil | Dashboard, Usuarios, Categorías, Edificios, Auditoría, Métricas IA |

@@ -1,30 +1,39 @@
 import { Camera, ClipboardList, RefreshCw } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { useIncidencias } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
+import { perfilDe } from '../components/navegacion'
 import { usePanelIncidencia } from '../components/PanelIncidencia'
 import { TarjetaIncidencia } from '../components/TarjetaIncidencia'
-import { Button, EmptyState, ErrorState, ETIQUETAS, PageHeader, Segmentado, SkeletonLista, type OpcionSegmentado } from '../components/ui'
+import { Button, EmptyState, ErrorState, ETIQUETAS, FiltroChips, PageHeader, SkeletonLista, type OpcionChip } from '../components/ui'
 import { ESTADOS, type Estado } from '../schemas/incidencia'
 
 const esEstado = (valor: string | null): valor is Estado => ESTADOS.includes(valor as Estado)
 
 type Filtro = Estado | 'todos'
 /** Filtros principales del reportante; otro estado llegado por URL (?estado=en_espera) se agrega como opción. */
-const FILTROS: OpcionSegmentado<Filtro>[] = [
+const FILTROS: { valor: Filtro; texto: string }[] = [
   { valor: 'todos', texto: 'Todos' },
   { valor: 'abierta', texto: 'Abiertas' },
   { valor: 'en_proceso', texto: 'En proceso' },
   { valor: 'resuelta', texto: 'Resueltas' },
 ]
 
-/** "Mis reportes" (T-045): incidencias reportadas por el usuario, filtrables por estado en la URL (?estado=). */
+/** El técnico ve sus reportes en «Mis incidencias» (pantalla única); el resto, «Mis reportes». */
 export default function MisTickets() {
+  const esTecnico = useAuth((s) => perfilDe(s.usuario?.permisos ?? []) === 'tecnico')
+  return esTecnico ? <Navigate to="/bandeja?vista=reportadas" replace /> : <MisReportes />
+}
+
+/** "Mis reportes" (T-045): incidencias reportadas por el usuario, filtrables por estado en la URL (?estado=). */
+function MisReportes() {
   const [params, setParams] = useSearchParams()
   const { abrir, panel } = usePanelIncidencia()
   const crudo = params.get('estado')
   const estado = esEstado(crudo) ? crudo : undefined
-  const { data, isPending, isError, isFetching, refetch } = useIncidencias({ propias: true, estado })
+  // Se piden todas y se filtra aquí: así cada filtro muestra cuántas tiene.
+  const { data: todas, isPending, isError, isFetching, refetch } = useIncidencias({ propias: true })
+  const data = (estado ? todas?.filter((t) => t.estado === estado) : todas) ?? []
   const puedeReportar = useAuth((s) => s.tiene('incidencias:crear'))
 
   const filtrar = (nuevo?: Estado) => {
@@ -34,9 +43,13 @@ export default function MisTickets() {
     setParams(siguiente, { replace: true })
   }
 
-  const opciones = estado && !FILTROS.some((f) => f.valor === estado)
+  const base = estado && !FILTROS.some((f) => f.valor === estado)
     ? [...FILTROS, { valor: estado, texto: ETIQUETAS.estado[estado] }]
     : FILTROS
+  const opciones: OpcionChip<Filtro>[] = base.map((f) => ({
+    ...f,
+    cuenta: todas && (f.valor === 'todos' ? todas.length : todas.filter((t) => t.estado === f.valor).length),
+  }))
 
   return (
     <>
@@ -54,15 +67,13 @@ export default function MisTickets() {
         )}
       />
 
-      <div className="-mx-4 mb-4 overflow-x-auto px-4 pb-1">
-        <Segmentado<Filtro>
-          etiqueta="Filtrar por estado"
-          valor={estado ?? 'todos'}
-          opciones={opciones}
-          onCambio={(v) => filtrar(v === 'todos' ? undefined : v)}
-          className="min-w-max"
-        />
-      </div>
+      <FiltroChips<Filtro>
+        etiqueta="Filtrar por estado"
+        valor={estado ?? 'todos'}
+        opciones={opciones}
+        onCambio={(v) => filtrar(v === 'todos' ? undefined : v)}
+        className="mb-4"
+      />
 
       {isPending && <SkeletonLista etiqueta="Cargando tus reportes" />}
 

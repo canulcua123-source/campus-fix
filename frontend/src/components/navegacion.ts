@@ -89,6 +89,7 @@ const I = {
   misReportes: item('/mis-reportes', 'Mis reportes', ClipboardList),
   perfil: item('/perfil', 'Perfil', UserRound),
   bandeja: item('/bandeja', 'Bandeja', Inbox),
+  misIncidencias: item('/bandeja', 'Mis incidencias', Inbox),
   buscar: item('/buscar', 'Buscar', Search),
   tablero: item('/tablero', 'Tablero', KanbanSquare),
   metricas: item('/dashboard', 'Métricas', BarChart3),
@@ -125,7 +126,8 @@ const plano = (...items: ItemNav[]): GrupoNav[] => [{ items }]
 export const NAVEGACION: Record<PerfilNav, Config> = {
   reportante: { movil: [I.inicio, REPORTAR, I.misReportes, I.perfil], lateral: plano(I.inicio, I.misReportes) },
   // En escritorio la barra superior ya busca: «Buscar» solo queda en la barra inferior (móvil).
-  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: plano(I.bandeja, I.misReportes) },
+  // Pantalla única del técnico: «Mis incidencias» une Bandeja y Mis reportes (/mis-reportes redirige ahí).
+  tecnico: { movil: [I.misIncidencias, I.buscar, REPORTAR, I.perfil], lateral: plano(I.misIncidencias) },
   coordinador: {
     movil: [I.tablero, I.bandeja, REPORTAR, I.metricas, I.perfil],
     lateral: plano(I.tablero, I.incidencias, I.tecnicos, I.metricas),

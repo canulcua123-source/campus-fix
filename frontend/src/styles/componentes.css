@@ -300,6 +300,89 @@
     }
   }
 
+  /* ---------- Filtros tipo chip (FiltroChips) ---------- */
+  .ui-chips {
+    /* A sangre en móvil: la fila se desplaza bajo el margen lateral sin cortar el foco. */
+    margin-inline: -16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ui-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .ui-chips__fila {
+    display: flex;
+    gap: 8px;
+    width: max-content;
+    padding: 4px 16px;
+  }
+  .ui-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--tap-min);
+    padding: 0 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+  }
+  .ui-chip:hover:not([aria-checked='true']) {
+    border-color: var(--color-border-strong);
+  }
+  .ui-chip:active {
+    transform: scale(0.97);
+  }
+  .ui-chip[aria-checked='true'] {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-on-primary);
+    font-weight: 600;
+  }
+  .ui-chip__cuenta {
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-2);
+    color: var(--color-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .ui-chip[aria-checked='true'] .ui-chip__cuenta {
+    background: var(--color-on-primary);
+    color: var(--color-primary);
+  }
+  .ui-chips--sm .ui-chip {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  @media (pointer: coarse), (max-width: 1023px) {
+    .ui-chips--sm .ui-chip {
+      min-height: var(--tap-min);
+    }
+  }
+  @media (min-width: 1024px) {
+    .ui-chips {
+      margin-inline: 0;
+      overflow: visible;
+    }
+    .ui-chips__fila {
+      flex-wrap: wrap;
+      width: auto;
+      padding: 0;
+    }
+  }
+
   /* ---------- Rango de fechas ---------- */
   .ui-rango {
     display: flex;
