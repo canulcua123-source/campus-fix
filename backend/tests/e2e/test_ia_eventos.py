@@ -130,7 +130,7 @@ async def test_metricas_agregadas(api):
             "hasta": ahora.date().isoformat(),
             "proveedor": proveedor,
         },
-        headers=api.h("admin"),
+        headers=api.h("superadmin"),
     )
     assert respuesta.status_code == 200, respuesta.text
     datos = respuesta.json()
@@ -145,13 +145,13 @@ async def test_metricas_agregadas(api):
     ]
 
 
-@pytest.mark.parametrize("quien", ["tecnico_infra", "coordinador_infra", "directivo", "reportante_a"])
-async def test_metricas_ia_403_no_admin(api, quien):
+@pytest.mark.parametrize("quien", ["tecnico_infra", "coordinador_infra", "directivo", "reportante_a", "admin"])
+async def test_metricas_ia_403_no_superadmin(api, quien):
     respuesta = await api.c.get("/analitica/ia", headers=api.h(quien))
     assert respuesta.status_code == 403, respuesta.text
     assert respuesta.json()["error"] == "sin_permiso"
 
-    admin = await api.c.get("/analitica/ia", headers=api.h("admin"))
-    assert admin.status_code == 200, admin.text
+    superadmin = await api.c.get("/analitica/ia", headers=api.h("superadmin"))
+    assert superadmin.status_code == 200, superadmin.text
     sin_sesion = await api.c.get("/analitica/ia")
     assert sin_sesion.status_code == 401

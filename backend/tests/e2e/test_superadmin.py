@@ -109,9 +109,123 @@ async def test_admin_no_ve_ni_edita_cuentas_privilegiadas(api):
     assert {str(api.oid("admin")), str(otro_admin["_id"]), str(api.oid("superadmin"))} <= visibles_sa
 
 
-async def test_metricas_ia_accesibles_para_superadmin(api):
-    assert (await api.c.get("/analitica/ia", headers=api.h("superadmin"))).status_code == 200
-    assert (await api.c.get("/analitica/ia", headers=api.h("admin"))).status_code == 200
+async def test_metricas_ia_y_auditoria_exclusivas_del_superadmin(api):
+    for ruta in ("/analitica/ia", "/auditoria"):
+        assert (await api.c.get(ruta, headers=api.h("superadmin"))).status_code == 200, ruta
+        assert (await api.c.get(ruta, headers=api.h("admin"))).status_code == 403, ruta
+
+
+# ---------- el superadmin limita al rol admin ----------
+
+
+async def _restaurar_rol_admin(api, antes: dict) -> None:
+    await api.db.roles.update_one({"_id": antes["_id"]}, {"$set": {"permisos": antes["permisos"]}})
+
+
+async def test_superadmin_limita_permisos_del_rol_admin(api):
+    antes = await api.db.roles.find_one({"clave": "admin"})
+    limitados = [p for p in antes["permisos"] if p != "categorias:gestionar"]
+    try:
+        r = await api.c.patch(f"/roles/{antes['_id']}", json={"permisos": limitados}, headers=api.h("superadmin"))
+        assert r.status_code == 200, r.text
+        assert set(r.json()["permisos"]) == set(limitados)
+        despues = await api.db.roles.find_one({"_id": antes["_id"]})
+        assert set(despues["permisos"]) == set(limitados)
+        assert {k: despues[k] for k in ("clave", "nombre", "alcance", "sistema")} == {
+            k: antes[k] for k in ("clave", "nombre", "alcance", "sistema")
+        }
+        # Efecto inmediato: el admin pierde la gestión de categorías.
+        r = await api.c.post(
+            "/categorias",
+            json={"clave": "cat_limitada", "nombre": "Limitada", "prefijo": "LIM", "area_responsable": "TI"},
+            headers=api.h("admin"),
+        )
+        assert r.status_code == 403, r.text
+        evento = await api.db.auditoria.find_one(
+            {"recurso": "roles", "recurso_id": "admin", "accion": "editar", "actor_id": api.oid("superadmin")}
+        )
+        assert evento is not None
+    finally:
+        await _restaurar_rol_admin(api, antes)
+
+
+@pytest.mark.parametrize("exclusivo", ["roles:gestionar", "configuracion:gestionar", "sistema:administrar"])
+async def test_superadmin_no_otorga_permisos_exclusivos_al_admin(api, exclusivo):
+    antes = await api.db.roles.find_one({"clave": "admin"})
+    try:
+        r = await api.c.patch(
+            f"/roles/{antes['_id']}", json={"permisos": [*antes["permisos"], exclusivo]}, headers=api.h("superadmin")
+        )
+        assert r.status_code == 403, r.text
+        assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
+    finally:
+        await _restaurar_rol_admin(api, antes)
+
+
+@pytest.mark.parametrize(
+    "cuerpo",
+    [
+        {"clave": "admin_nuevo"},
+        {"alcance": "area"},
+        {"nombre": "Administrador TI"},
+        {"descripcion": "otra"},
+        {"permisos": ["incidencias:ver"], "alcance": "propio"},
+    ],
+)
+async def test_superadmin_solo_edita_permisos_del_admin(api, cuerpo):
+    antes = await api.db.roles.find_one({"clave": "admin"})
+    r = await api.c.patch(f"/roles/{antes['_id']}", json=cuerpo, headers=api.h("superadmin"))
+    assert r.status_code == 409, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
+
+
+async def test_admin_no_edita_su_propio_rol(api):
+    antes = await api.db.roles.find_one({"clave": "admin"})
+    r = await api.c.patch(f"/roles/{antes['_id']}", json={"permisos": list(CATALOGO_PERMISOS)}, headers=api.h("admin"))
+    assert r.status_code == 403, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
+
+
+async def test_rol_admin_no_se_elimina(api):
+    antes = await api.db.roles.find_one({"clave": "admin"})
+    r = await api.c.delete(f"/roles/{antes['_id']}", headers=api.h("superadmin"))
+    assert r.status_code == 409, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
+
+
+@pytest.mark.parametrize("clave", ["superadmin", "coordinador", "reportante"])
+async def test_otros_roles_de_sistema_siguen_inmutables(api, clave):
+    antes = await api.db.roles.find_one({"clave": clave})
+    r = await api.c.patch(f"/roles/{antes['_id']}", json={"permisos": ["incidencias:ver"]}, headers=api.h("superadmin"))
+    assert r.status_code == 409, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
+
+
+async def test_rol_con_gestion_de_roles_sin_superadmin_no_limita_admin(api):
+    clave = "gestor_sin_sistema"
+    await api.db.roles.update_one(
+        {"clave": clave},
+        {
+            "$setOnInsert": {
+                "clave": clave,
+                "nombre": "Gestor sin sistema",
+                "descripcion": "e2e",
+                "permisos": [p for p in CATALOGO_PERMISOS if p != "sistema:administrar"],
+                "alcance": "global",
+                "sistema": False,
+            }
+        },
+        upsert=True,
+    )
+    gestor = await api.usuario_temporal(rol=clave)
+    antes = await api.db.roles.find_one({"clave": "admin"})
+    r = await api.c.patch(
+        f"/roles/{antes['_id']}",
+        json={"permisos": ["incidencias:ver"]},
+        headers={"Authorization": f"Bearer {gestor['token']}"},
+    )
+    assert r.status_code == 409, r.text
+    assert await api.db.roles.find_one({"_id": antes["_id"]}) == antes
 
 
 # ---------- invariantes ----------

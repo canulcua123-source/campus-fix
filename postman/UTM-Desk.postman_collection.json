@@ -2434,7 +2434,7 @@
           }
         },
         {
-          "name": "Métricas de IA (solo admin)",
+          "name": "Métricas de IA (solo superadmin)",
           "event": [
             {
               "listen": "test",
@@ -2452,10 +2452,11 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
               }
             ],
-            "description": "Tablero agregado exclusivo del rol admin. Filtros opcionales, periodo máximo de 180 días.",
+            "description": "Tablero agregado exclusivo del superadministrador (sistema:administrar). Filtros opcionales, periodo máximo de 180 días.",
             "url": {
               "raw": "{{base_url}}/analitica/ia",
               "host": [
@@ -2496,7 +2497,7 @@
           }
         },
         {
-          "name": "Métricas IA - no administrador",
+          "name": "Métricas IA - admin sin permiso",
           "event": [
             {
               "listen": "test",
@@ -2513,10 +2514,11 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token_reportante}}"
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
               }
             ],
-            "description": "Un usuario que no es admin recibe 403 aunque esté autenticado.",
+            "description": "El admin (sin sistema:administrar) recibe 403 aunque esté autenticado.",
             "url": {
               "raw": "{{base_url}}/analitica/ia",
               "host": [
@@ -3230,7 +3232,8 @@
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
                   "pm.test('Respuesta es un arreglo', function () { const j = pm.response.json(); pm.expect(j).to.be.an('array'); });",
-                  "pm.test('Roles con clave y permisos', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('clave'); pm.expect(j[0].permisos).to.be.an('array'); } const base = j.find((r) => r.clave === 'reportante'); pm.expect(base.sistema).to.eql(true); pm.collectionVariables.set('rol_base_id', base._id); });"
+                  "pm.test('Roles con clave y permisos', function () { const j = pm.response.json(); if (j.length) { pm.expect(j[0]).to.have.property('clave'); pm.expect(j[0].permisos).to.be.an('array'); } const base = j.find((r) => r.clave === 'reportante'); pm.expect(base.sistema).to.eql(true); pm.collectionVariables.set('rol_base_id', base._id); });",
+                  "pm.test('Rol admin del sistema', function () { const admin = pm.response.json().find((r) => r.clave === 'admin'); pm.expect(admin.sistema).to.eql(true); pm.collectionVariables.set('rol_admin_id', admin._id); pm.collectionVariables.set('rol_admin_permisos', JSON.stringify(admin.permisos)); });"
                 ]
               }
             }
@@ -3487,6 +3490,199 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"nombre\": \"Nombre prohibido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Limitar permisos del rol admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Rol admin sigue siendo del sistema', function () { const j = pm.response.json(); pm.expect(j.clave).to.eql('admin'); pm.expect(j.sistema).to.eql(true); pm.expect(j.permisos).to.not.include('sistema:administrar'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "El superadmin (sistema:administrar) ajusta SOLO los permisos del rol de sistema admin. Se reenvían los permisos actuales para no alterar el entorno.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permisos\": {{rol_admin_permisos}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Limitar admin - permiso exclusivo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Los permisos exclusivos del superadmin nunca se otorgan al rol admin: 403.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permisos\": [\n    \"incidencias:ver\",\n    \"roles:gestionar\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Limitar admin - campo no permitido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Del rol admin solo se editan los permisos; cambiar alcance, clave o nombre responde 409.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alcance\": \"area\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Limitar admin - admin sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "description": "Token JWT de administrador"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "El admin no puede editar su propio rol (le falta roles:gestionar): 403.",
+            "url": {
+              "raw": "{{base_url}}/roles/{{rol_admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "roles",
+                "{{rol_admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permisos\": [\n    \"incidencias:ver\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4515,7 +4711,7 @@
     },
     {
       "name": "Auditoria administrativa",
-      "description": "Consulta paginada de T-022, exclusiva del administrador.",
+      "description": "Consulta paginada de T-022, exclusiva del superadministrador (sistema:administrar).",
       "item": [
         {
           "name": "Listar auditoria por recurso",
@@ -4536,11 +4732,59 @@
             "header": [
               {
                 "key": "Authorization",
+                "value": "Bearer {{token_superadmin}}",
+                "description": "Token JWT de superadministrador"
+              }
+            ],
+            "description": "Lista la primera pagina de eventos de usuarios en orden estable descendente.",
+            "url": {
+              "raw": "{{base_url}}/auditoria?pagina=1&limite=20&recurso=usuarios",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auditoria"
+              ],
+              "query": [
+                {
+                  "key": "pagina",
+                  "value": "1"
+                },
+                {
+                  "key": "limite",
+                  "value": "20"
+                },
+                {
+                  "key": "recurso",
+                  "value": "usuarios"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar auditoria - admin sin permiso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Codigo de estado 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
                 "value": "Bearer {{token}}",
                 "description": "Token JWT de administrador"
               }
             ],
-            "description": "Lista la primera pagina de eventos de usuarios en orden estable descendente.",
+            "description": "El admin no consulta la bitácora: es exclusiva del superadmin.",
             "url": {
               "raw": "{{base_url}}/auditoria?pagina=1&limite=20&recurso=usuarios",
               "host": [
@@ -5292,6 +5536,14 @@
     {
       "key": "aula_id_publico",
       "value": ""
+    },
+    {
+      "key": "rol_admin_id",
+      "value": ""
+    },
+    {
+      "key": "rol_admin_permisos",
+      "value": "[]"
     }
   ]
 }

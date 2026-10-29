@@ -2,15 +2,24 @@ from typing import Annotated
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from app.core.auditoria import registrar_auditoria
 from app.core.db import get_db
-from app.core.security import puede_otorgar, require_algun_permiso, require_permiso
+from app.core.security import (
+    PERMISO_SUPERADMIN,
+    puede_otorgar,
+    require_algun_permiso,
+    require_permiso,
+)
 from app.core.serial import a_json
-from app.schemas.rol import RolIn, RolPatch
+from app.schemas.rol import PERMISOS_EXCLUSIVOS_SUPERADMIN, RolIn, RolPatch
 
 router = APIRouter(prefix="/roles", tags=["roles"])
+
+# Único rol de sistema cuyos permisos puede limitar el superadmin.
+CLAVE_ROL_ADMIN = "admin"
 
 
 @router.get("")
@@ -71,12 +80,52 @@ async def _fallo_sin_coincidencia(oid: ObjectId) -> HTTPException:
     return HTTPException(409, "Los roles del sistema son inmutables")
 
 
+async def _limitar_rol_admin(oid: ObjectId, actual: dict, cambios: dict, usuario: dict) -> dict:
+    """El superadmin ajusta SOLO los permisos del rol de sistema admin, sin otorgarle los exclusivos."""
+    if set(cambios) != {"permisos"}:
+        raise HTTPException(409, "Del rol admin solo se pueden limitar sus permisos")
+    exclusivos = sorted(set(cambios["permisos"]) & set(PERMISOS_EXCLUSIVOS_SUPERADMIN))
+    if exclusivos:
+        raise HTTPException(403, f"El permiso {exclusivos[0]} es exclusivo del superadministrador")
+    if not puede_otorgar(usuario, cambios["permisos"], actual["alcance"]):
+        raise HTTPException(403, "No puedes editar un rol con permisos o alcance mayores a los tuyos")
+    actualizado = await get_db().roles.find_one_and_update(
+        {"_id": oid, "clave": CLAVE_ROL_ADMIN, "sistema": True},
+        {"$set": {"permisos": cambios["permisos"]}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if actualizado is None:
+        if await get_db().roles.find_one({"_id": oid}, {"_id": 1}) is None:
+            raise HTTPException(404, "Rol no encontrado")
+        raise HTTPException(409, "El rol cambió mientras se editaba; recarga e intenta de nuevo")
+    await registrar_auditoria(
+        actor=usuario,
+        accion="editar",
+        recurso="roles",
+        recurso_id=CLAVE_ROL_ADMIN,
+        antes=actual,
+        despues=actualizado,
+    )
+    return a_json(actualizado)
+
+
 @router.patch("/{rol_id}")
 async def editar_rol(
     rol_id: str, datos: RolPatch, usuario: Annotated[dict, Depends(require_permiso("roles:gestionar"))]
 ):
-    oid, actual = await _rol_editable(rol_id, usuario)
     cambios = datos.model_dump(exclude_unset=True, exclude_none=True)
+    oid = _oid(rol_id)
+    rol = await get_db().roles.find_one({"_id": oid})
+    if (
+        rol is not None
+        and rol.get("sistema") is True
+        and rol.get("clave") == CLAVE_ROL_ADMIN
+        and PERMISO_SUPERADMIN in usuario["_permisos"]
+    ):
+        if not cambios:
+            raise HTTPException(400, "No hay cambios")
+        return await _limitar_rol_admin(oid, rol, cambios, usuario)
+    oid, actual = await _rol_editable(rol_id, usuario)
     if not cambios:
         raise HTTPException(400, "No hay cambios")
     permisos = cambios.get("permisos", actual["permisos"])

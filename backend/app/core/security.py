@@ -172,24 +172,11 @@ def require_algun_permiso(*permisos: str):
     return dependencia
 
 
-# Roles de sistema con acceso administrativo completo (require_admin). superadmin está por encima de admin.
+# Roles de sistema administrativos (cuentas privilegiadas). superadmin está por encima de admin.
 ROLES_ADMINISTRADORES = ("admin", "superadmin")
-# Permiso exclusivo del superadmin: gestionar cuentas privilegiadas y el Centro de control.
+# Permiso exclusivo del superadmin: gestionar cuentas privilegiadas, el Centro de control, la auditoría,
+# las métricas de IA y los permisos del rol admin.
 PERMISO_SUPERADMIN = "sistema:administrar"
-
-
-def require_admin(permiso: str):
-    """Combina un permiso real con la restricción explícita a los roles de sistema admin/superadmin."""
-    dependencia_permiso = require_permiso(permiso)
-
-    async def dependencia(
-        usuario: Annotated[dict[str, Any], Depends(dependencia_permiso)],
-    ) -> dict[str, Any]:
-        if usuario.get("rol") not in ROLES_ADMINISTRADORES:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Acceso exclusivo del administrador")
-        return usuario
-
-    return dependencia
 
 
 def filtro_alcance(usuario: dict[str, Any]) -> dict[str, Any]:

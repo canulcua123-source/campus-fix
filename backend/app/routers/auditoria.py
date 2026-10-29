@@ -2,10 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.core.db import get_db
-from app.core.security import ROLES_ADMINISTRADORES, require_permiso
+from app.core.security import PERMISO_SUPERADMIN, require_permiso
 from app.core.serial import a_json
 from app.schemas.auditoria import PaginaAuditoriaOut, RecursoAuditoria
 
@@ -28,24 +28,22 @@ PROYECCION_AUDITORIA = {
     response_model_exclude_none=True,
     summary="Consultar la bitácora administrativa",
     description=(
-        "Solo los roles administrador y superadministrador pueden consultar eventos de usuarios, roles, categorías y aulas. "
+        f"Exclusivo del superadministrador (permiso {PERMISO_SUPERADMIN}): consulta eventos de usuarios, roles, "
+        "categorías y aulas. "
         "Los resultados se ordenan por fecha e identificador descendentes y admiten filtro por recurso."
     ),
     responses={
         400: {"description": "Parámetros de paginación o recurso inválidos"},
         401: {"description": "Autenticación requerida"},
-        403: {"description": "Acceso exclusivo del administrador"},
+        403: {"description": f"Falta el permiso {PERMISO_SUPERADMIN} (exclusivo del superadministrador)"},
     },
 )
 async def listar_auditoria(
-    usuario: Annotated[dict, Depends(require_permiso("usuarios:gestionar"))],
+    _: Annotated[dict, Depends(require_permiso(PERMISO_SUPERADMIN))],
     pagina: Annotated[int, Query(ge=1)] = 1,
     limite: Annotated[int, Query(ge=1, le=100)] = 20,
     recurso: RecursoAuditoria | None = None,
 ):
-    if usuario.get("rol") not in ROLES_ADMINISTRADORES:
-        raise HTTPException(403, "La bitácora de auditoría es exclusiva del administrador")
-
     filtro = {"recurso": recurso} if recurso is not None else {}
     coleccion = get_db().auditoria
     total = await coleccion.count_documents(filtro)

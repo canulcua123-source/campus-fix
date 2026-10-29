@@ -12,10 +12,9 @@ const MATRIZ: Record<RolBase, { movil: string[]; lateral: string[] }> = {
   },
   directivo: { movil: ['Dashboard', 'Buscar', 'Perfil'], lateral: ['Dashboard', 'Incidencias', 'Reportes'] },
   admin: {
-    // Roles y Configuración pasaron al superadmin.
-    movil: ['Usuarios', 'Categorías', 'Perfil'],
-    // + Dashboard (acceso a analítica:ver) y Métricas IA (T-030, exclusiva de admin/superadmin), fuera de la tabla original.
-    lateral: ['Dashboard', 'Métricas IA', 'Usuarios', 'Categorías', 'Edificios', 'Auditoría'],
+    // Roles, Configuración, Auditoría y Métricas IA son exclusivas del superadmin.
+    movil: ['Usuarios', 'Incidencias', 'Categorías', 'Perfil'],
+    lateral: ['Dashboard', 'Reportes', 'Incidencias', 'Usuarios', 'Categorías', 'Edificios'],
   },
   superadmin: {
     movil: ['Control', 'Incidencias', 'Usuarios', 'Perfil'],
@@ -45,9 +44,9 @@ const RUTAS_POR_ROL: Record<RutaApp, RolBase[]> = {
   '/admin/roles': ['superadmin'],
   '/admin/categorias': ['admin', 'superadmin'],
   '/admin/edificios': ['admin', 'superadmin'],
-  '/admin/auditoria': ['admin', 'superadmin'],
+  '/admin/auditoria': ['superadmin'],
   '/admin/configuracion': ['superadmin'],
-  '/admin/metricas-ia': ['admin', 'superadmin'],
+  '/admin/metricas-ia': ['superadmin'],
 }
 
 const etiquetas = (items: { etiqueta: string }[]) => items.map((i) => i.etiqueta)
@@ -92,10 +91,11 @@ describe('navegacion', () => {
     expect(rutaInicio(ROLES_BASE.admin.permisos, 'admin')).toBe('/dashboard')
   })
 
-  it('un rol personalizado con analítica pero sin rol admin no ve Métricas IA', () => {
-    const permisos = [...ROLES_BASE.admin.permisos]
-    expect(perfilDe(permisos)).toBe('admin')
-    expect(etiquetas(navegacionPara(permisos, 'admin_campus').lateral)).not.toContain('Métricas IA')
+  it('Auditoría y Métricas IA dependen de sistema:administrar, no del nombre del rol', () => {
+    const lateral = (permisos: readonly string[], rol: string) => etiquetas(navegacionPara(permisos, rol).lateral)
+    expect(lateral(ROLES_BASE.admin.permisos, 'admin')).not.toContain('Métricas IA')
+    expect(lateral(ROLES_BASE.admin.permisos, 'admin')).not.toContain('Auditoría')
+    expect(lateral(ROLES_BASE.superadmin.permisos, 'clon_superadmin')).toEqual(expect.arrayContaining(['Métricas IA', 'Auditoría']))
   })
 
   it('superadmin y admin ven el menú lateral agrupado; Administración y Sistema son plegables', () => {
@@ -109,9 +109,9 @@ describe('navegacion', () => {
       { titulo: 'Sistema', plegable: true, items: ['Auditoría', 'Configuración'] },
     ])
     expect(resumen('admin')).toEqual([
-      { titulo: 'Análisis', plegable: false, items: ['Dashboard', 'Métricas IA'] },
+      { titulo: 'Análisis', plegable: false, items: ['Dashboard', 'Reportes'] },
+      { titulo: 'Operación', plegable: false, items: ['Incidencias'] },
       { titulo: 'Administración', plegable: true, items: ['Usuarios', 'Categorías', 'Edificios'] },
-      { titulo: 'Sistema', plegable: true, items: ['Auditoría'] },
     ])
   })
 
