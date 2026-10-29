@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.db import get_db, get_redis
 from app.core.errores import cabeceras_retry_after
 from app.core.limiter import clave_usuario, limiter
-from app.core.security import filtro_alcance, permisos_del_usuario, require_permiso
+from app.core.security import filtro_alcance, filtro_visibilidad, permisos_del_usuario, require_permiso
 from app.core.serial import a_json
 from app.core.storage import get_storage
 from app.dominio.categorias import CATEGORIAS_SISTEMA
@@ -109,11 +109,15 @@ def _oid(id_: str) -> ObjectId:
     return ObjectId(id_)
 
 
-async def _en_alcance(incidencia_id: str, usuario: dict, proyeccion: dict | None = None) -> dict:
-    """Carga la incidencia solo si está dentro del alcance; fuera de alcance responde 404 (no revela que existe)."""
-    doc = await get_db().incidencias_campus.find_one(
-        {"_id": _oid(incidencia_id), **filtro_alcance(usuario)}, proyeccion
-    )
+async def _en_alcance(
+    incidencia_id: str, usuario: dict, proyeccion: dict | None = None, *, lectura: bool = False
+) -> dict:
+    """Carga la incidencia solo si está dentro del alcance; fuera de alcance responde 404 (no revela que existe).
+
+    `lectura=True` usa filtro_visibilidad: además del alcance, las que el usuario reportó.
+    """
+    filtro = filtro_visibilidad(usuario) if lectura else filtro_alcance(usuario)
+    doc = await get_db().incidencias_campus.find_one({"_id": _oid(incidencia_id), **filtro}, proyeccion)
     if doc is None:
         raise HTTPException(404, "Incidencia no encontrada")
     return doc
@@ -376,7 +380,7 @@ async def listar_incidencias(
     # $and: el filtro del cliente se suma al alcance; nunca lo reemplaza ni es reemplazado.
     cursor = (
         get_db()
-        .incidencias_campus.find({"$and": [filtro, filtro_alcance(usuario)]}, PROYECCION_LISTA)
+        .incidencias_campus.find({"$and": [filtro, filtro_visibilidad(usuario)]}, PROYECCION_LISTA)
         .sort("fecha_creacion", -1)
         .limit(limite)
     )
@@ -396,10 +400,10 @@ async def buscar(
     if PATRON_FOLIO.match(q.strip()):
         # Folio completo o parcial (INC-2026-1020…): prefijo anclado sobre el índice único de `codigo`.
         prefijo = re.escape(q.strip().upper())
-        filtro_folio = {"codigo": {"$regex": f"^{prefijo}"}, **filtro_alcance(usuario)}
+        filtro_folio = {"codigo": {"$regex": f"^{prefijo}"}, **filtro_visibilidad(usuario)}
         cursor = get_db().incidencias_campus.find(filtro_folio, PROYECCION_LISTA).sort("codigo", 1).limit(20)
         return [a_json(d) async for d in cursor]
-    filtro = {"$text": {"$search": q}, **filtro_alcance(usuario)}
+    filtro = {"$text": {"$search": q}, **filtro_visibilidad(usuario)}
     proyeccion = {**PROYECCION_LISTA, "score": {"$meta": "textScore"}}
     cursor = get_db().incidencias_campus.find(filtro, proyeccion).sort([("score", {"$meta": "textScore"})]).limit(20)
     return [a_json(d) async for d in cursor]
@@ -407,7 +411,7 @@ async def buscar(
 
 @router.get("/{incidencia_id}", response_model=IncidenciaDetalleOut, response_model_exclude_none=True)
 async def detalle(incidencia_id: str, usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))]):
-    doc = await _en_alcance(incidencia_id, usuario)
+    doc = await _en_alcance(incidencia_id, usuario, lectura=True)
     doc["puede_retirar"] = (
         doc.get("reportante", {}).get("usuario_id") == usuario["_id"]
         and doc.get("estado") == "abierta"
@@ -479,7 +483,7 @@ async def retirar_incidencia(
                         "$lte": ahora,
                     },
                 },
-                filtro_alcance(usuario),
+                filtro_visibilidad(usuario),
             ]
         },
         {
@@ -492,7 +496,7 @@ async def retirar_incidencia(
         },
     )
     if res.matched_count == 0:
-        actual = await _en_alcance(incidencia_id, usuario, {"reportante.usuario_id": 1})
+        actual = await _en_alcance(incidencia_id, usuario, {"reportante.usuario_id": 1}, lectura=True)
         if actual.get("reportante", {}).get("usuario_id") != usuario["_id"]:
             raise HTTPException(404, "Incidencia no encontrada")
         raise HTTPException(409, "La incidencia ya no puede retirarse")
@@ -510,6 +514,7 @@ async def _diagnosticar_accion_reportante(
         incidencia_id,
         usuario,
         {"estado": 1, "fecha_resolucion": 1, "reportante.usuario_id": 1},
+        lectura=True,
     )
     if actual.get("reportante", {}).get("usuario_id") != usuario["_id"]:
         raise HTTPException(403, "Solo el reportante propietario puede realizar esta acción")
@@ -554,7 +559,7 @@ async def confirmar_o_reabrir(
     propietario = {"reportante.usuario_id": usuario["_id"]}
     condiciones: list[dict[str, Any]] = [
         {"_id": oid, "estado": "resuelta"},
-        filtro_alcance(usuario),
+        filtro_visibilidad(usuario),
         propietario,
     ]
     if datos.accion == "confirmar":
@@ -1044,7 +1049,7 @@ async def url_evidencia(
     usuario: Annotated[dict, Depends(require_permiso("incidencias:ver"))],
     almacenamiento: Annotated[StoragePort, Depends(get_storage)] = _STORAGE_DIRECTO,
 ):
-    inc = await _en_alcance(incidencia_id, usuario, {"evidencias_adjuntas": 1})
+    inc = await _en_alcance(incidencia_id, usuario, {"evidencias_adjuntas": 1}, lectura=True)
     ev = next((e for e in inc.get("evidencias_adjuntas", []) if e.get("evidencia_id") == evidencia_id), None)
     if ev is None:
         raise HTTPException(404, "Evidencia no encontrada")

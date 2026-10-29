@@ -191,6 +191,19 @@ def filtro_alcance(usuario: dict[str, Any]) -> dict[str, Any]:
     return {"reportante.usuario_id": usuario["_id"]}
 
 
+def filtro_visibilidad(usuario: dict[str, Any]) -> dict[str, Any]:
+    """Filtro de lectura: el alcance del rol más las incidencias que el propio usuario reportó.
+
+    Un técnico (alcance area/edificio) que reporta fuera de sus categorías o edificios debe poder seguir
+    su reporte. Solo amplía lecturas y acciones de reportante; asignar, tomar, dar seguimiento o
+    cambiar prioridad siguen usando filtro_alcance.
+    """
+    alcance = filtro_alcance(usuario)
+    if not alcance or "reportante.usuario_id" in alcance:
+        return alcance
+    return {"$or": [alcance, {"reportante.usuario_id": usuario["_id"]}]}
+
+
 # Jerarquía de alcance: un gestor no puede otorgar más alcance del que tiene.
 RANGO_ALCANCE = {"propio": 0, "area": 1, "edificio": 1, "global": 2}
 

@@ -101,6 +101,8 @@ Los seis endpoints de `/analitica` aceptan `desde`, `hasta` y `categoria`. Las f
 
 **API-05 · 404 fuera de alcance, nunca 403.** Si la incidencia existe pero no está en el alcance del usuario, la respuesta es idéntica a la de una que no existe: `404 "Incidencia no encontrada"`. Así no se puede adivinar qué ids existen (BOLA, OWASP API1:2023). El 403 es solo para "tu rol no tiene ese permiso".
 
+Lecturas (listar, buscar, detalle, URL de evidencia) y acciones de reportante (retirar, confirmar, reabrir) usan `filtro_visibilidad`: el alcance del rol **más** las incidencias que el propio usuario reportó, para que un técnico siga sus reportes fuera de su área. Tomar, asignar, seguimiento, prioridad y evidencias siguen con `filtro_alcance`.
+
 ```python
 # ✅ el filtro de alcance va en la misma consulta
 doc = await get_db().incidencias_campus.find_one({"_id": _oid(incidencia_id), **filtro_alcance(usuario)})
