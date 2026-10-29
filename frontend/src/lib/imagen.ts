@@ -29,6 +29,8 @@ export const CONFIG_FOTO = {
 
 /** `accept` del input: JPEG primero para que iOS transcodifique HEIC a JPEG (nunca `image/heic`). */
 export const ACCEPT_FOTO = 'image/jpeg,image/png,image/webp'
+/** Entrada de cámara: Chrome Android ignora `capture` si `accept` lista varios tipos y abre la galería. El tipo se valida y se convierte a JPEG después. */
+export const ACCEPT_CAMARA = 'image/*'
 
 export class ErrorImagen extends Error {
   constructor(mensaje: string) {
