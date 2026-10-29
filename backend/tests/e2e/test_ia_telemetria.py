@@ -221,7 +221,7 @@ async def test_metricas_ia_con_datos_tras_el_flujo(api, ia_falsa):
             "hasta": ahora.date().isoformat(),
             "proveedor": ia_falsa["proveedor"],
         },
-        headers=api.h("admin"),
+        headers=api.h("superadmin"),
     )
     assert metricas.status_code == 200, metricas.text
     datos = metricas.json()

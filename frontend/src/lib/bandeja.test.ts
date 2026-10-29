@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { IncidenciaListaItem } from '../schemas/incidencia'
-import { antiguedad, filtrarBandeja, ordenarBandeja } from './bandeja'
+import { antiguedad, esVistaBandeja, filtrarBandeja, filtrarVista, ordenarBandeja, unirIncidencias } from './bandeja'
 
 const base = {
   categoria: 'computo_redes' as const,
@@ -63,5 +63,38 @@ describe('Bandeja del técnico', () => {
     expect(antiguedad('2026-10-05T05:00:00Z', ahora)).toEqual({ texto: 'Hace 5 h', nivel: 'normal' })
     expect(antiguedad('2026-10-04T20:00:00Z', ahora).nivel).toBe('atencion')
     expect(antiguedad('2026-10-03T10:00:00Z', ahora)).toEqual({ texto: 'Hace 2 d', nivel: 'vencida' })
+  })
+})
+
+describe('Vistas de «Mis incidencias»', () => {
+  const inc = (id: string, extra: Partial<IncidenciaListaItem> = {}): IncidenciaListaItem => ({
+    ...base, _id: id, codigo: id, titulo: id, prioridad: 'media', fecha_creacion: '2026-10-20T08:00:00Z', ...extra,
+  })
+  const mia = { usuario_id: 'u1', nombre: 'Yo' }
+  const lista = [
+    inc('cerrada-mia', { estado: 'cerrada', tecnico_asignado: mia }),
+    inc('mia', { tecnico_asignado: mia }),
+    inc('libre', { prioridad: 'critica' }),
+    inc('resuelta-mia', { estado: 'resuelta', tecnico_asignado: mia }),
+    inc('ajena', { tecnico_asignado: { usuario_id: 'u2', nombre: 'Otro' } }),
+  ]
+  const ids = (l: IncidenciaListaItem[]) => l.map((i) => i._id)
+  const reportadas = new Set(['ajena', 'cerrada-mia'])
+
+  it('separa cada vista', () => {
+    expect(ids(filtrarVista(lista, 'asignadas', 'u1', reportadas))).toEqual(['mia'])
+    expect(ids(filtrarVista(lista, 'por_tomar', 'u1', reportadas))).toEqual(['libre'])
+    expect(ids(filtrarVista(lista, 'resueltas', 'u1', reportadas))).toEqual(['resuelta-mia'])
+    expect(ids(filtrarVista(lista, 'reportadas', 'u1', reportadas))).toEqual(['ajena', 'cerrada-mia'])
+  })
+
+  it('«todas» pone primero las pendientes por prioridad', () => {
+    expect(ids(filtrarVista(lista, 'todas', 'u1', reportadas))).toEqual(['libre', 'mia', 'ajena', 'cerrada-mia', 'resuelta-mia'])
+  })
+
+  it('une listas sin duplicar y valida la vista de la URL', () => {
+    expect(ids(unirIncidencias([inc('a'), inc('b')], [inc('b'), inc('c')]))).toEqual(['a', 'b', 'c'])
+    expect(esVistaBandeja('por_tomar')).toBe(true)
+    expect(esVistaBandeja('otra')).toBe(false)
   })
 })

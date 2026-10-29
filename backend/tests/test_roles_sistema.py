@@ -128,3 +128,11 @@ def test_superadmin_esta_por_encima_de_admin():
 
     assert admin < superadmin
     assert superadmin - admin == {"configuracion:gestionar", "roles:gestionar", "sistema:administrar"}
+
+
+def test_permisos_exclusivos_compartidos_con_la_api():
+    from app.core.security import PERMISO_SUPERADMIN
+    from app.schemas.rol import PERMISOS_EXCLUSIVOS_SUPERADMIN
+
+    assert PERMISO_SUPERADMIN in PERMISOS_EXCLUSIVOS_SUPERADMIN
+    assert set(PERMISOS_EXCLUSIVOS_SUPERADMIN).isdisjoint(_por_clave()["admin"]["permisos"])

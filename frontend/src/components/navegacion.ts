@@ -16,23 +16,21 @@ export interface ItemNav {
   icono: LucideIcon
   /** Permiso requerido; sin permiso = basta con tener sesión. */
   permiso?: string
-  /** Rol(es) exigido(s) además del permiso (solo Métricas IA, igual que `require_admin`). */
+  /** Rol(es) exigido(s) además del permiso (hoy ninguna ruta lo usa). */
   rol?: string | readonly string[]
 }
 
-/** Roles de sistema que pasan `require_admin` en el backend (security.py::ROLES_ADMINISTRADORES). */
-export const ROLES_ADMINISTRADORES = ['admin', 'superadmin'] as const
 /** Permiso exclusivo del superadmin (backend: security.py::PERMISO_SUPERADMIN). */
 export const PERMISO_SUPERADMIN = 'sistema:administrar'
 
 /**
  * Matriz ruta → acceso (docs/revision-acceso/pantallas.md). App.tsx protege cada ruta con estos
  * mismos valores y el menú los reutiliza: una sola fuente para guardas y pestañas.
- * Sin `permiso` = basta con tener sesión. `rol` replica `require_admin` del backend (admin o superadmin).
+ * Sin `permiso` = basta con tener sesión. Auditoría y Métricas IA son exclusivas del superadmin.
  */
 export const ACCESO_RUTA = {
   '/': {},
-  '/control': { permiso: 'sistema:administrar' },
+  '/control': { permiso: PERMISO_SUPERADMIN },
   '/perfil': {},
   '/reportar': { permiso: 'incidencias:crear' },
   '/mis-reportes': { permiso: 'incidencias:ver' },
@@ -48,9 +46,9 @@ export const ACCESO_RUTA = {
   '/admin/roles': { permiso: 'roles:gestionar' },
   '/admin/categorias': { permiso: 'categorias:gestionar' },
   '/admin/edificios': { permiso: 'usuarios:gestionar' },
-  '/admin/auditoria': { permiso: 'usuarios:gestionar' },
+  '/admin/auditoria': { permiso: PERMISO_SUPERADMIN },
   '/admin/configuracion': { permiso: 'configuracion:gestionar' },
-  '/admin/metricas-ia': { permiso: 'analitica:ver', rol: ROLES_ADMINISTRADORES },
+  '/admin/metricas-ia': { permiso: PERMISO_SUPERADMIN },
 } as const satisfies Record<string, Acceso>
 
 export interface Acceso {
@@ -89,6 +87,7 @@ const I = {
   misReportes: item('/mis-reportes', 'Mis reportes', ClipboardList),
   perfil: item('/perfil', 'Perfil', UserRound),
   bandeja: item('/bandeja', 'Bandeja', Inbox),
+  misIncidencias: item('/bandeja', 'Mis incidencias', Inbox),
   buscar: item('/buscar', 'Buscar', Search),
   tablero: item('/tablero', 'Tablero', KanbanSquare),
   metricas: item('/dashboard', 'Métricas', BarChart3),
@@ -125,19 +124,20 @@ const plano = (...items: ItemNav[]): GrupoNav[] => [{ items }]
 export const NAVEGACION: Record<PerfilNav, Config> = {
   reportante: { movil: [I.inicio, REPORTAR, I.misReportes, I.perfil], lateral: plano(I.inicio, I.misReportes) },
   // En escritorio la barra superior ya busca: «Buscar» solo queda en la barra inferior (móvil).
-  tecnico: { movil: [I.bandeja, I.buscar, REPORTAR, I.perfil], lateral: plano(I.bandeja, I.misReportes) },
+  // Pantalla única del técnico: «Mis incidencias» une Bandeja y Mis reportes (/mis-reportes redirige ahí).
+  tecnico: { movil: [I.misIncidencias, I.buscar, REPORTAR, I.perfil], lateral: plano(I.misIncidencias) },
   coordinador: {
     movil: [I.tablero, I.bandeja, REPORTAR, I.metricas, I.perfil],
     lateral: plano(I.tablero, I.incidencias, I.tecnicos, I.metricas),
   },
   directivo: { movil: [I.dashboard, I.buscar, I.perfil], lateral: plano(I.dashboard, I.incidencias, I.reportes) },
-  // Admin opera el día a día; Roles y Configuración son del superadmin (el filtro por permiso las oculta).
+  // Admin (TI de la institución) opera el día a día; Roles, Configuración, Auditoría y Métricas IA son del superadmin.
   admin: {
-    movil: [I.usuarios, I.categorias, I.perfil],
+    movil: [I.usuarios, I.incidencias, I.categorias, I.perfil],
     lateral: [
-      { titulo: 'Análisis', items: [I.dashboard, I.metricasIA] },
+      { titulo: 'Análisis', items: [I.dashboard, I.reportes] },
+      { titulo: 'Operación', items: [I.incidencias] },
       { titulo: 'Administración', plegable: true, items: [I.usuarios, I.categorias, I.edificios] },
-      { titulo: 'Sistema', plegable: true, items: [I.auditoria] },
     ],
   },
   superadmin: {

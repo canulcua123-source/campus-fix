@@ -9,7 +9,7 @@ from app.core.cache import cache_analitica
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.limiter import limiter
-from app.core.security import filtro_alcance, require_admin, require_permiso
+from app.core.security import PERMISO_SUPERADMIN, filtro_alcance, require_permiso
 from app.core.serial import a_json
 from app.schemas.analitica import (
     AnaliticaEdificio,
@@ -514,7 +514,7 @@ async def tendencia(
     responses={
         400: {"description": "Filtros inválidos"},
         401: {"description": "Autenticación requerida"},
-        403: {"description": "Acceso exclusivo del administrador"},
+        403: {"description": f"Falta el permiso {PERMISO_SUPERADMIN} (exclusivo del superadministrador)"},
         429: {"description": "Límite de consultas excedido"},
     },
 )
@@ -522,7 +522,7 @@ async def tendencia(
 async def metricas_ia(
     request: Request,
     filtros: Annotated[FiltrosMetricasIA, Query()],
-    usuario: Annotated[dict, Depends(require_admin("analitica:ver"))],
+    usuario: Annotated[dict, Depends(require_permiso(PERMISO_SUPERADMIN))],
 ):
     alcance = filtro_alcance(usuario)
 

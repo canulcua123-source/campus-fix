@@ -21,6 +21,7 @@ Archivos clave: `frontend/src/styles/tokens.css` (tokens), `frontend/src/styles/
 | `PageHeader` | Título de pantalla: 34 px en iOS, 22 px en Android, 26 px en escritorio; `subtitulo`, `atras`, `acciones`. |
 | `Spinner` | Solo dentro de botones o zonas pequeñas (nunca a pantalla completa). |
 | `BarraFiltros` | Fila compacta de filtros con acciones alineadas al final; en < 768 px se pliega tras «Filtros (n)». Dentro usa campos `tamano="sm"`. |
+| `FiltroChips` | Fila de filtros tipo chip con contador (`radiogroup`, flechas para cambiar), desplazable en móvil. Para filtros de lista (vista, estado); `Segmentado` queda para conmutadores cortos (tema, prioridad). |
 | `RangoFechas` | Periodo con atajos (7/30/90 días) y «Personalizado»; fechas `YYYY-MM-DD` en America/Mexico_City (`lib/fechas.ts`). |
 | `StatTile`, `StatGrid` | Indicador compacto (etiqueta, valor, ícono, `tono`, `delta`, `pista`) y su rejilla. Sustituye tarjetas KPI hechas a mano. |
 | `Seccion` | Tarjeta con encabezado (título, descripción, acciones) y cuerpo; `sinPadding` para tablas a sangre. |

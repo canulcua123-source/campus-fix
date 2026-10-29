@@ -19,7 +19,7 @@ from pymongo.uri_parser import parse_uri  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
 from app.core.security import hashear_password  # noqa: E402
-from app.schemas.rol import CATALOGO_PERMISOS  # noqa: E402
+from app.schemas.rol import CATALOGO_PERMISOS, PERMISOS_EXCLUSIVOS_SUPERADMIN  # noqa: E402
 
 CATEGORIAS = ["computo_redes", "infraestructura", "academico"]
 PATRON_CATEGORIA = r"^[a-z][a-z0-9_]{2,29}$"
@@ -888,10 +888,6 @@ async def crear_indices(db) -> None:
     )
 
 
-# Permisos que solo tiene el superadmin (rol de sistema por encima de admin).
-PERMISOS_EXCLUSIVOS_SUPERADMIN = ("configuracion:gestionar", "roles:gestionar", "sistema:administrar")
-
-
 def roles_sistema() -> list[dict]:
     reportante = ["incidencias:crear", "incidencias:ver", "evidencias:subir", "ia:usar"]
     tecnico = [*reportante, "seguimiento:registrar", "tags:gestionar", "incidencias:buscar"]
@@ -1026,10 +1022,31 @@ async def sembrar_superadmin_demo(db) -> dict:
     return doc
 
 
+async def sembrar_rol_admin(db, rol: dict) -> None:
+    """Sincroniza el rol admin sin pisar los permisos que el superadmin haya limitado.
+
+    Los permisos solo se escriben al crear el rol; en un rol existente únicamente se retiran
+    los exclusivos del superadmin (así una base antigua con admin completo queda por debajo).
+    """
+    fijos = {campo: valor for campo, valor in rol.items() if campo != "permisos"}
+    await db.roles.update_one(
+        {"clave": rol["clave"]},
+        {"$set": fijos, "$setOnInsert": {"permisos": rol["permisos"]}},
+        upsert=True,
+    )
+    await db.roles.update_one(
+        {"clave": rol["clave"], "permisos": {"$in": list(PERMISOS_EXCLUSIVOS_SUPERADMIN)}},
+        {"$pull": {"permisos": {"$in": list(PERMISOS_EXCLUSIVOS_SUPERADMIN)}}},
+    )
+
+
 async def sembrar_base(db) -> dict:
     for rol in roles_sistema():
         # Los roles base son parte del contrato de seguridad: se sincronizan
         # sin cambiar su _id ni las referencias de usuarios existentes.
+        if rol["clave"] == "admin":
+            await sembrar_rol_admin(db, rol)
+            continue
         await db.roles.update_one({"clave": rol["clave"]}, {"$set": rol}, upsert=True)
     for cat in categorias_sistema():
         await db.categorias.update_one({"clave": cat["clave"]}, {"$setOnInsert": cat}, upsert=True)

@@ -95,6 +95,12 @@ Esta comprobación se limita a la configuración base. La auditoría exhaustiva 
 - `PATCH /roles/{id}` y `DELETE /roles/{id}` rechazan con 409 cualquier rol con
   `sistema: true` (también para el administrador); la operación atómica repite
   `sistema != true` en el filtro para evitar carreras.
+- Única excepción: un actor con `sistema:administrar` (superadmin) puede hacer
+  `PATCH` **solo de `permisos`** del rol de sistema `admin` para limitar lo que hace
+  el administrador. Cambiar `clave`, `nombre`, `descripcion` o `alcance` responde 409;
+  incluir un permiso de `PERMISOS_EXCLUSIVOS_SUPERADMIN` (`app/schemas/rol.py`)
+  responde 403. La escritura es atómica (`{_id, clave: "admin", sistema: true}`) y se
+  registra en la auditoría. El rol `admin` tampoco se puede eliminar.
 - Un rol personalizado solo se puede editar o eliminar si el actor puede otorgar
   los permisos y el alcance ACTUALES de ese rol (`puede_otorgar`), además de los
   nuevos; así un gestor con menos acceso no degrada ni borra un rol más poderoso.
@@ -115,8 +121,10 @@ frontend no es suficiente.
 
 ## Definición base frente a documentos persistidos
 
-`sembrar_base()` sincroniza los cinco roles base por su clave estable con `$set`
-(upsert). Por tanto:
+`sembrar_base()` sincroniza los roles base por su clave estable con `$set`
+(upsert). El rol `admin` es la excepción: sus `permisos` solo se escriben al crearlo
+(`$setOnInsert`) para no pisar lo que haya limitado el superadmin; en un rol existente
+únicamente se retiran (`$pull`) los permisos exclusivos del superadmin. Por tanto:
 
 1. `roles_sistema()` es la fuente de verdad de los cinco roles base: volver a
    ejecutar `init_db.py` repara permisos, alcance o marca `sistema` alterados;
@@ -125,7 +133,8 @@ frontend no es suficiente.
 3. es idempotente: dos ejecuciones seguidas dejan el mismo resultado.
 
 Antes de ejecutar `init_db.py` en producción se sigue BD-19 (respaldo previo con
-`mongodump`). Prueba: `test_sembrar_base_repara_rol_base_conservando_id`.
+`mongodump`). Pruebas: `test_sembrar_base_repara_rol_base_conservando_id` y
+`test_sembrar_base_conserva_permisos_limitados_del_admin`.
 
 ## Adenda: rol `superadmin` (28 de octubre de 2026)
 
@@ -143,7 +152,8 @@ Cuentas privilegiadas (`_es_rol_privilegiado` en `routers/usuarios.py`): rol `ad
 cualquier rol con `sistema:administrar` o con `usuarios:gestionar` y alcance `global`. Sin
 `sistema:administrar` no se ven en `GET /usuarios` (salvo la propia), editarlas responde 404 y
 asignarlas 403. Invariantes: nadie cambia su propio rol ni se desactiva (400) y no se puede
-desactivar ni degradar al último superadmin activo (409). `require_admin` (Métricas IA) acepta
-`admin` y `superadmin`. Pruebas: `tests/e2e/test_superadmin.py` y la columna `SUP` de
+desactivar ni degradar al último superadmin activo (409). `GET /auditoria` y `GET /analitica/ia`
+(Métricas IA) exigen `sistema:administrar`: el admin recibe 403. El superadmin puede limitar los
+permisos del rol `admin` (ver «Protección de los roles del sistema»). Pruebas: `tests/e2e/test_superadmin.py` y la columna `SUP` de
 `test_alcance_matriz.py`.
 

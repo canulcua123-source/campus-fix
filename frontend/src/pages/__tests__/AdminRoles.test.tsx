@@ -16,6 +16,10 @@ import AdminRoles from '../AdminRoles'
 
 const URL_ROLES = `${BASE}/roles`
 const SISTEMA: Rol = { _id: '664f1c2e9b1e8a3d4c5b6a01', clave: 'tecnico', nombre: 'Técnico', descripcion: 'Rol de sistema: Técnico', permisos: ['seguimiento:registrar'], alcance: 'area', sistema: true }
+const ADMIN: Rol = {
+  _id: '664f1c2e9b1e8a3d4c5b6a04', clave: 'admin', nombre: 'Administrador', descripcion: 'Rol de sistema: Administrador',
+  permisos: [...sesionDe('admin').permisos], alcance: 'global', sistema: true,
+}
 const PROPIO: Rol = { _id: '664f1c2e9b1e8a3d4c5b6a02', clave: 'auxiliar', nombre: 'Auxiliar', descripcion: '', permisos: ['incidencias:ver'], alcance: 'propio', sistema: false }
 
 function entorno(usuario = sesionDe('superadmin'), roles: Rol[] = [SISTEMA, PROPIO]) {
@@ -57,6 +61,43 @@ describe('AdminRoles', () => {
     expect(within(tarjeta('Técnico')).queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument()
     expect(within(tarjeta('Técnico')).getByText('Los roles del sistema no se pueden modificar.')).toBeInTheDocument()
     expect(within(tarjeta('Auxiliar')).getByRole('button', { name: /Editar/ })).toBeInTheDocument()
+  })
+
+  it('el superadmin limita los permisos del rol admin sin ofrecer los exclusivos', async () => {
+    const { peticiones } = entorno(sesionDe('superadmin'), [ADMIN, SISTEMA])
+    const u = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Administrador' })
+    expect(within(tarjeta('Técnico')).queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument()
+    expect(within(tarjeta('Administrador')).getByText(/Limita lo que puede hacer el administrador/)).toBeInTheDocument()
+    expect(within(tarjeta('Administrador')).queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument()
+
+    await u.click(within(tarjeta('Administrador')).getByRole('button', { name: 'Editar permisos' }))
+    const form = screen.getByRole('form', { name: 'Permisos del administrador' })
+    expect(within(form).queryByLabelText(/^Nombre/)).not.toBeInTheDocument()
+    expect(within(form).queryByRole('radiogroup', { name: 'Alcance' })).not.toBeInTheDocument()
+    for (const exclusivo of ['Gestionar roles', 'Gestionar configuración', 'Administrar el sistema']) {
+      expect(within(form).queryByLabelText(exclusivo)).not.toBeInTheDocument()
+    }
+
+    await u.click(within(form).getByRole('button', { name: 'Guardar permisos' }))
+    expect(await within(form).findByText('No hay cambios por guardar')).toBeInTheDocument()
+    expect(peticiones).toHaveLength(0)
+
+    await u.click(within(form).getByLabelText('Gestionar categorías'))
+    await u.click(within(form).getByRole('button', { name: 'Guardar permisos' }))
+    await screen.findByText('Permisos del administrador actualizados')
+    expect(peticiones[0]).toEqual({
+      metodo: 'PATCH',
+      cuerpo: { permisos: ADMIN.permisos.filter((p) => p !== 'categorias:gestionar') },
+    })
+  })
+
+  it('sin sistema:administrar el rol admin sigue siendo de solo lectura', async () => {
+    const gestor = { ...sesionDe('admin'), permisos: [...sesionDe('admin').permisos, 'roles:gestionar'] }
+    entorno(gestor, [ADMIN])
+    await screen.findByRole('heading', { name: 'Administrador' })
+    expect(within(tarjeta('Administrador')).queryByRole('button', { name: /Editar/ })).not.toBeInTheDocument()
+    expect(within(tarjeta('Administrador')).getByText('Los roles del sistema no se pueden modificar.')).toBeInTheDocument()
   })
 
   it('crea un rol validado con Zod y envía solo los campos del contrato', async () => {
