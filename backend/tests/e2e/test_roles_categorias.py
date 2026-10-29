@@ -354,3 +354,22 @@ async def test_sembrar_base_repara_rol_base_conservando_id(api):
         await api.db.roles.update_one(
             {"_id": antes["_id"]}, {"$set": {k: antes[k] for k in ("permisos", "alcance", "sistema")}}
         )
+
+
+async def test_sembrar_base_conserva_permisos_limitados_del_admin(api):
+    from scripts.init_db import sembrar_base
+
+    antes = await api.db.roles.find_one({"clave": "admin"})
+    limitados = ["incidencias:ver", "usuarios:gestionar"]
+    try:
+        # Re-sembrar no pisa lo que el superadmin limitó, pero sí retira los permisos exclusivos.
+        await api.db.roles.update_one(
+            {"_id": antes["_id"]}, {"$set": {"permisos": [*limitados, "roles:gestionar", "sistema:administrar"]}}
+        )
+        await sembrar_base(api.db)
+        despues = await api.db.roles.find_one({"clave": "admin"})
+        assert despues["_id"] == antes["_id"]
+        assert despues["permisos"] == limitados
+        assert despues["alcance"] == "global" and despues["sistema"] is True
+    finally:
+        await api.db.roles.update_one({"_id": antes["_id"]}, {"$set": {"permisos": antes["permisos"]}})

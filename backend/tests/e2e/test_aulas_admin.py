@@ -149,7 +149,7 @@ async def test_auditoria_registra_alta_y_edicion_de_aula(api, limpio):
     assert "antes" not in eventos[0]
     assert eventos[1]["antes"]["activa"] is True and eventos[1]["despues"]["activa"] is False
 
-    r = await api.c.get("/auditoria", params={"recurso": "aulas", "limite": 100}, headers=api.h("admin"))
+    r = await api.c.get("/auditoria", params={"recurso": "aulas", "limite": 100}, headers=api.h("superadmin"))
     assert r.status_code == 200, r.text
     propios = [e for e in r.json()["resultados"] if e["recurso_id"] == aula["id_publico"]]
     assert {e["accion"] for e in propios} == {"crear", "editar"}

@@ -37,6 +37,9 @@ Permiso = Literal[
 ]
 assert list(get_args(Permiso)) == CATALOGO_PERMISOS
 
+# Permisos que solo tiene el superadmin: nunca se otorgan al rol de sistema admin (init_db y PATCH /roles).
+PERMISOS_EXCLUSIVOS_SUPERADMIN = ("configuracion:gestionar", "roles:gestionar", "sistema:administrar")
+
 
 class RolIn(BaseModel):
     model_config = ConfigDict(extra="forbid")

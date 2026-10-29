@@ -350,10 +350,26 @@ async def test_consulta_admin_pagina_filtra_y_ordena(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_consulta_rechaza_no_admin_antes_de_consultar(monkeypatch):
-    monkeypatch.setattr(router_auditoria, "get_db", lambda: pytest.fail("No debe consultar MongoDB"))
+async def test_consulta_exige_permiso_exclusivo_del_superadmin(monkeypatch):
+    import inspect
 
+    import app.core.security as seguridad
+    from app.schemas.rol import CATALOGO_PERMISOS, PERMISOS_EXCLUSIVOS_SUPERADMIN
+
+    parametro = inspect.signature(router_auditoria.listar_auditoria).parameters["_"]
+    dependencia = parametro.annotation.__metadata__[0].dependency
+    permisos_admin = [p for p in CATALOGO_PERMISOS if p not in PERMISOS_EXCLUSIVOS_SUPERADMIN]
+
+    monkeypatch.setattr(
+        seguridad, "permisos_del_usuario", AsyncMock(return_value={"permisos": permisos_admin, "alcance": "global"})
+    )
     with pytest.raises(HTTPException) as exc:
-        await router_auditoria.listar_auditoria(_actor("coordinador"), pagina=1, limite=20)
-
+        await dependencia(_actor("admin"))
     assert exc.value.status_code == 403
+
+    monkeypatch.setattr(
+        seguridad,
+        "permisos_del_usuario",
+        AsyncMock(return_value={"permisos": list(CATALOGO_PERMISOS), "alcance": "global"}),
+    )
+    assert (await dependencia(_actor("superadmin")))["rol"] == "superadmin"
