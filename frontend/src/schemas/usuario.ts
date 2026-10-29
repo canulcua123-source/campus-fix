@@ -19,6 +19,8 @@ export const PERMISOS = [
   'configuracion:gestionar',
   'sistema:administrar',
 ] as const
+/** Permisos que solo tiene el superadmin: nunca se otorgan al rol admin (backend: schemas/rol.py). */
+export const PERMISOS_EXCLUSIVOS_SUPERADMIN = ['configuracion:gestionar', 'roles:gestionar', 'sistema:administrar'] as const
 export const ALCANCES = ['propio', 'area', 'edificio', 'global'] as const
 export const TIPOS_REPORTANTE = ['docente', 'estudiante', 'administrativo'] as const
 
@@ -153,6 +155,13 @@ export type RolIn = z.infer<typeof rolInSchema>
 /** RolPatch (PATCH /roles/{id}): solo los campos que cambian. */
 export const rolPatchSchema = rolInSchema.partial().strict()
 export type RolPatch = z.infer<typeof rolPatchSchema>
+
+/** PATCH /roles/{id} del rol de sistema admin (solo superadmin): únicamente sus permisos, sin los exclusivos. */
+export const rolAdminPermisosSchema = rolInSchema.pick({ permisos: true }).strict().refine(
+  (v) => !v.permisos.some((p) => (PERMISOS_EXCLUSIVOS_SUPERADMIN as readonly string[]).includes(p)),
+  { message: 'Ese permiso es exclusivo del superadministrador', path: ['permisos'] },
+)
+export type RolAdminPermisos = z.infer<typeof rolAdminPermisosSchema>
 
 /** Respuesta de DELETE /roles/{id}. */
 export const okSchema = z.object({ ok: z.literal(true) })

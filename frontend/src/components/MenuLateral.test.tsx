@@ -84,12 +84,15 @@ describe('NavegacionLateral', () => {
     expect(boton(montar('superadmin'), 'Sistema')).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('admin ve la misma agrupación sin lo que no tiene', () => {
+  it('admin ve Análisis, Operación y Administración sin lo exclusivo del superadmin', () => {
     const nav = montar('admin', '/dashboard')
     expect(within(nav).getByText('Análisis')).toBeInTheDocument()
-    expect(within(nav).queryByText('Operación')).not.toBeInTheDocument()
+    expect(within(nav).getByText('Operación')).toBeInTheDocument()
     expect(boton(nav, 'Administración')).toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('button', { name: /Sistema/ })).not.toBeInTheDocument()
+    for (const exclusivo of ['Roles', 'Auditoría', 'Métricas IA', 'Configuración']) {
+      expect(within(nav).queryByRole('link', { name: exclusivo })).not.toBeInTheDocument()
+    }
   })
 
   it('coordinador (pocos elementos) conserva el menú plano', () => {

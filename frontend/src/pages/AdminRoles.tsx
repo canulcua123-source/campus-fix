@@ -1,4 +1,4 @@
-import { Lock, Pencil, Plus, Shield, ShieldCheck, Trash2 } from 'lucide-react'
+import { Lock, Pencil, Plus, Shield, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ApiError, mensajeDeError } from '../api/client'
 import { useCrearRol, useEditarRol, useEliminarRol, useRoles } from '../api/hooks/admin'
@@ -6,16 +6,22 @@ import { puedeOtorgar } from '../api/usuarios'
 import { SiPermiso } from '../auth/RequirePermiso'
 import { useAuth } from '../auth/store'
 import { Aviso, Chip, Paso } from '../components/admin/PiezasAdmin'
+import { PERMISO_SUPERADMIN } from '../components/navegacion'
 import { DESCRIPCION_ALCANCE, DESCRIPCION_PERMISO, GRUPOS_PERMISOS, etiquetaPermiso, permisosAgrupados } from '../components/admin/permisos'
 import { BottomSheet, Button, Card, EmptyState, ErrorState, Input, PageHeader, SkeletonLista, Textarea } from '../components/ui'
 import { ETIQUETAS_ALCANCE } from '../schemas/etiquetas'
-import { ALCANCES, rolInSchema, rolPatchSchema, type AlcanceRol, type Rol, type RolIn, type RolPatch } from '../schemas/usuario'
+import {
+  ALCANCES, PERMISOS_EXCLUSIVOS_SUPERADMIN, rolAdminPermisosSchema, rolInSchema, rolPatchSchema, type AlcanceRol, type Rol, type RolIn, type RolPatch,
+} from '../schemas/usuario'
 
-type Modo = { tipo: 'crear' } | { tipo: 'editar'; rol: Rol } | null
+/** `limitar`: el superadmin ajusta solo los permisos del rol de sistema admin (PATCH con `permisos`). */
+type Modo = { tipo: 'crear' } | { tipo: 'editar'; rol: Rol } | { tipo: 'limitar'; rol: Rol } | null
 type Formulario = { clave: string; nombre: string; descripcion: string; permisos: string[]; alcance: AlcanceRol }
 
 const VACIO: Formulario = { clave: '', nombre: '', descripcion: '', permisos: [], alcance: 'propio' }
 const PERMISO = 'roles:gestionar'
+const EXCLUSIVOS: readonly string[] = PERMISOS_EXCLUSIVOS_SUPERADMIN
+const TITULO_MODO = { crear: 'Nuevo rol', editar: 'Editar rol', limitar: 'Permisos del administrador' } as const
 
 function erroresDe(issues: { path: PropertyKey[]; message: string }[]): Record<string, string> {
   const errores: Record<string, string> = {}
@@ -65,7 +71,10 @@ function ResumenCambios({ form, rol }: { form: Formulario; rol: Rol | null }) {
   )
 }
 
-/** Administración de roles (GET/POST/PATCH/DELETE /roles). Los roles del sistema son de solo lectura. */
+/**
+ * Administración de roles (GET/POST/PATCH/DELETE /roles). Los roles del sistema son de solo lectura,
+ * salvo los permisos del rol admin, que el superadmin puede limitar (sin otorgarle los exclusivos).
+ */
 export default function AdminRoles() {
   const actor = useAuth((s) => s.usuario)
   const roles = useRoles()
@@ -84,14 +93,16 @@ export default function AdminRoles() {
   if (!actor) return null
   const otorgable = (permisos: readonly string[], alcance: AlcanceRol) => puedeOtorgar(actor, permisos, alcance)
   const administrable = (rol: Rol) => rol.sistema !== true && otorgable(rol.permisos, rol.alcance)
+  const limitable = (rol: Rol) => rol.sistema === true && rol.clave === 'admin' && actor.permisos.includes(PERMISO_SUPERADMIN)
+  const limitando = modo?.tipo === 'limitar'
   const alcances = ALCANCES.filter((a) => otorgable([], a))
 
   const abrir = (siguiente: Modo) => {
     setModo(siguiente)
     setErrores({})
     setAviso(null)
-    setClaveManual(siguiente?.tipo === 'editar')
-    setForm(siguiente?.tipo === 'editar'
+    setClaveManual(siguiente?.tipo !== 'crear')
+    setForm(siguiente && siguiente.tipo !== 'crear'
       ? { clave: siguiente.rol.clave, nombre: siguiente.rol.nombre, descripcion: siguiente.rol.descripcion ?? '', permisos: [...siguiente.rol.permisos], alcance: siguiente.rol.alcance }
       : VACIO)
   }
@@ -106,6 +117,10 @@ export default function AdminRoles() {
   async function guardar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!modo || guardando) return
+    if (modo.tipo === 'limitar') {
+      await guardarLimite(modo.rol)
+      return
+    }
     const entrada = modo.tipo === 'crear' ? { ...form, nombre: form.nombre.trim(), descripcion: form.descripcion.trim() } : cambiosDe(form, modo.rol)
     if (modo.tipo === 'editar' && Object.keys(entrada).length === 0) {
       setErrores({ _general: 'No hay cambios por guardar' })
@@ -128,6 +143,26 @@ export default function AdminRoles() {
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.campos).length) setErrores(err.campos)
       else setErrores({ _general: mensajeDeError(err, 'No se pudo guardar el rol') })
+    }
+  }
+
+  async function guardarLimite(rol: Rol) {
+    if ([...form.permisos].sort().join() === [...rol.permisos].sort().join()) {
+      setErrores({ _general: 'No hay cambios por guardar' })
+      return
+    }
+    const validado = rolAdminPermisosSchema.safeParse({ permisos: form.permisos })
+    if (!validado.success) {
+      setErrores(erroresDe(validado.error.issues))
+      return
+    }
+    try {
+      await editar.mutateAsync({ id: rol._id, datos: validado.data })
+      setModo(null)
+      setAviso('Permisos del administrador actualizados')
+    } catch (err) {
+      if (err instanceof ApiError && Object.keys(err.campos).length) setErrores(err.campos)
+      else setErrores({ _general: mensajeDeError(err, 'No se pudieron guardar los permisos') })
     }
   }
 
@@ -186,7 +221,16 @@ export default function AdminRoles() {
                   )}
                   <SiPermiso permiso={PERMISO}>
                     <div className="mt-auto border-t border-line pt-3">
-                      {administrable(rol) ? (
+                      {limitable(rol) ? (
+                        <div className="flex flex-col gap-2">
+                          <p className="text-sm text-muted">Limita lo que puede hacer el administrador. Los permisos exclusivos del superadministrador no se le pueden otorgar.</p>
+                          <div>
+                            <Button variante="secundario" tamano="sm" icono={<SlidersHorizontal size={16} aria-hidden />} onClick={() => abrir({ tipo: 'limitar', rol })}>
+                              Editar permisos
+                            </Button>
+                          </div>
+                        </div>
+                      ) : administrable(rol) ? (
                         <div className="flex flex-wrap gap-2">
                           <Button variante="secundario" tamano="sm" icono={<Pencil size={16} aria-hidden />} onClick={() => abrir({ tipo: 'editar', rol })}>
                             Editar
@@ -206,9 +250,14 @@ export default function AdminRoles() {
               ))}
             </ul>}
 
-      <BottomSheet abierto={modo !== null} onCerrar={cerrar} titulo={modo?.tipo === 'editar' ? 'Editar rol' : 'Nuevo rol'}>
+      <BottomSheet abierto={modo !== null} onCerrar={cerrar} titulo={modo ? TITULO_MODO[modo.tipo] : ''}>
         {modo && (
-          <form noValidate aria-label={modo.tipo === 'crear' ? 'Nuevo rol' : 'Editar rol'} onSubmit={(e) => { void guardar(e) }} className="flex flex-col gap-5">
+          <form noValidate aria-label={TITULO_MODO[modo.tipo]} onSubmit={(e) => { void guardar(e) }} className="flex flex-col gap-5">
+            {limitando ? (
+              <p className="text-sm text-muted">
+                Limita lo que puede hacer el administrador: desmarca lo que no debe gestionar. El cambio aplica de inmediato a todas las cuentas con rol «{modo.rol.nombre}».
+              </p>
+            ) : <>
             <Paso numero={1} titulo="Identidad" ayuda="Cómo verán este rol quienes administran cuentas.">
               <Input etiqueta="Nombre" required value={form.nombre} maxLength={50} error={errores.nombre} placeholder="Ej. Jefe de mantenimiento"
                 onChange={(e) => {
@@ -235,11 +284,15 @@ export default function AdminRoles() {
               </div>
               {errores.alcance && <p role="alert" className="ui-campo__error">{errores.alcance}</p>}
             </Paso>
+            </>}
 
-            <Paso numero={3} titulo="Permisos" ayuda="Solo puedes otorgar permisos que tú tienes.">
+            <Paso numero={limitando ? 1 : 3} titulo="Permisos"
+              ayuda={limitando ? 'Los permisos exclusivos del superadministrador (roles, configuración y sistema) no se ofrecen.' : 'Solo puedes otorgar permisos que tú tienes.'}>
               {GRUPOS_PERMISOS.map((g) => {
-                const disponibles = g.permisos.filter((p) => actor.permisos.includes(p))
-                const marcados = g.permisos.filter((p) => form.permisos.includes(p)).length
+                const ofrecidos = limitando ? g.permisos.filter((p) => !EXCLUSIVOS.includes(p)) : g.permisos
+                if (ofrecidos.length === 0) return null
+                const disponibles = ofrecidos.filter((p) => actor.permisos.includes(p))
+                const marcados = ofrecidos.filter((p) => form.permisos.includes(p)).length
                 const todos = disponibles.length > 0 && disponibles.every((p) => form.permisos.includes(p))
                 return (
                   <div key={g.clave} className="rounded-xl border border-line">
@@ -251,10 +304,10 @@ export default function AdminRoles() {
                           onChange={(e) => alternarPermisos(disponibles, e.target.checked)} />
                         <span aria-hidden>{g.titulo}</span>
                       </label>
-                      <span className="text-xs text-muted">{marcados} de {g.permisos.length}</span>
+                      <span className="text-xs text-muted">{marcados} de {ofrecidos.length}</span>
                     </div>
                     <ul className="flex flex-col">
-                      {g.permisos.map((p) => {
+                      {ofrecidos.map((p) => {
                         const propio = actor.permisos.includes(p)
                         const id = `permiso-${p.replace(':', '-')}`
                         return (
@@ -276,11 +329,11 @@ export default function AdminRoles() {
               {errores.permisos && <p role="alert" className="ui-campo__error">{errores.permisos}</p>}
             </Paso>
 
-            <ResumenCambios form={form} rol={modo.tipo === 'editar' ? modo.rol : null} />
+            <ResumenCambios form={form} rol={modo.tipo === 'crear' ? null : modo.rol} />
             {errores._general && <p role="alert" className="ui-campo__error">{errores._general}</p>}
             <div className="ui-sheet__acciones mt-0!">
               <Button variante="secundario" onClick={cerrar} disabled={guardando}>Cancelar</Button>
-              <Button type="submit" cargando={guardando} textoCargando="Guardando…">{modo.tipo === 'crear' ? 'Crear rol' : 'Guardar cambios'}</Button>
+              <Button type="submit" cargando={guardando} textoCargando="Guardando…">{modo.tipo === 'crear' ? 'Crear rol' : modo.tipo === 'limitar' ? 'Guardar permisos' : 'Guardar cambios'}</Button>
             </div>
           </form>
         )}

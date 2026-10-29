@@ -40,7 +40,7 @@ function preparar(manejador: (url: URL) => Response, cliente = new QueryClient({
   }))
   useAuth.setState({
     token: 'token-admin',
-    usuario: { nombre: 'Administradora', rol: 'admin', alcance: 'global', permisos: ['usuarios:gestionar'] },
+    usuario: { nombre: 'Superadministradora', rol: 'superadmin', alcance: 'global', permisos: ['usuarios:gestionar', 'sistema:administrar'] },
   })
   render(<QueryClientProvider client={cliente}><MemoryRouter><AdminAuditoria /></MemoryRouter></QueryClientProvider>)
   return urls
