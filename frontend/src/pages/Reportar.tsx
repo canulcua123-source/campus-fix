@@ -6,10 +6,11 @@ import { useForm, useWatch, type Path } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { aulaQuery } from '../api/aulas'
 import { ApiError } from '../api/client'
-import { analizarImagen, registrarEventoIA } from '../api/ia'
+import { analizarImagen, confirmarAdhesion, registrarEventoIA } from '../api/ia'
 import { useCrearIncidencia, useEvidencia } from '../api/hooks/incidencias'
 import type { ReanudarSubida } from '../api/evidencias'
 import { AvisoCalidad } from '../components/AvisoCalidad'
+import { AdhesionConfirmada, AvisoDuplicado } from '../components/AvisoDuplicado'
 import { CamposDetalleReporte } from '../components/CamposDetalleReporte'
 import { SelectorUbicacion } from '../components/SelectorUbicacion'
 import { SugerenciaIA } from '../components/SugerenciaIA'
@@ -18,9 +19,12 @@ import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
 import { ETIQUETAS_PRIORIDAD, OPCIONES_CATEGORIA } from '../lib/etiquetas'
 import { ACCEPT_CAMARA, ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
-import type { EventoIAIn, RespuestaIA } from '../schemas/ia'
+import type { Adhesion, EventoIAIn, PosibleDuplicado, RespuestaIA } from '../schemas/ia'
 import { incidenciaSchema, LIMITES, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
 import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
+
+/** id_publico del aula (QR); otro valor no se manda a la IA (el servidor respondería 400). */
+const AULA_ID_VALIDO = /^[A-Za-z0-9_-]{22}$/
 
 /** Rutas del formulario que tienen un campo visible: un 400 de la API en ellas se marca bajo el campo (UX-18). */
 const RUTAS_CON_CAMPO = /^(titulo|descripcion|prioridad|tags|ubicacion\.(edificio|piso|aula)|detalle_especifico\.[a-z_]+)$/
@@ -115,6 +119,11 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const [errorFoto, setErrorFoto] = useState<string | null>(null)
   const [estadoFoto, setEstadoFoto] = useState<EstadoFoto>('sin_foto')
   const [calidadPendiente, setCalidadPendiente] = useState<{ ia: Blob; pistas: CalidadCliente[] } | null>(null)
+  /** G8: la misma falla ya se reportó en esta aula (solo llega con el aula del QR). */
+  const [duplicado, setDuplicado] = useState<PosibleDuplicado | null>(null)
+  const [sumando, setSumando] = useState(false)
+  const [errorSumar, setErrorSumar] = useState<string | null>(null)
+  const [sumado, setSumado] = useState<Adhesion | null>(null)
   const progresoFoto = useRef<ReanudarSubida>({}) // conserva firma y PUT hechos para reintentar solo el paso fallido
 
   const galeria = useRef<HTMLInputElement>(null)
@@ -240,6 +249,8 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     setCamposIA([])
     resolverOferta('deshecho') // otra foto reemplaza la sugerencia anterior sin usarla
     setIa(null) // no deja visible la sugerencia de la foto anterior
+    setDuplicado(null)
+    setErrorSumar(null)
     try {
       await tarea(control)
     } catch (e) {
@@ -260,12 +271,18 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
 
   async function analizar(imagen: Blob, pistas: CalidadCliente[], control: AbortController) {
     const sugerencia = await analizarImagen(
-      { imagen, contexto: contexto.trim() || undefined, calidad_cliente: pistas.length ? pistas : undefined },
+      {
+        imagen,
+        contexto: contexto.trim() || undefined,
+        calidad_cliente: pistas.length ? pistas : undefined,
+        aula_id: AULA_ID_VALIDO.test(aulaId) ? aulaId : undefined,
+      },
       { signal: control.signal },
     )
     if (!vigente(control)) return
     ofertaPendiente.current = sugerencia.analisis_id
     setIa(sugerencia)
+    setDuplicado(sugerencia.accion === 'duplicado' && sugerencia.duplicado ? sugerencia.duplicado : null)
     // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
     if (sugerencia.accion_asistida === 'autollenar' || sugerencia.accion_asistida === 'sugerir') {
       const analisis = sugerencia.analisis
@@ -335,6 +352,41 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     })
   }
 
+  /** "Yo también lo vi": suma una adhesión al reporte existente; no crea un ticket nuevo. */
+  async function sumarmeAlReporte() {
+    if (!duplicado || sumando) return
+    cancelarAnalisis()
+    setSumando(true)
+    setErrorSumar(null)
+    try {
+      const analisisId = ofertaPendiente.current
+      const adhesion = await confirmarAdhesion(
+        analisisId ? { coincidencia_id: duplicado.coincidencia_id, analisis_id: analisisId } : { coincidencia_id: duplicado.coincidencia_id },
+      )
+      ofertaPendiente.current = null // el servidor la cerró como duplicado_sumado
+      if (montado.current) setSumado(adhesion)
+    } catch (e) {
+      if (!montado.current) return
+      if (e instanceof ApiError && (e.status === 404 || e.status === 409)) {
+        // La coincidencia venció o el reporte ya se cerró: lo correcto es enviar un reporte propio.
+        setDuplicado(null)
+        setAviso(e.status === 409
+          ? 'Ese reporte ya fue atendido. Envía el tuyo para que lo revisen de nuevo.'
+          : 'La coincidencia ya venció. Envía tu reporte normalmente.')
+      } else {
+        setErrorSumar(e instanceof Error && e.message ? e.message : 'No pudimos sumarte al reporte. Intenta de nuevo.')
+      }
+    } finally {
+      if (montado.current) setSumando(false)
+    }
+  }
+
+  /** "Es otra falla": oculta el aviso y sigue con el formulario (ya prellenado por la IA). */
+  function reportarIgual() {
+    setDuplicado(null)
+    setErrorSumar(null)
+  }
+
   function usarFotoDeTodosModos() {
     if (!calidadPendiente) return
     const { ia: imagen, pistas } = calidadPendiente
@@ -397,6 +449,8 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   function enviarFormulario(evento: FormEvent<HTMLFormElement>) {
     void handleSubmit(enviar)(evento)
   }
+
+  if (sumado) return <AdhesionConfirmada adhesion={sumado} onReportarOtro={onReportarOtro} />
 
   if (creada) {
     return (
@@ -537,7 +591,16 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
         <AvisoCalidad pistas={calidadPendiente.pistas} onRepetir={repetirFoto} onUsar={usarFotoDeTodosModos} />
       )}
       {aviso && <p role="status" className="card m-0 text-sm">{aviso}</p>}
-      {ia && <SugerenciaIA respuesta={ia} />}
+      {duplicado && (
+        <AvisoDuplicado
+          duplicado={duplicado}
+          sumando={sumando}
+          error={errorSumar}
+          onSumarme={() => void sumarmeAlReporte()}
+          onReportarIgual={reportarIgual}
+        />
+      )}
+      {ia && ia.accion !== 'duplicado' && <SugerenciaIA respuesta={ia} />}
       {criticaPendiente && (
         <Card role="alert" className="text-sm">
           <p className="m-0 font-semibold">La IA sugiere prioridad crítica</p>

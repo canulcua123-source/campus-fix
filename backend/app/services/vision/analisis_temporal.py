@@ -17,6 +17,8 @@ class RegistroAnalisis(BaseModel):
     version: Literal["v1"] = "v1"
     usuario_id: str
     imagen_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    # dHash del mismo archivo: POST /incidencias lo registra en huellas_reportes (T-038) sin volver a leer la foto.
+    imagen_dhash: str | None = Field(default=None, pattern=r"^[0-9a-f]{16}$")
     respuesta: RespuestaIA
     compuertas: tuple[ResultadoCompuerta, ...]
     prompt_version: str

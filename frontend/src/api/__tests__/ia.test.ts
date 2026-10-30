@@ -38,6 +38,17 @@ describe('analizarImagen', () => {
     const cuerpos = fetchMock.mock.calls.map((c) => (c as unknown as [string, RequestInit])[1].body as FormData)
     expect(cuerpos[0].get('calidad_cliente')).toBe('borrosa,oscura')
     expect(cuerpos[1].has('calidad_cliente')).toBe(false)
+    expect(cuerpos[0].has('aula_id')).toBe(false)
+  })
+
+  it('envía el aula del QR para que el servidor busque duplicados (G8)', async () => {
+    const fetchMock = vi.fn(async () => respuesta(200, ANALISIS))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await analizarImagen({ imagen: imagen(), aula_id: 'AbCdEfGhIjKlMnOpQrStUv' })
+
+    const cuerpo = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData
+    expect(cuerpo.get('aula_id')).toBe('AbCdEfGhIjKlMnOpQrStUv')
   })
 
   it('aborta a los 30s', async () => {

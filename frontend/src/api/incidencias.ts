@@ -5,6 +5,7 @@ import {
   type AsignacionIn, type ComentarioReportanteIn, type ConfirmacionIn, type FiltrosIncidencias, type IncidenciaIn, type PrioridadIn, type SeguimientoIn, type TagsIn,
 } from '../schemas/incidencia'
 import { api, validarEntrada } from './client'
+import { refrescoOperativo } from './frescura'
 import { claves, limpiarFiltros } from './keys'
 
 const ruta = (id: string) => `/incidencias/${encodeURIComponent(id)}`
@@ -13,7 +14,8 @@ export const incidenciasQuery = (filtros: FiltrosIncidencias = {}) =>
   queryOptions({
     queryKey: claves.listaIncidencias(filtros),
     queryFn: ({ signal }) => api('/incidencias', { signal, params: limpiarFiltros(filtros), schema: incidenciaListaSchema }),
-    refetchOnWindowFocus: true,
+    // Bandeja, Mis reportes, Tablero, Inicio, Incidencias: ven cambios de otros usuarios sin recargar.
+    ...refrescoOperativo,
   })
 
 export const buscarQuery = (q: string) =>
@@ -28,6 +30,7 @@ export const incidenciaQuery = (id: string) =>
     queryKey: claves.incidencia(id),
     queryFn: ({ signal }) => api(ruta(id), { signal, schema: incidenciaDetalleSchema }),
     enabled: Boolean(id),
+    ...refrescoOperativo, // detalle o panel abierto: estado, asignación e historial al día
   })
 
 export function crearIncidencia(datos: IncidenciaIn) {

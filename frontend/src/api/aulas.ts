@@ -3,6 +3,7 @@ import {
   aulaOutSchema, aulaResueltaSchema, catalogoAulasSchema, ubicacionesAulaSchema, type AulaIn, type AulaPatch,
 } from '../schemas/aula'
 import { api } from './client'
+import { invalidarAdmin } from './frescura'
 import { claves } from './keys'
 
 export const aulaQuery = (id: string) => queryOptions({
@@ -36,10 +37,8 @@ export const editarAula = (id: string, datos: AulaPatch) =>
 
 function useInvalidarAulas() {
   const qc = useQueryClient()
-  return () => Promise.all([
-    qc.invalidateQueries({ queryKey: claves.catalogoAulas }),
-    qc.invalidateQueries({ queryKey: claves.ubicacionesAula }),
-  ])
+  // ['aulas'] cubre catálogo, ubicaciones y el aula del QR (`claves.aula(id)`, staleTime de 24 h).
+  return () => invalidarAdmin(qc, ['aulas'])
 }
 
 export function useCrearAula() {

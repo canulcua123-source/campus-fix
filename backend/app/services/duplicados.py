@@ -1,7 +1,9 @@
 """Deteccion privada de duplicados y adhesiones idempotentes para T-038.
 
-La integracion futura de G8 debe llamar ``detectar_duplicado`` con la imagen
-recibida por el servidor. Este modulo nunca consulta incidencias ajenas para
+``POST /ia/analizar-imagen`` calcula las huellas de la imagen recibida por el
+servidor, consulta G8 con ``detectar_duplicado_por_huellas`` y las guarda en el
+analisis temporal; ``POST /incidencias`` las registra con
+``registrar_huella_calculada`` al crear el reporte. Este modulo nunca consulta incidencias ajenas para
 buscar coincidencias: esa busqueda se limita a ``huellas_reportes``.
 """
 
@@ -234,9 +236,30 @@ async def detectar_duplicado(
     secreto: str,
     ahora: datetime | None = None,
 ) -> PosibleDuplicadoOut | None:
-    """Punto de integracion tipado que debera invocar G8 cuando exista T-033."""
+    """Calcula las huellas de la imagen recibida por el servidor y busca una coincidencia (G8)."""
+    return await detectar_duplicado_por_huellas(
+        db,
+        huellas=calcular_huellas(datos_imagen, tipo_mime),
+        aula_id=aula_id,
+        categoria=categoria,
+        usuario_id=usuario_id,
+        secreto=secreto,
+        ahora=ahora,
+    )
+
+
+async def detectar_duplicado_por_huellas(
+    db: AsyncDatabase,
+    *,
+    huellas: HuellasImagen,
+    aula_id: str,
+    categoria: str,
+    usuario_id: ObjectId,
+    secreto: str,
+    ahora: datetime | None = None,
+) -> PosibleDuplicadoOut | None:
+    """G8 con huellas ya calculadas en ``POST /ia/analizar-imagen`` (evita decodificar la imagen dos veces)."""
     instante = _fecha_utc(ahora or datetime.now(timezone.utc), "ahora")
-    huellas = calcular_huellas(datos_imagen, tipo_mime)
     coincidencia = await buscar_por_huellas(
         db,
         aula_id=aula_id,
@@ -260,6 +283,26 @@ async def registrar_huella(
     usuario: dict[str, Any],
 ) -> dict[str, Any]:
     """Registra una huella solo para una incidencia legitima dentro del alcance del actor."""
+    return await registrar_huella_calculada(
+        db,
+        incidencia_id=incidencia_id,
+        aula_id=aula_id,
+        huellas=calcular_huellas(datos_imagen, tipo_mime),
+        usuario=usuario,
+    )
+
+
+async def registrar_huella_calculada(
+    db: AsyncDatabase,
+    *,
+    incidencia_id: ObjectId,
+    aula_id: str,
+    huellas: HuellasImagen,
+    usuario: dict[str, Any],
+) -> dict[str, Any]:
+    """Como ``registrar_huella``, con las huellas que el servidor calculo al analizar la foto."""
+    validar_sha256(huellas.sha256)
+    validar_dhash(huellas.dhash)
     if not isinstance(incidencia_id, ObjectId):
         raise RegistroHuellaInvalido("incidencia_id no es valido")
     incidencia = await db.incidencias_campus.find_one(
@@ -278,7 +321,6 @@ async def registrar_huella(
     ):
         raise RegistroHuellaInvalido("El aula no corresponde a la ubicacion de la incidencia")
     fecha = _fecha_utc(incidencia["fecha_creacion"], "fecha_creacion")
-    huellas = calcular_huellas(datos_imagen, tipo_mime)
     documento = {
         "aula_id": aula_id,
         "categoria": categoria,
