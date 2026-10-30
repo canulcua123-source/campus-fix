@@ -11,6 +11,9 @@ export function useEditarConfigIA() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (datos: ConfigIAPatch) => editarConfigIa(datos),
-    onSuccess: (config) => qc.setQueryData(claves.configIA, config),
+    onSuccess: (config) => {
+      qc.setQueryData(claves.configIA, config)
+      return qc.invalidateQueries({ queryKey: claves.sistemaSalud }) // la tarjeta de IA del Centro de control
+    },
   })
 }
