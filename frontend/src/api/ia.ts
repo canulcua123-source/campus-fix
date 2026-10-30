@@ -18,11 +18,12 @@ interface OpcionesAnalisis {
 
 /** POST /ia/analizar-imagen: multipart, timeout de 30 s y cancelación externa opcional. */
 export function analizarImagen(datos: AnalizarImagenIn, opciones: OpcionesAnalisis = {}) {
-  const { imagen, contexto, calidad_cliente } = validarEntrada(analizarImagenSchema, datos)
+  const { imagen, contexto, calidad_cliente, aula_id } = validarEntrada(analizarImagenSchema, datos)
   const fd = new FormData()
   fd.append('imagen', imagen, opciones.nombre ?? 'incidencia.jpg')
   if (contexto) fd.append('contexto', contexto)
   if (calidad_cliente?.length) fd.append('calidad_cliente', calidad_cliente.join(','))
+  if (aula_id) fd.append('aula_id', aula_id)
   return api('/ia/analizar-imagen', {
     method: 'POST',
     body: fd,

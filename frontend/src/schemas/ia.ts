@@ -16,6 +16,8 @@ export const analizarImagenSchema = z.object({
   contexto: z.string().max(500, 'Máximo 500 caracteres').optional(),
   /** Pistas del control de calidad del cliente (Form `calidad_cliente`, CALIDADES_CLIENTE de routers/ia.py). */
   calidad_cliente: z.array(z.enum(['borrosa', 'oscura', 'sobreexpuesta'])).max(3).optional(),
+  /** id_publico del aula (QR): con él, G8 busca el mismo reporte en las últimas 24 h. */
+  aula_id: z.string().regex(/^[A-Za-z0-9_-]{22}$/).optional(),
 })
 export type AnalizarImagenIn = z.infer<typeof analizarImagenSchema>
 
@@ -48,6 +50,20 @@ export const analisisImagenSchema = z.strictObject({
 })
 export type AnalisisImagen = z.infer<typeof analisisImagenSchema>
 
+const categoriaSchema = z.string().regex(/^[a-z][a-z0-9_]{2,29}$/)
+const coincidenciaIdSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+
+/** PosibleDuplicadoOut (G8, T-038): solo folio, categoría, minutos y adhesiones; nunca quién reportó. */
+export const posibleDuplicadoSchema = z.strictObject({
+  accion: z.literal('duplicado'),
+  coincidencia_id: coincidenciaIdSchema,
+  codigo: z.string().min(1).max(64),
+  categoria: categoriaSchema,
+  reportado_hace_minutos: z.number().int().min(0).max(1440),
+  adhesiones: z.number().int().min(0),
+})
+export type PosibleDuplicado = z.infer<typeof posibleDuplicadoSchema>
+
 /** RespuestaIA: decisión del servidor (compuertas y confianza) y análisis con la confianza efectiva. */
 export const respuestaIaSchema = z.strictObject({
   /** Compuertas G1–G9 del servidor; el cliente nunca puede forzar `agentico`. */
@@ -61,6 +77,8 @@ export const respuestaIaSchema = z.strictObject({
   mensaje: z.string().min(1),
   /** true si reutilizó un análisis sin consumir cupo. */
   cache: z.boolean(),
+  /** Solo con accion=duplicado: el reporte que ya existe en esa aula y categoría (últimas 24 h). */
+  duplicado: posibleDuplicadoSchema.optional(),
 })
 export type RespuestaIA = z.infer<typeof respuestaIaSchema>
 
@@ -80,22 +98,11 @@ export const eventoIaOutSchema = z.strictObject({
   es_final: z.boolean(),
 })
 
-const categoriaSchema = z.string().regex(/^[a-z][a-z0-9_]{2,29}$/)
-const coincidenciaIdSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
-
-/** Contrato independiente de T-038; T-033 lo incorporara a su respuesta G8. */
-export const posibleDuplicadoSchema = z.strictObject({
-  accion: z.literal('duplicado'),
-  coincidencia_id: coincidenciaIdSchema,
-  codigo: z.string().min(1).max(64),
-  categoria: categoriaSchema,
-  reportado_hace_minutos: z.number().int().min(0).max(1440),
-  adhesiones: z.number().int().min(0),
-})
-export type PosibleDuplicado = z.infer<typeof posibleDuplicadoSchema>
 
 export const confirmarAdhesionSchema = z.strictObject({
   coincidencia_id: coincidenciaIdSchema,
+  /** Cierra la oferta de IA como duplicado_sumado. */
+  analisis_id: z.uuidv4().optional(),
 })
 export type ConfirmarAdhesionIn = z.infer<typeof confirmarAdhesionSchema>
 
