@@ -2546,7 +2546,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Código de estado 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('Decisión, compuertas y análisis tipados', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['agentico','formulario','duplicado']); pm.expect(j.accion_asistida).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.motivos).to.be.an('array'); pm.expect(j.analisis_id).to.be.a('string'); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.confianza).to.be.within(0,1); if (j.analisis.categoria === 'infraestructura') { pm.expect(['bajo','medio','alto']).to.include(j.analisis.detalle_infra.riesgo_seguridad); } else { pm.expect(j.analisis).not.to.have.property('detalle_infra'); } pm.environment.set('analisis_id', j.analisis_id); });"
+                  "pm.test('Decisión, compuertas y análisis tipados', function () { const j = pm.response.json(); pm.expect(j.accion).to.be.oneOf(['agentico','formulario','duplicado']); pm.expect(j.accion_asistida).to.be.oneOf(['autollenar','sugerir','preguntar','rechazar']); pm.expect(j.motivos).to.be.an('array'); pm.expect(j.analisis_id).to.be.a('string'); pm.expect(j.mensaje).to.be.a('string'); pm.expect(j.cache).to.be.a('boolean'); pm.expect(j.analisis.confianza).to.be.within(0,1); if (j.analisis.categoria === 'infraestructura') { pm.expect(['bajo','medio','alto']).to.include(j.analisis.detalle_infra.riesgo_seguridad); } else { pm.expect(j.analisis).not.to.have.property('detalle_infra'); } pm.environment.set('analisis_id', j.analisis_id); });",
+                  "pm.test('Duplicado G8 solo con datos públicos', function () { const j = pm.response.json(); if (j.accion === 'duplicado') { pm.expect(j.duplicado).to.have.all.keys('accion','coincidencia_id','codigo','categoria','reportado_hace_minutos','adhesiones'); pm.environment.set('coincidencia_id', j.duplicado.coincidencia_id); } else { pm.expect(j).not.to.have.property('duplicado'); } });"
                 ]
               }
             }
@@ -2560,7 +2561,7 @@
                 "description": "Token JWT"
               }
             ],
-            "description": "Multipart: campo imagen (archivo), contexto (opcional) y calidad_cliente (opcional). Adjunta un archivo antes de enviar. La respuesta indica con cache si el análisis se reutilizó.",
+            "description": "Multipart: campo imagen (archivo), contexto (opcional) y calidad_cliente (opcional). Adjunta un archivo antes de enviar. La respuesta indica con cache si el análisis se reutilizó. Con aula_id (QR) se evalúa G8 contra huellas_reportes.",
             "url": {
               "raw": "{{base_url}}/ia/analizar-imagen",
               "host": [
@@ -2592,6 +2593,13 @@
                   "type": "text",
                   "disabled": true,
                   "description": "Opcional: pistas del control de calidad del cliente separadas por coma (borrosa, oscura, sobreexpuesta). Con cualquier pista la compuerta G4 no pasa."
+                },
+                {
+                  "key": "aula_id",
+                  "value": "{{aula_id_publico}}",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Opcional: id_publico del aula (QR). Con él, G8 busca en huellas_reportes un reporte igual (misma aula y categoría, últimas 24 h); si lo hay responde accion=duplicado y el objeto duplicado {coincidencia_id, codigo, categoria, reportado_hace_minutos, adhesiones}."
                 }
               ]
             }
@@ -2708,7 +2716,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Confirma una coincidencia opaca emitida por G8. Es idempotente por usuario y no crea otra incidencia. T-033 aún debe integrar la emisión de coincidencia_id.",
+            "description": "Confirma la coincidencia opaca que devolvió POST /ia/analizar-imagen (accion=duplicado, duplicado.coincidencia_id). Es idempotente por usuario (registrada=false al repetir) y no crea otra incidencia. analisis_id es opcional: cierra la oferta de IA como duplicado_sumado. 404 si la coincidencia expiró (30 min) o es de otro usuario; 409 si el reporte ya no está abierto.",
             "url": {
               "raw": "{{base_url}}/ia/duplicados/adhesiones",
               "host": [
@@ -2722,7 +2730,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"coincidencia_id\": \"{{coincidencia_id}}\"\n}",
+              "raw": "{\n  \"coincidencia_id\": \"{{coincidencia_id}}\",\n  \"analisis_id\": \"{{analisis_id}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

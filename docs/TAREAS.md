@@ -1518,6 +1518,8 @@ Extender `AnalisisImagen` con `detalle_infra {tipo_dano, riesgo_seguridad}` (enu
 
 **Compuertas G1–G9 en servidor + accion agentico|formulario|duplicado + analisis_id**
 
+> **Estado (2026-10-30):** G8 conectado. Con `aula_id` (QR) `/ia/analizar-imagen` consulta `huellas_reportes` y, si hay coincidencia, responde `accion: "duplicado"` con el objeto `duplicado` (`PosibleDuplicadoOut`). G5 (ubicación verificada) sigue pendiente, así que `agentico` todavía es inalcanzable.
+
 - **Épica:** IA · **Rol:** Backend · **Prioridad:** Debería · **Fase:** F2 · **Semana:** 3 · **Estimación:** 8 h
 - **Depende de:** T-030, T-032
 - **Cubre:** RF-IA-02, RF-IA-03, RNF-12
@@ -1647,6 +1649,8 @@ Botón de un toque, tarjeta con ventana de 10 s [Deshacer] [Editar], pausa en `v
 
 > ⚑ **Pendiente de aprobación del PO** (cambio de reglas de negocio o de BD). No empezar hasta que el PO lo apruebe en el issue.
 
+> **Estado (2026-10-30):** conectado de punta a punta. `POST /ia/analizar-imagen` calcula SHA-256 + dHash de la foto, consulta G8 (si llega `aula_id`) y guarda las huellas en el análisis temporal; `POST /incidencias` con `analisis_id` registra la huella (aula resuelta por la ubicación en el catálogo `aulas`); `Reportar.tsx` muestra «Esto ya fue reportado» con «Yo también lo vi» (`POST /ia/duplicados/adhesiones`, cierra la oferta como `duplicado_sumado`) y «Es otra falla, reportar igual». De mejor esfuerzo: sin análisis de IA, sin aula en el catálogo o con Mongo/Redis caídos no hay huella y el reporte sigue normal. Pruebas: `backend/tests/e2e/test_duplicados_flujo.py`, `frontend/src/pages/__tests__/Reportar.duplicado.test.tsx`.
+
 - **Épica:** IA · **Rol:** DBA MongoDB · **Prioridad:** Debería · **Fase:** F2 · **Semana:** 4 · **Estimación:** 8 h
 - **Depende de:** T-033
 - **Cubre:** RF-COO-06, RNF-12, RNF-17
@@ -1656,13 +1660,13 @@ Botón de un toque, tarjeta con ventana de 10 s [Deshacer] [Editar], pausa en `v
 
 **Criterios de aceptación**
 
-- [ ] Misma aula+categoría con sha256 igual o dHash ≤ 10 en 24 h ⇒ `duplicado`
-- [ ] La respuesta no expone datos del otro reportante
-- [ ] «Sí» ⇒ +1 adhesión y ningún ticket nuevo
+- [x] Misma aula+categoría con sha256 igual o dHash ≤ 10 en 24 h ⇒ `duplicado`
+- [x] La respuesta no expone datos del otro reportante
+- [x] «Sí» ⇒ +1 adhesión y ningún ticket nuevo
 
 **Pruebas requeridas**
 
-- [ ] Pytest: `test_duplicado_exacto`, `test_casi_duplicado`, `test_otra_aula_no_dup`, `test_mas_24h_no_dup`, `test_respuesta_sin_pii_ajena`
+- [x] Pytest: `test_duplicado_exacto`, `test_casi_duplicado`, `test_otra_aula_no_dup`, `test_mas_24h_no_dup`, `test_respuesta_sin_pii_ajena`
 
 **Definición de terminado:** DoD común
 
