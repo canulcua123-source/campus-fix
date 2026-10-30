@@ -7,6 +7,7 @@ import {
 import { Link } from 'react-router-dom'
 import { auditoriaQuery } from '../api/auditoria'
 import { mensajeDeError } from '../api/client'
+import { refrescoPesado } from '../api/frescura'
 import { resumenSistemaQuery, saludSistemaQuery } from '../api/sistema'
 import {
   Button, EmptyState, ErrorState, PageHeader, Seccion, Skeleton, SkeletonLista, StatGrid, StatTile, Tabla, claseNumerica,
@@ -162,7 +163,7 @@ function textoEvento(e: EventoAuditoria): string {
 export default function CentroControl() {
   const salud = useQuery(saludSistemaQuery())
   const resumen = useQuery(resumenSistemaQuery())
-  const actividad = useQuery(auditoriaQuery({ limite: 10 }))
+  const actividad = useQuery({ ...auditoriaQuery({ limite: 10 }), ...refrescoPesado })
   const consultas = [salud, resumen, actividad]
   const actualizando = consultas.some((c) => c.isFetching && !c.isPending)
   const kpis = resumen.data?.kpis

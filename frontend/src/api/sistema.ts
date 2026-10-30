@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { resumenSistemaSchema, saludSistemaSchema } from '../schemas/sistema'
 import { api } from './client'
+import { refrescoPesado } from './frescura'
 import { claves } from './keys'
 
 /** GET /sistema/salud (sistema:administrar): Mongo, Redis, almacenamiento, IA, versión y uptime. */
@@ -17,5 +18,6 @@ export const resumenSistemaQuery = () =>
   queryOptions({
     queryKey: claves.sistemaResumen,
     queryFn: ({ signal }) => api('/sistema/resumen', { signal, schema: resumenSistemaSchema }),
-    staleTime: 60_000,
+    staleTime: 30_000,
+    ...refrescoPesado, // límite de consulta pesada (30/min): 1 petición/min por pestaña visible
   })

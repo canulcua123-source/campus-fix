@@ -8,6 +8,7 @@ import {
   agregarTags, asignar, buscarQuery, cambiarPrioridad, comentarEnEspera, confirmarSolucion, crearIncidencia, incidenciaQuery, incidenciasQuery, quitarTags, registrarSeguimiento,
   retirarIncidencia, tomarIncidencia,
 } from '../incidencias'
+import { invalidarIncidencia } from '../frescura'
 import { claves } from '../keys'
 
 export function useIncidencias(filtros: FiltrosIncidencias = {}) {
@@ -27,23 +28,16 @@ export function useCrearIncidencia() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (datos: IncidenciaIn) => crearIncidencia(datos),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: claves.incidencias })
-      qc.invalidateQueries({ queryKey: claves.analitica })
-    },
+    onSuccess: () => invalidarIncidencia(qc),
   })
 }
 
 const esConflicto = (e: unknown) => e instanceof ApiError && e.status === 409
 
-/** Invalida detalle, listas y analítica de una incidencia. */
+/** Invalida detalle, listas, analítica y Centro de control de una incidencia (ver `invalidarIncidencia`). */
 function useInvalidarIncidencia(id: string) {
   const qc = useQueryClient()
-  return () => {
-    qc.invalidateQueries({ queryKey: claves.incidencia(id) })
-    qc.invalidateQueries({ queryKey: claves.incidencias })
-    qc.invalidateQueries({ queryKey: claves.analitica })
-  }
+  return () => invalidarIncidencia(qc, id)
 }
 
 export function useSeguimiento(id: string) {
@@ -83,7 +77,7 @@ export function useRetirar(id: string) {
         if (!actual || typeof actual !== 'object') return actual
         return { ...actual, estado: 'retirada', puede_retirar: false }
       })
-      invalidar()
+      return invalidar()
     },
     onError: (e) => esConflicto(e) && invalidar(),
   })
@@ -101,22 +95,18 @@ export function useConfirmacion(id: string) {
 
 /** Reportante: agrega información mientras la incidencia está en espera (no cambia estado). */
 export function useComentarioReportante(id: string) {
-  const qc = useQueryClient()
+  const invalidar = useInvalidarIncidencia(id)
   return useMutation({
     mutationFn: (datos: ComentarioReportanteIn) => comentarEnEspera(id, datos),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.incidencia(id) }),
-    onError: (e) => esConflicto(e) && qc.invalidateQueries({ queryKey: claves.incidencia(id) }),
+    onSuccess: invalidar,
+    onError: (e) => esConflicto(e) && invalidar(),
   })
 }
 
 /** Técnico: se autoasigna una incidencia sin técnico. `useTomar().mutate(id)`; 409 = ya la tomó alguien más. */
 export function useTomar() {
   const qc = useQueryClient()
-  const invalidar = (id: string) => {
-    qc.invalidateQueries({ queryKey: claves.incidencia(id) })
-    qc.invalidateQueries({ queryKey: claves.incidencias })
-    qc.invalidateQueries({ queryKey: claves.analitica })
-  }
+  const invalidar = (id: string) => invalidarIncidencia(qc, id)
   return useMutation({
     mutationFn: (id: string) => tomarIncidencia(id),
     onSuccess: (_r, id) => invalidar(id),
@@ -126,12 +116,8 @@ export function useTomar() {
 
 /** Agregar y quitar tags: `const { agregar, quitar } = useTags(id); agregar.mutate({ tags: ['wifi'] })`. */
 export function useTags(id: string) {
-  const qc = useQueryClient()
-  const onSuccess = () => {
-    qc.invalidateQueries({ queryKey: claves.incidencia(id) })
-    qc.invalidateQueries({ queryKey: claves.incidencias })
-    qc.invalidateQueries({ queryKey: claves.analiticaTags })
-  }
+  const invalidar = useInvalidarIncidencia(id)
+  const onSuccess = () => invalidar()
   const agregar = useMutation({ mutationFn: (datos: TagsIn) => agregarTags(id, datos), onSuccess })
   const quitar = useMutation({ mutationFn: (datos: TagsIn) => quitarTags(id, datos), onSuccess })
   return { agregar, quitar }
@@ -153,7 +139,8 @@ export function useEvidencia(id?: string) {
     },
     onSettled: (_datos, _error, variables) => {
       const destino = variables.incidenciaId ?? id
-      if (destino) qc.invalidateQueries({ queryKey: claves.incidencia(destino) })
+      // Sin esperar: no retrasa el flujo de «Reportar» (varias fotos seguidas).
+      if (destino) void invalidarIncidencia(qc, destino)
     },
   })
 }
