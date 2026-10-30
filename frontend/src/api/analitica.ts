@@ -9,6 +9,7 @@ import {
   type FiltrosAnalitica,
 } from '../schemas/analitica'
 import { api } from './client'
+import { refrescoPesado } from './frescura'
 import { claves, limpiarFiltrosAnalitica } from './keys'
 
 /** El backend aplica filtro_alcance(usuario) en los tres endpoints: nunca enviar áreas del cliente. */
@@ -19,6 +20,7 @@ export const analiticaResumenQuery = (filtros: FiltrosAnalitica = {}) =>
       signal, params: limpiarFiltrosAnalitica(filtros), schema: resumenAnaliticaSchema,
     }),
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
   })
 
 export const analiticaEdificiosQuery = (filtros: FiltrosAnalitica = {}) =>
@@ -28,6 +30,7 @@ export const analiticaEdificiosQuery = (filtros: FiltrosAnalitica = {}) =>
       signal, params: limpiarFiltrosAnalitica(filtros), schema: analiticaEdificiosSchema,
     }),
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
   })
 
 export const analiticaTagsQuery = (filtros: FiltrosAnalitica = {}) =>
@@ -37,6 +40,7 @@ export const analiticaTagsQuery = (filtros: FiltrosAnalitica = {}) =>
       signal, params: limpiarFiltrosAnalitica(filtros), schema: analiticaTagsSchema,
     }),
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
   })
 
 export const cargaTecnicosQuery = (filtros: FiltrosAnalitica = {}) =>
@@ -46,6 +50,7 @@ export const cargaTecnicosQuery = (filtros: FiltrosAnalitica = {}) =>
       signal, params: limpiarFiltrosAnalitica(filtros), schema: cargaTecnicosSchema,
     }),
     staleTime: 60_000,
+    ...refrescoPesado, // pantalla Técnicos: la carga cambia al asignar/tomar
   })
 
 export const analiticaTendenciaQuery = (filtros: FiltrosAnalitica = {}) =>
@@ -55,6 +60,7 @@ export const analiticaTendenciaQuery = (filtros: FiltrosAnalitica = {}) =>
       signal, params: limpiarFiltrosAnalitica(filtros), schema: tendenciaSchema,
     }),
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
   })
 
 /** Ventana fija de 30 días (UTC) que el backend intersecta con desde/hasta. */
@@ -65,4 +71,5 @@ export const analiticaAulasCronicasQuery = (filtros: FiltrosAnalitica = {}) =>
       signal, params: limpiarFiltrosAnalitica(filtros), schema: aulasCronicasSchema,
     }),
     staleTime: 60_000,
+    refetchOnWindowFocus: true,
   })

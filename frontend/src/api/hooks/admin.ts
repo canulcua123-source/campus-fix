@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { CategoriaIn, CategoriaPatch } from '../../schemas/catalogos'
 import type { RolIn, RolPatch, UsuarioIn, UsuarioPatch } from '../../schemas/usuario'
 import { categoriasQuery, crearCategoria, editarCategoria } from '../catalogos'
+import { invalidarAdmin } from '../frescura'
 import { claves } from '../keys'
 import { crearRol, crearUsuario, editarRol, editarUsuario, eliminarRol, rolesQuery, tecnicosQuery, usuariosQuery } from '../usuarios'
 
@@ -13,7 +14,7 @@ export function useCrearCategoria() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (datos: CategoriaIn) => crearCategoria(datos),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.categorias }),
+    onSuccess: () => invalidarAdmin(qc, claves.categorias, claves.usuarios),
   })
 }
 
@@ -21,7 +22,7 @@ export function useEditarCategoria() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ clave, datos }: { clave: string; datos: CategoriaPatch }) => editarCategoria(clave, datos),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.categorias }),
+    onSuccess: () => invalidarAdmin(qc, claves.categorias, claves.usuarios),
   })
 }
 
@@ -38,7 +39,7 @@ export function useCrearUsuario() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (datos: UsuarioIn) => crearUsuario(datos),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.usuarios }),
+    onSuccess: () => invalidarAdmin(qc, claves.usuarios, claves.me, claves.analitica),
   })
 }
 
@@ -46,7 +47,7 @@ export function useEditarUsuario() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, datos }: { id: string; datos: UsuarioPatch }) => editarUsuario(id, datos),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.usuarios }),
+    onSuccess: () => invalidarAdmin(qc, claves.usuarios, claves.me, claves.analitica),
   })
 }
 
@@ -58,7 +59,7 @@ export function useCrearRol() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (datos: RolIn) => crearRol(datos),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.roles }),
+    onSuccess: () => invalidarAdmin(qc, claves.roles, claves.usuarios, claves.me),
   })
 }
 
@@ -66,7 +67,7 @@ export function useEditarRol() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, datos }: { id: string; datos: RolPatch }) => editarRol(id, datos),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.roles }),
+    onSuccess: () => invalidarAdmin(qc, claves.roles, claves.usuarios, claves.me),
   })
 }
 
@@ -74,6 +75,6 @@ export function useEliminarRol() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => eliminarRol(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: claves.roles }),
+    onSuccess: () => invalidarAdmin(qc, claves.roles, claves.usuarios, claves.me),
   })
 }
