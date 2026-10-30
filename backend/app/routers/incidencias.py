@@ -48,7 +48,12 @@ from app.schemas.incidencia import (
     TomarIncidenciaIn,
     TomarIncidenciaOut,
 )
-from app.services.duplicados import actualizar_elegibilidad_huella
+from app.services.duplicados import (
+    HuellasImagen,
+    RegistroHuellaInvalido,
+    actualizar_elegibilidad_huella,
+    registrar_huella_calculada,
+)
 from app.services.ia_eventos import (
     EventoIAConflictivo,
     OfertaIAAjena,
@@ -57,7 +62,7 @@ from app.services.ia_eventos import (
     registrar_resultado_confiable,
 )
 from app.schemas.ia import AnalisisImagen
-from app.services.vision.analisis_temporal import cargar_analisis
+from app.services.vision.analisis_temporal import RegistroAnalisis, cargar_analisis
 
 router = APIRouter(prefix="/incidencias", tags=["incidencias"])
 logger = logging.getLogger(__name__)
@@ -220,8 +225,56 @@ def campos_editados_ia(analisis: AnalisisImagen, datos: IncidenciaIn, categoria:
     return editados
 
 
+async def _cargar_registro_ia(usuario: dict, analisis_id: str) -> RegistroAnalisis | None:
+    try:
+        return await cargar_analisis(get_redis(), analisis_id, str(usuario["_id"]))
+    except Exception:
+        logger.warning("Redis no disponible al leer el análisis de IA del reporte", exc_info=True)
+        return None
+
+
+async def _registrar_huella_reporte(
+    usuario: dict, registro: RegistroAnalisis | None, datos: IncidenciaIn, incidencia_id: ObjectId
+) -> None:
+    """T-038: guarda la huella de la foto analizada para que G8 detecte reportes repetidos del aula.
+
+    Usa el SHA-256/dHash que calculó POST /ia/analizar-imagen (la foto no vuelve a pasar por la API). El aula se
+    resuelve con la ubicación guardada (QR o selector). De mejor esfuerzo: si falla, la incidencia ya existe.
+    """
+    if registro is None or registro.imagen_dhash is None or datos.ubicacion.piso is None:
+        return
+    try:
+        db = get_db()
+        ubicacion = datos.ubicacion
+        aula = await db.aulas.find_one(
+            {"edificio": ubicacion.edificio, "piso": ubicacion.piso, "aula": ubicacion.aula, "activa": True},
+            {"id_publico": 1},
+        )
+        if aula is None:
+            return
+        await asyncio.wait_for(
+            registrar_huella_calculada(
+                db,
+                incidencia_id=incidencia_id,
+                aula_id=aula["id_publico"],
+                huellas=HuellasImagen(sha256=registro.imagen_sha256, dhash=registro.imagen_dhash),
+                usuario=usuario,
+            ),
+            timeout=TIMEOUT_TELEMETRIA_SEGUNDOS,
+        )
+    except (RegistroHuellaInvalido, ValueError) as exc:
+        logger.info("No se registró la huella del reporte: %s", type(exc).__name__)
+    except Exception:
+        logger.warning("No se pudo registrar la huella del reporte en huellas_reportes", exc_info=True)
+
+
 async def _cerrar_oferta_ia(
-    usuario: dict, analisis_id: str, datos: IncidenciaIn, categoria: str, incidencia_id
+    usuario: dict,
+    analisis_id: str,
+    registro: RegistroAnalisis | None,
+    datos: IncidenciaIn,
+    categoria: str,
+    incidencia_id,
 ) -> None:
     """Resultado final confiable de la oferta: lo decide el servidor al crear la incidencia, nunca el cliente.
 
@@ -230,11 +283,6 @@ async def _cerrar_oferta_ia(
     la incidencia ya existe y la telemetría no debe romper su creación.
     """
     try:
-        registro = None
-        try:
-            registro = await cargar_analisis(get_redis(), analisis_id, str(usuario["_id"]))
-        except Exception:
-            logger.warning("Redis no disponible al cerrar la oferta de IA", exc_info=True)
         evento, motivo, editados = "enviado", None, []
         if registro is not None:
             respuesta = registro.respuesta
@@ -341,7 +389,9 @@ async def crear_incidencia(
         else (datos.ia_sugerencia.analisis_id if datos.ia_sugerencia is not None else None)
     )
     if analisis_id is not None:
-        await _cerrar_oferta_ia(usuario, analisis_id, datos, categoria, res.inserted_id)
+        registro = await _cargar_registro_ia(usuario, analisis_id)
+        await _registrar_huella_reporte(usuario, registro, datos, res.inserted_id)
+        await _cerrar_oferta_ia(usuario, analisis_id, registro, datos, categoria, res.inserted_id)
     return {"_id": str(res.inserted_id), "codigo": doc["codigo"], "estado": doc["estado"]}
 
 

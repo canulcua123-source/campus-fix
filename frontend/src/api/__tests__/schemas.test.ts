@@ -190,6 +190,22 @@ describe('contratos T-038 sin datos personales', () => {
     expect(posibleDuplicadoSchema.safeParse({ ...coincidencia, reportante: 'Ana' }).success).toBe(false)
     expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'A'.repeat(43) }).success).toBe(true)
     expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'corta' }).success).toBe(false)
+    expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'A'.repeat(43), analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4' }).success).toBe(true)
+    expect(confirmarAdhesionSchema.safeParse({ coincidencia_id: 'A'.repeat(43), analisis_id: 'no-uuid' }).success).toBe(false)
+  })
+
+  it('RespuestaIA trae el duplicado de G8 y rechaza datos de más', () => {
+    const ia = {
+      es_incidencia_valida: true, categoria: 'infraestructura', titulo: 'Luminaria fundida', descripcion: 'Luminaria apagada en el aula',
+      prioridad_sugerida: 'baja', tags: [], campos_detectados: [], confianza: 0.9, advertencias: [],
+      detalle_infra: { tipo_dano: 'luminaria', riesgo_seguridad: 'bajo' },
+    }
+    const respuesta = {
+      accion: 'duplicado', motivos: [], analisis_id: '901bba9a-9e5f-4cb9-8fe4-4c22710ad5a4', analisis: ia,
+      accion_asistida: 'autollenar', mensaje: 'Posible duplicado', cache: false, duplicado: coincidencia,
+    }
+    expect(respuestaIaSchema.safeParse(respuesta).success).toBe(true)
+    expect(respuestaIaSchema.safeParse({ ...respuesta, duplicado: { ...coincidencia, correo: 'a@b.mx' } }).success).toBe(false)
   })
 
   it('valida la respuesta idempotente de adhesion', () => {

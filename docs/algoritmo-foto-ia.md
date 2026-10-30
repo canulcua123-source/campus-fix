@@ -153,6 +153,18 @@ el TTL. Un ID ajeno, inexistente, expirado o un registro inválido responde el m
 disponible, tanto la creación como la consulta fallan cerradas con `503`; nunca se concede acceso ni se devuelve una
 decisión sin poder guardar su contexto temporal.
 
+**G8 implementado (T-033/T-038).** `POST /ia/analizar-imagen` calcula SHA-256 y dHash de los bytes que recibe (el
+derivado `ia`) y los guarda en el análisis temporal (`imagen_sha256`, `imagen_dhash`). Si la PWA manda `aula_id` (QR) y la
+IA determinó la categoría, consulta `huellas_reportes` (misma aula + categoría, `elegible`, últimas 24 h, SHA-256 igual o
+Hamming ≤ 10): coincidencia ⇒ G8 `probable` y `accion: "duplicado"` con `duplicado` (folio, categoría, minutos,
+adhesiones y un `coincidencia_id` opaco de 30 min ligado al actor por HMAC); sin coincidencia ⇒ `no_encontrado`; sin
+aula ⇒ `no_verificable`; error o > 2 s ⇒ `no_verificable` (el análisis sigue). `POST /incidencias` con `analisis_id`
+registra la huella con esas mismas huellas (la foto no vuelve a pasar por la API) resolviendo el aula por
+`edificio + piso + aula` en el catálogo `aulas`; si no existe, falla o venció el análisis, no hay huella y el reporte se
+crea igual. «Yo también lo vi» llama a `POST /ia/duplicados/adhesiones` (+1 adhesión, ningún ticket nuevo, cierra la
+oferta como `duplicado_sumado`); «Es otra falla» sigue el formulario normal. La elegibilidad se apaga al cerrar,
+resolver o retirar el reporte (`actualizar_elegibilidad_huella`).
+
 **Nota de alcance para G8 (choca con `AGENTS.md`, regla 6).** Toda consulta a `incidencias_campus` debe llevar `filtro_alcance(usuario)`, y un alumno tiene alcance `propio`. Buscar duplicados de **otros** usuarios en esa colección violaría la regla y filtraría datos ajenos.
 
 Propuesta, **que requiere aprobación del PO y de quien mantiene `AGENTS.md`**: una colección aparte `huellas_reportes` con TTL de 24 h, que se escribe al crear cada ticket con foto:

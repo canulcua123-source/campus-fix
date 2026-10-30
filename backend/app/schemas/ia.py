@@ -2,6 +2,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import UUID4, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.duplicado import PosibleDuplicadoOut
 from app.schemas.infraestructura import RiesgoSeguridad, TipoDano
 
 PatronIdentificadorAnalisis = r"^[A-Za-z0-9_-]{22,64}$"
@@ -82,6 +83,13 @@ class RespuestaIA(BaseModel):
     accion_asistida: AccionAsistida
     mensaje: str
     cache: bool
+    duplicado: PosibleDuplicadoOut | None = Field(
+        default=None,
+        description=(
+            "Solo con accion=duplicado (G8): folio, categoría, minutos y adhesiones del reporte existente, "
+            "sin datos de quien lo reportó. coincidencia_id se confirma en POST /ia/duplicados/adhesiones."
+        ),
+    )
 
 
 class IASugerencia(BaseModel):
