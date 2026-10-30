@@ -21,14 +21,18 @@ from app.core.imagen import (
 )
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import require_permiso
-from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn
+from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn, PosibleDuplicadoOut
 from app.schemas.ia import AnalisisImagen, DecisionAsistida, EventoIAIn, EventoIAOut, OfertaIAInterna, RespuestaIA
 from app.schemas.config import ConfigIA
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
     CoincidenciaNoElegible,
     CoincidenciaNoEncontrada,
+    HuellasImagen,
+    ImagenHuellaInvalida,
+    calcular_huellas,
     confirmar_adhesion,
+    detectar_duplicado_por_huellas,
 )
 from app.services import ia as ia_service
 from app.services.ia import PROMPT_VERSION, IAError, analizar_imagen, identidad_proveedor
@@ -49,6 +53,7 @@ from app.services.ia_eventos import (
     OfertaIAVencida,
     registrar_evento_cliente,
     registrar_oferta,
+    registrar_resultado_confiable,
 )
 
 router = APIRouter(prefix="/ia", tags=["ia"])
@@ -57,6 +62,9 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 24 * 3600
 # La telemetría nunca debe bloquear el análisis: si Mongo no responde pronto se abandona el registro.
 TIMEOUT_TELEMETRIA_SEGUNDOS = 2.0
+# G8 es de mejor esfuerzo: si huellas_reportes tarda o falla, el reporte sigue como formulario.
+TIMEOUT_DUPLICADOS_SEGUNDOS = 2.0
+PATRON_AULA_ID = r"^[A-Za-z0-9_-]{22}$"
 CUPO_TTL = 2 * 24 * 3600
 
 _CONSUMIR_CUPO = """
@@ -133,9 +141,9 @@ async def _consumir_cupo(redis, claves: tuple[str, str], *, limite_usuario: int,
 
 
 def _estado_por_verificar(usuario: dict) -> tuple[UbicacionCompuertas | None, str]:
-    """Ubicación verificada (T17/T18) y evidencia de duplicados (T22) todavía no existen.
+    """Ubicación verificada (T17/T18) todavía no existe; G8 la sustituye ``_evaluar_duplicado`` cuando hay aula.
 
-    Mientras tanto la ubicación es ``None`` y el duplicado ``no_verificable``: G5, G7 y G8 fallan, así que el modo
+    Mientras tanto la ubicación es ``None`` y el duplicado ``no_verificable``: G5 y G7 fallan, así que el modo
     agéntico es inalcanzable a propósito y la salida segura es ``formulario`` (aunque el kill switch esté encendido).
     """
     return None, "no_verificable"
@@ -161,8 +169,11 @@ def _entrada_compuertas(
     *,
     cupo_agentico_disponible: bool,
     calidad_cliente: tuple[str, ...] = (),
+    estado_duplicado: str | None = None,
 ) -> EntradaCompuertas:
     ubicacion, duplicado = _estado_por_verificar(usuario)
+    if estado_duplicado is not None:
+        duplicado = estado_duplicado
     return EntradaCompuertas(
         analisis=analisis,
         ahora=ahora,
@@ -186,6 +197,52 @@ async def _cupo_agentico_previo(redis, usuario: dict, config: ConfigIA, ahora: d
     except Exception:
         logger.warning("Redis no disponible al consultar el cupo agéntico", exc_info=True)
         return False
+
+
+async def _calcular_huellas(datos: bytes, tipo_mime: str) -> HuellasImagen | None:
+    """SHA-256 + dHash de los bytes que recibió el servidor; si falla, el análisis sigue sin G8."""
+    try:
+        return await asyncio.to_thread(calcular_huellas, datos, tipo_mime)
+    except ImagenHuellaInvalida:
+        logger.info("No se pudo calcular la huella de la imagen; se omite la detección de duplicados")
+        return None
+
+
+async def _evaluar_duplicado(
+    usuario: dict,
+    analisis: AnalisisImagen,
+    huellas: HuellasImagen | None,
+    aula_id: str | None,
+    ahora: datetime,
+) -> tuple[str | None, PosibleDuplicadoOut | None]:
+    """G8 (T-038): busca solo en huellas_reportes con el aula del QR y la categoría detectada.
+
+    Devuelve ``(None, None)`` si falta contexto (sin aula o sin categoría): el estado queda como lo deja
+    ``_estado_por_verificar``. Un error o un tiempo excedido se degradan a ``no_verificable``.
+    """
+    if aula_id is None or huellas is None or not analisis.es_incidencia_valida:
+        return None, None
+    if analisis.categoria == "no_determinada":
+        return None, None
+    try:
+        posible = await asyncio.wait_for(
+            detectar_duplicado_por_huellas(
+                get_db(),
+                huellas=huellas,
+                aula_id=aula_id,
+                categoria=analisis.categoria,
+                usuario_id=usuario["_id"],
+                secreto=settings.jwt_secret,
+                ahora=ahora,
+            ),
+            timeout=TIMEOUT_DUPLICADOS_SEGUNDOS,
+        )
+    except Exception:
+        logger.warning("No se pudo consultar huellas_reportes; el análisis sigue sin G8", exc_info=True)
+        return "no_verificable", None
+    if posible is None:
+        return "no_encontrado", None
+    return "probable", posible
 
 
 def _mensaje(accion: str, asistida: DecisionAsistida) -> str:
@@ -260,10 +317,13 @@ async def _responder(
     cupo_agentico_disponible: bool,
     calidad_cliente: tuple[str, ...] = (),
     latencia_ms: int | None = None,
+    huellas: HuellasImagen | None = None,
+    aula_id: str | None = None,
 ) -> RespuestaIA:
     """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
     # Las pistas del cliente (borrosa/oscura/sobreexpuesta) también topan la confianza: nunca autollena.
     asistida = decidir(analisis, calidad_cliente, cache=cache)
+    estado_duplicado, posible_duplicado = await _evaluar_duplicado(usuario, analisis, huellas, aula_id, ahora)
     entrada = _entrada_compuertas(
         analisis,
         usuario,
@@ -271,6 +331,7 @@ async def _responder(
         config,
         cupo_agentico_disponible=cupo_agentico_disponible,
         calidad_cliente=calidad_cliente,
+        estado_duplicado=estado_duplicado,
     )
     decision = evaluar_compuertas(entrada)
     if decision.accion == "agentico" and entrada.ubicacion is not None:
@@ -296,10 +357,12 @@ async def _responder(
         accion_asistida=asistida.accion,
         mensaje=_mensaje(decision.accion, asistida),
         cache=cache,
+        duplicado=posible_duplicado if decision.accion == "duplicado" else None,
     )
     registro = RegistroAnalisis(
         usuario_id=str(usuario["_id"]),
-        imagen_sha256=hashlib.sha256(datos).hexdigest(),
+        imagen_sha256=huellas.sha256 if huellas is not None else hashlib.sha256(datos).hexdigest(),
+        imagen_dhash=huellas.dhash if huellas is not None else None,
         respuesta=respuesta,
         compuertas=decision.compuertas,
         prompt_version=PROMPT_VERSION,
@@ -344,6 +407,13 @@ async def analizar(
     usuario: Annotated[dict, Depends(require_permiso("ia:usar"))],
     contexto: Annotated[str | None, Form(max_length=500)] = None,
     calidad_cliente: Annotated[str | None, Form(max_length=60)] = None,
+    aula_id: Annotated[
+        str | None,
+        Form(
+            pattern=PATRON_AULA_ID,
+            description="id_publico del aula (QR). Con él, G8 busca un reporte igual en las últimas 24 h.",
+        ),
+    ] = None,
 ):
     pistas_calidad = _calidad_cliente(calidad_cliente)
     try:
@@ -392,6 +462,8 @@ async def analizar(
         "ahora": ahora,
         "cupo_agentico_disponible": cupo_agentico,
         "calidad_cliente": pistas_calidad,
+        "huellas": await _calcular_huellas(validada.datos, validada.tipo_mime),
+        "aula_id": aula_id,
     }
     if analisis_cache is not None:
         return await _responder(redis, usuario, validada.datos, analisis_cache, cache=True, **contexto_respuesta)
@@ -505,7 +577,7 @@ async def adherirse_a_duplicado(
     if "incidencias:crear" not in usuario["_permisos"]:
         raise HTTPException(403, "Falta el permiso incidencias:crear")
     try:
-        return await confirmar_adhesion(
+        adhesion = await confirmar_adhesion(
             get_db(),
             coincidencia_id=datos.coincidencia_id,
             usuario_id=usuario["_id"],
@@ -515,6 +587,28 @@ async def adherirse_a_duplicado(
         raise HTTPException(404, "Coincidencia no encontrada") from exc
     except CoincidenciaNoElegible as exc:
         raise HTTPException(409, "El reporte ya no admite adhesiones") from exc
+    if datos.analisis_id is not None:
+        await _cerrar_oferta_duplicado(usuario, str(datos.analisis_id))
+    return adhesion
+
+
+async def _cerrar_oferta_duplicado(usuario: dict, analisis_id: str) -> None:
+    """Cierra la oferta como ``duplicado_sumado``; la adhesión ya quedó guardada, así que solo se registra el fallo."""
+    try:
+        await asyncio.wait_for(
+            registrar_resultado_confiable(
+                get_db(),
+                analisis_id=analisis_id,
+                evento="duplicado_sumado",
+                actor_id=usuario["_id"],
+                secreto=settings.jwt_secret,
+            ),
+            timeout=TIMEOUT_TELEMETRIA_SEGUNDOS,
+        )
+    except (OfertaIANoEncontrada, OfertaIAAjena, OfertaIAVencida, EventoIAConflictivo) as exc:
+        logger.info("La oferta de IA no se cerró al sumarse al duplicado: %s", type(exc).__name__)
+    except Exception:
+        logger.warning("No se pudo cerrar la oferta de IA como duplicado_sumado", exc_info=True)
 
 
 @router.get(

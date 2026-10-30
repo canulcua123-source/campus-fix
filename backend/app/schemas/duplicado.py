@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import UUID4, BaseModel, ConfigDict, Field
 
 
 PATRON_CATEGORIA = r"^[a-z][a-z0-9_]{2,29}$"
@@ -24,6 +24,10 @@ class ConfirmarAdhesionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     coincidencia_id: str = Field(pattern=PATRON_COINCIDENCIA)
+    analisis_id: UUID4 | None = Field(
+        default=None,
+        description="Análisis de POST /ia/analizar-imagen que ofreció el duplicado; cierra su oferta como duplicado_sumado.",
+    )
 
 
 class AdhesionOut(BaseModel):
