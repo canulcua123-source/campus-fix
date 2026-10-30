@@ -17,6 +17,8 @@ interface AuthState {
   /** true mientras se intenta recuperar la sesión con la cookie de refresh al abrir la app. */
   restaurando: boolean
   iniciarSesion: (token: string, usuario: Usuario) => void
+  /** Sustituye rol, permisos y alcance con lo que dice /auth/me (un cambio de rol aplica sin re-login). */
+  actualizarUsuario: (usuario: Usuario) => void
   /** Sustituye el access token tras un refresh, sin tocar el usuario. */
   actualizarToken: (token: string) => void
   cerrarSesion: (aviso?: string) => void
@@ -30,6 +32,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   aviso: null,
   restaurando: false,
   iniciarSesion: (token, usuario) => set({ token, usuario, aviso: null, restaurando: false }),
+  actualizarUsuario: (usuario) => set((s) => (s.token ? { usuario } : {})),
   actualizarToken: (token) => set({ token }),
   cerrarSesion: (aviso) => set({ token: null, usuario: null, aviso: aviso ?? null, restaurando: false }),
   setRestaurando: (restaurando) => set({ restaurando }),

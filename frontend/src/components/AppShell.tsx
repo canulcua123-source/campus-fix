@@ -3,6 +3,7 @@ import { Camera, ChevronDown, LogOut } from 'lucide-react'
 import { useEffect, useId, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useLogout } from '../api/hooks/auth'
+import { useSincronizarSesion } from '../auth/sincronizar'
 import { useAuth } from '../auth/store'
 import { InstallPrompt } from './InstallPrompt'
 import { navegacionPara, PERFIL_ITEM, REPORTAR, rutaDentroDe, type GrupoNav, type ItemNav } from './navegacion'
@@ -198,6 +199,7 @@ export function NavegacionLateral({
 }
 
 export function AppShell() {
+  useSincronizarSesion()
   const usuario = useAuth((s) => s.usuario)
   const logout = useLogout()
   const navigate = useNavigate()
