@@ -1,5 +1,5 @@
 import {
-  Camera, CheckCheck, CircleCheck, ClipboardList, Hand, Hourglass, Inbox, ListFilter, RefreshCw, Search, SearchX, type LucideIcon,
+  Camera, CheckCheck, CircleCheck, ClipboardList, Hand, Hourglass, ListFilter, RefreshCw, Search, SearchX, type LucideIcon,
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -32,7 +32,6 @@ const esEstado = (valor: string | null): valor is Estado => ESTADOS.includes(val
 const ACTIVOS: readonly string[] = ['abierta', 'en_proceso', 'en_espera']
 
 const VISTAS: Record<VistaBandeja, { texto: string; ayuda: string }> = {
-  todas: { texto: 'Todas', ayuda: 'Tus asignadas, las de tu área sin técnico y las que reportaste.' },
   asignadas: { texto: 'Asignadas a mí', ayuda: 'Pendientes a tu cargo, de la más urgente a la menos urgente.' },
   por_tomar: { texto: 'Por tomar', ayuda: 'Sin técnico asignado en tu área. Tómala para que pase a «Asignadas a mí».' },
   reportadas: { texto: 'Reportadas por mí', ayuda: 'Fallas que tú reportaste y su avance.' },
@@ -43,7 +42,7 @@ const VISTAS: Record<VistaBandeja, { texto: string; ayuda: string }> = {
 export default function Bandeja() {
   const [params, setParams] = useSearchParams()
   const crudaVista = params.get('vista')
-  const vista: VistaBandeja = esVistaBandeja(crudaVista) ? crudaVista : 'todas'
+  const vista: VistaBandeja = esVistaBandeja(crudaVista) ? crudaVista : 'asignadas'
   const crudoEstado = params.get('estado')
   const estado = esEstado(crudoEstado) ? crudoEstado : undefined
 
@@ -69,7 +68,7 @@ export default function Bandeja() {
   const cambiar = (cambios: { vista?: VistaBandeja; estado?: Estado | null }) => {
     const siguiente = new URLSearchParams(params)
     if (cambios.vista !== undefined) {
-      if (cambios.vista === 'todas') siguiente.delete('vista')
+      if (cambios.vista === 'asignadas') siguiente.delete('vista')
       else siguiente.set('vista', cambios.vista)
       siguiente.delete('estado')
     }
@@ -93,10 +92,12 @@ export default function Bandeja() {
     valor: v, texto: VISTAS[v].texto, cuenta: listo ? porVista[v].length : undefined,
   }))
   const cuentaEstado = (e: Estado) => enVista.filter((t) => t.estado === e).length
-  const estadosPresentes = ESTADOS.filter((e) => cuentaEstado(e) > 0 || e === estado)
+  const estadosBase: readonly Estado[] = vista === 'resueltas' ? ['resuelta'] : (ACTIVOS as readonly Estado[])
+  const estadosExtra = ESTADOS.filter((e) => !estadosBase.includes(e) && (cuentaEstado(e) > 0 || e === estado))
+  const estadosAMostrar = [...estadosBase, ...estadosExtra]
   const opcionesEstado: OpcionChip<Estado | 'todos'>[] = [
     { valor: 'todos', texto: 'Todos', cuenta: enVista.length },
-    ...estadosPresentes.map((e) => ({ valor: e, texto: ETIQUETAS.estado[e], cuenta: cuentaEstado(e) })),
+    ...estadosAMostrar.map((e) => ({ valor: e, texto: ETIQUETAS.estado[e], cuenta: cuentaEstado(e) })),
   ]
 
   const accionDe = (t: IncidenciaListaItem): ReactNode => {
@@ -149,11 +150,6 @@ export default function Bandeja() {
   const nPorTomar = porVista.por_tomar.length
   const nAsignadas = porVista.asignadas.length
   const VACIOS: Record<VistaBandeja, { titulo: string; descripcion: string; icono: LucideIcon; accion?: ReactNode }> = {
-    todas: {
-      titulo: 'Todo al día',
-      descripcion: 'No tienes incidencias asignadas, no hay pendientes por tomar en tu área y no has reportado fallas.',
-      icono: Inbox,
-    },
     asignadas: {
       titulo: 'No tienes incidencias asignadas',
       descripcion: nPorTomar > 0
@@ -162,12 +158,14 @@ export default function Bandeja() {
       icono: CircleCheck,
       accion: nPorTomar > 0 ? irA('por_tomar', 'Ver por tomar') : undefined,
     },
+
     por_tomar: {
       titulo: 'No hay incidencias por tomar',
       descripcion: 'Todas las incidencias de tu área ya tienen técnico asignado.',
       icono: Hourglass,
       accion: nAsignadas > 0 ? irA('asignadas', 'Ver asignadas a mí') : undefined,
     },
+
     reportadas: {
       titulo: 'No has reportado incidencias',
       descripcion: 'Si encuentras una falla, repórtala con una foto y aquí verás su avance.',
@@ -176,12 +174,14 @@ export default function Bandeja() {
         <Link to="/reportar" className="ui-btn ui-btn--primario ui-btn--sm"><Camera size={16} aria-hidden /> Reportar</Link>
       ) : undefined,
     },
+
     resueltas: {
       titulo: 'Sin resueltas por confirmar',
       descripcion: 'Cuando resuelvas una incidencia, aparecerá aquí hasta que el reportante la confirme.',
       icono: CheckCheck,
       accion: nAsignadas > 0 ? irA('asignadas', 'Ver asignadas a mí') : undefined,
     },
+
   }
 
   const vacio = (): ReactNode => {
@@ -234,7 +234,7 @@ export default function Bandeja() {
           opciones={opcionesVista}
           onCambio={(v) => cambiar({ vista: v })}
         />
-        {listo && (estadosPresentes.length > 1 || estado) && (
+        {listo && (
           <FiltroChips<Estado | 'todos'>
             etiqueta="Filtrar por estado"
             tamano="sm"

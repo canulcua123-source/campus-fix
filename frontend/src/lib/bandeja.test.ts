@@ -88,13 +88,10 @@ describe('Vistas de «Mis incidencias»', () => {
     expect(ids(filtrarVista(lista, 'reportadas', 'u1', reportadas))).toEqual(['ajena', 'cerrada-mia'])
   })
 
-  it('«todas» pone primero las pendientes por prioridad', () => {
-    expect(ids(filtrarVista(lista, 'todas', 'u1', reportadas))).toEqual(['libre', 'mia', 'ajena', 'cerrada-mia', 'resuelta-mia'])
-  })
-
   it('une listas sin duplicar y valida la vista de la URL', () => {
     expect(ids(unirIncidencias([inc('a'), inc('b')], [inc('b'), inc('c')]))).toEqual(['a', 'b', 'c'])
     expect(esVistaBandeja('por_tomar')).toBe(true)
+    expect(esVistaBandeja('todas')).toBe(false)
     expect(esVistaBandeja('otra')).toBe(false)
   })
 })

@@ -92,19 +92,19 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(screen.getAllByText('Aceptada por ti')).toHaveLength(4)
   })
 
-  it('«Todas» une la bandeja y lo reportado, sin duplicar, con el conteo de cada filtro', async () => {
+  it('«Asignadas a mí» es la vista por defecto y muestra el conteo de cada filtro', async () => {
     const yaVisible = INCIDENCIAS[4]
     responder([...INCIDENCIAS, REPORTADA], [REPORTADA, yaVisible])
     renderBandeja()
 
     await screen.findByText('Crítica asignada')
-    expect(chip(/^Todas/)).toHaveAttribute('aria-checked', 'true')
-    expect(chip(/^Todas/)).toHaveTextContent('7')
+    expect(chip(/^Asignadas a mí/)).toHaveAttribute('aria-checked', 'true')
     expect(chip(/^Asignadas a mí/)).toHaveTextContent('4')
     expect(chip(/^Por tomar/)).toHaveTextContent('1')
     expect(chip(/^Reportadas por mí/)).toHaveTextContent('2')
     expect(chip(/^Resueltas/)).toHaveTextContent('0')
-    expect(screen.getAllByText('Pendiente de asignación')).toHaveLength(1)
+    expect(screen.queryByRole('radio', { name: /^Todas/ })).not.toBeInTheDocument()
+    expect(nombres('Asignadas a mí')).toHaveLength(4)
   })
 
   it('cada filtro filtra de verdad y queda en la URL', async () => {
@@ -132,10 +132,7 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(nombres('Asignadas a mí')).toHaveLength(4)
     expect(screen.queryByText('Ya resuelta')).not.toBeInTheDocument()
     expect(screen.queryByText('Asignada a Luis')).not.toBeInTheDocument()
-
-    await usuario.click(chip(/^Todas/))
     expect(screen.getByTestId('url')).toHaveTextContent(/^$/)
-    expect(nombres('Todas')).toHaveLength(8)
   })
 
   it('las flechas del teclado cambian de filtro', async () => {
@@ -144,10 +141,10 @@ describe('Mis incidencias del técnico (T-050)', () => {
     const usuario = userEvent.setup()
     await screen.findByText('Crítica asignada')
 
-    chip(/^Todas/).focus()
+    chip(/^Asignadas a mí/).focus()
     await usuario.keyboard('{ArrowRight}')
-    expect(chip(/^Asignadas a mí/)).toHaveAttribute('aria-checked', 'true')
-    expect(chip(/^Asignadas a mí/)).toHaveFocus()
+    expect(chip(/^Por tomar/)).toHaveAttribute('aria-checked', 'true')
+    expect(chip(/^Por tomar/)).toHaveFocus()
     await usuario.keyboard('{End}')
     expect(screen.getByTestId('url')).toHaveTextContent('?vista=resueltas')
   })
@@ -183,11 +180,37 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(screen.getByRole('link', { name: 'Reportar' })).toHaveAttribute('href', '/reportar')
   })
 
-  it('muestra «Todo al día» si no hay nada', async () => {
+  it('muestra «No tienes incidencias asignadas» si no hay nada en asignadas', async () => {
     responder([])
     renderBandeja()
 
-    expect(await screen.findByText('Todo al día')).toBeInTheDocument()
+    expect(await screen.findByText('No tienes incidencias asignadas')).toBeInTheDocument()
+  })
+
+  it('los chips de estado y «Todos» se mantienen visibles en vistas vacías y al seleccionar estado', async () => {
+    responder(INCIDENCIAS)
+    renderBandeja('/bandeja?vista=reportadas')
+    const usuario = userEvent.setup()
+
+    await screen.findByText('No has reportado incidencias')
+    expect(chip(/^Todos/)).toBeInTheDocument()
+    expect(chip(/^Todos/)).toHaveTextContent('0')
+    expect(chip(/^Abierta/)).toBeInTheDocument()
+    expect(chip(/^En proceso/)).toBeInTheDocument()
+    expect(chip(/^En espera/)).toBeInTheDocument()
+
+    await usuario.click(chip(/^Abierta/))
+    expect(screen.getByTestId('url')).toHaveTextContent('?vista=reportadas&estado=abierta')
+    expect(chip(/^Todos/)).toBeInTheDocument()
+    expect(chip(/^Abierta/)).toHaveAttribute('aria-checked', 'true')
+    expect(chip(/^En proceso/)).toBeInTheDocument()
+    expect(chip(/^En espera/)).toBeInTheDocument()
+
+    await usuario.click(chip(/^Resueltas/))
+    await screen.findByText('Sin resueltas por confirmar')
+    const filtrosEstado = screen.getByRole('radiogroup', { name: 'Filtrar por estado' })
+    expect(within(filtrosEstado).getByRole('radio', { name: /^Todos/ })).toHaveTextContent('0')
+    expect(within(filtrosEstado).getByRole('radio', { name: /^Resuelta/ })).toHaveTextContent('0')
   })
 
   it('«Asignadas a mí» usa el id del usuario y no confunde homónimos', async () => {
@@ -226,10 +249,13 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(screen.queryByText('Alta antigua')).not.toBeInTheDocument()
 
     await usuario.clear(buscador)
-    await usuario.type(buscador, 'INC-SIN')
-    expect(nombres('Todas')).toEqual([expect.stringContaining('Pendiente de asignación')])
-    expect(chip(/^Por tomar/)).toHaveTextContent('1')
-    expect(chip(/^Asignadas a mí/)).toHaveTextContent('0')
+    await usuario.type(buscador, 'ALTA')
+    expect(nombres('Asignadas a mí')).toEqual([
+      expect.stringContaining('Alta antigua'),
+      expect.stringContaining('Alta reciente'),
+    ])
+    expect(chip(/^Por tomar/)).toHaveTextContent('0')
+    expect(chip(/^Asignadas a mí/)).toHaveTextContent('2')
 
     await usuario.clear(buscador)
     await usuario.type(buscador, 'no existe nada')
@@ -277,7 +303,7 @@ describe('Mis incidencias del técnico (T-050)', () => {
       http.post(`${BASE}/incidencias/sin-asignar/tomar`, () =>
         HttpResponse.json({ detail: 'La incidencia no está disponible para autoasignación' }, { status: 409 })),
     )
-    renderBandeja()
+    renderBandeja('/bandeja?vista=por_tomar')
     const usuario = userEvent.setup()
     await usuario.click(await screen.findByRole('button', { name: 'Tomar INC-SIN' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('La incidencia no está disponible para autoasignación')

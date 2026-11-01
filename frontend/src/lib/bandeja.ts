@@ -53,7 +53,7 @@ export function antiguedad(fecha: string, ahora = Date.now()): { texto: string; 
 }
 
 /** Vistas de «Mis incidencias» (pantalla única del técnico, `?vista=`). */
-export const VISTAS_BANDEJA = ['todas', 'asignadas', 'por_tomar', 'reportadas', 'resueltas'] as const
+export const VISTAS_BANDEJA = ['asignadas', 'por_tomar', 'reportadas', 'resueltas'] as const
 export type VistaBandeja = (typeof VISTAS_BANDEJA)[number]
 
 export const esVistaBandeja = (valor: string | null): valor is VistaBandeja =>
@@ -91,6 +91,6 @@ export function filtrarVista(
     case 'por_tomar': return ordenarBandeja(filtrarBandeja(incidencias, 'sin_asignar', usuarioId))
     case 'reportadas': return pendientesPrimero(incidencias.filter((i) => reportadas.has(i._id)))
     case 'resueltas': return incidencias.filter((i) => esResueltaPorMi(i, usuarioId))
-    default: return pendientesPrimero(incidencias)
+
   }
 }
