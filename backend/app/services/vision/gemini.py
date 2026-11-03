@@ -10,6 +10,8 @@ from app.services.vision.prompt import PROMPT_SISTEMA, texto_usuario
 from app.services.vision.puerto import TIMEOUT_PROVEEDOR_SEGUNDOS, ErrorProveedor, error_http, validar_salida
 
 URL_BASE = "https://generativelanguage.googleapis.com/v1beta"
+# Tope de salida: el JSON del análisis cabe holgado; sin tope, una respuesta larga llega truncada sin aviso.
+MAX_TOKENS_SALIDA = 2048
 
 
 def esquema_sin_referencias(esquema: dict) -> dict:
@@ -54,6 +56,7 @@ class ProveedorGemini:
                 "responseMimeType": "application/json",
                 "responseJsonSchema": esquema_sin_referencias(AnalisisImagen.model_json_schema()),
                 "mediaResolution": "MEDIA_RESOLUTION_HIGH",
+                "maxOutputTokens": MAX_TOKENS_SALIDA,
             },
         }
         try:
@@ -79,6 +82,12 @@ class ProveedorGemini:
         candidatos = datos.get("candidates") or []
         if not candidatos or candidatos[0].get("finishReason") in {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST"}:
             raise ErrorProveedor("La IA no pudo analizar la imagen", tipo="negativa")
+        motivo_fin = candidatos[0].get("finishReason")
+        if motivo_fin in {"MAX_TOKENS", "RECITATION"}:
+            raise ErrorProveedor(
+                f"El proveedor de IA cortó la respuesta antes de completarla ({motivo_fin})",
+                tipo="respuesta_invalida",
+            )
         partes = candidatos[0].get("content", {}).get("parts", [])
         texto = "".join(p.get("text", "") for p in partes if isinstance(p, dict))
         return validar_salida(texto)

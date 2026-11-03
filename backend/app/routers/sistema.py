@@ -17,6 +17,7 @@ from app.core.security import PERMISO_SUPERADMIN, filtro_alcance, require_permis
 from app.routers.analitica import _ESTADOS_ACTIVOS, _pipeline_carga_tecnicos
 from app.schemas.analitica import FiltrosAnalitica
 from app.schemas.sistema import ComponenteSalud, ResumenSistema, SaludIA, SaludSistema
+from app.services.vision.cupos import dia_campus
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ _RESPUESTAS = {401: {"description": "No autenticado"}, 403: {"description": f"Fa
 
 def _clave_cupo_global(ahora: datetime) -> str:
     # Misma clave que routers/ia.py::_claves_cupo.
-    return f"ia:uso:global:{ahora:%Y-%m-%d}"
+    return f"ia:uso:global:{dia_campus(ahora)}"
 
 
 def _por_latencia(latencia_ms: float) -> str:

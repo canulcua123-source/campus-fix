@@ -159,6 +159,14 @@ describe('Reportar: robustez del análisis con IA', () => {
     expect(await screen.findByText('Alcanzaste el límite de 20 análisis por día. Puedes llenar el formulario manualmente.')).toBeInTheDocument()
   })
 
+  it('no repite «manualmente» si el mensaje del servidor ya lo dice', async () => {
+    dobles.analizarImagen.mockRejectedValue(new ApiError(503, 'no_disponible', 'No fue posible analizar la imagen; llena el formulario manualmente'))
+    renderReportar()
+    seleccionarFoto()
+    expect(await screen.findByText('No fue posible analizar la imagen; llena el formulario manualmente')).toBeInTheDocument()
+    expect(screen.queryByText(/Puedes llenar el formulario manualmente/)).not.toBeInTheDocument()
+  })
+
   it('recorta lo que propone la IA a los límites del formulario y avisa de «crítica» aunque la prioridad ya esté elegida', async () => {
     const tags = Array.from({ length: 20 }, (_, i) => `etiqueta_${i}`)
     dobles.analizarImagen.mockResolvedValue({

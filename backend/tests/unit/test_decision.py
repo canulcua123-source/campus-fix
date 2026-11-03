@@ -30,7 +30,7 @@ def _analisis(**cambios) -> AnalisisImagen:
         (_analisis(confianza=0.3), "preguntar"),
         (_analisis(categoria="no_determinada", confianza=0.9), "preguntar"),
         (_analisis(es_incidencia_valida=False, confianza=0.9), "rechazar"),
-        (_analisis(confianza=0.95, advertencias=["foto borrosa"]), "sugerir"),
+        (_analisis(confianza=0.95, advertencias=["borrosa"]), "sugerir"),
         (_analisis(confianza=0.95, advertencias=["texto_con_instrucciones"]), "sugerir"),
     ],
 )
@@ -52,7 +52,7 @@ def test_no_incidencia_muestra_mensaje_claro(tipo: str):
 
 
 def test_confianza_topada_es_la_que_se_expone():
-    analisis = _analisis(confianza=0.95, advertencias=["foto oscura"])
+    analisis = _analisis(confianza=0.95, advertencias=["oscura"])
     respuesta = decidir(analisis)
 
     assert respuesta.accion == "sugerir"
@@ -69,4 +69,4 @@ def test_pistas_de_calidad_del_cliente_topan_la_confianza(pista):
 
 
 def test_advertencia_falta_contexto_tambien_topa():
-    assert decidir(_analisis(confianza=0.95, advertencias=["Falta contexto del lugar"])).accion == "sugerir"
+    assert decidir(_analisis(confianza=0.95, advertencias=["falta_contexto"])).accion == "sugerir"

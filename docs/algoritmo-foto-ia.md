@@ -57,6 +57,10 @@ se reutiliza como `v3`; además, una respuesta de infraestructura sin `detalle_i
 
 ### A.1 Flujo de un toque "Reportar con IA"
 
+> **Estado (#182):** el diagrama es el diseño objetivo. **Pendiente, no implementado:** `Idempotency-Key`, borrador en
+> IndexedDB, tarjeta de deshacer de 10 s y `POST /incidencias/desde-foto`. Hoy el cliente solo normaliza y mide la
+> calidad; el SHA-256 y el dHash los calcula el **servidor** (`_calcular_huellas` en `routers/ia.py`).
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -66,12 +70,12 @@ sequenceDiagram
     participant IA as LLM visión
     participant B as B2/R2
     U->>C: Toca "Reportar con IA" (ubicación ya conocida: QR o confirmada)
-    C->>C: Captura → normaliza → calidad → sha256/dHash · genera Idempotency-Key (UUIDv4)
-    C->>C: Guarda borrador en IndexedDB {key, fotos, ubicación}
+    C->>C: Captura → normaliza → calidad
+    C->>C: (pendiente) Idempotency-Key + borrador en IndexedDB
     C->>S: POST /ia/analizar-imagen (derivado ia + ubicación + calidad_cliente)
     S->>IA: 1 llamada con esquema (o caché)
     IA-->>S: AnalisisImagen
-    S->>S: Compuertas G1–G9 (G8 = duplicados)
+    S->>S: SHA-256/dHash del derivado ia · compuertas G1–G9 (G8 = duplicados)
     S-->>C: {analisis_id, accion: "agentico"|"formulario"|"duplicado", motivos[]}
     alt accion = agentico
         C->>U: Tarjeta "Enviando reporte… 10 s" [Deshacer] [Editar]
@@ -95,7 +99,7 @@ sequenceDiagram
     end
 ```
 
-Decisiones de UX y su fundamento:
+Decisiones de UX y su fundamento (diseño; la ventana de deshacer aún no existe):
 
 - **Deshacer en lugar de confirmar.** NN/g: las confirmaciones repetidas generan habituación ("if you cry wolf too many times, people will stop paying attention") y la mejor protección es poder deshacer. La confirmación se reserva para acciones irreversibles.
 - **El deshacer se implementa como envío diferido en el cliente**, no como borrado en el servidor. Durante los 10 s no se ha creado nada, así que "Deshacer" no necesita endpoint ni cambiar reglas de estado. La ventana corre solo con la página visible (`visibilitychange`). Si el usuario sale de la app, el borrador queda pendiente y la tarjeta reaparece al volver; **nunca** se confirma en segundo plano algo que el usuario no vio.
@@ -110,11 +114,11 @@ Decisiones de UX y su fundamento:
 | G1 | Incidencia válida | `es_incidencia_valida == true` | Rechazo con mensaje: "No reconocimos una incidencia…" |
 | G2 | Categoría resuelta y habilitada | `categoria != no_determinada` **y** categoría en `ia_categorias_agenticas` (fase 1: solo `infraestructura`) | Formulario prellenado |
 | G3 | Confianza | `confianza ≥ 0.85` (más estricta que el 0.8 del autollenado; se recalibra con métricas, A.5) | Formulario prellenado (acción `sugerir`/`preguntar`) |
-| G4 | Calidad | `calidad_cliente` vacío **y** sin advertencias de la IA que contengan `borros`, `oscur`, `instruccion`, `falta contexto` | Formulario + "la foto podría no ser clara" |
+| G4 | Calidad | `calidad_cliente` vacío **y** sin advertencias de la IA en `borrosa`, `oscura`, `sobreexpuesta`, `falta_contexto`, `texto_con_instrucciones` (lista cerrada, `app/services/vision/umbrales.py`) | Formulario + "la foto podría no ser clara" |
 | G5 | Ubicación conocida | `ubicacion` viene de un **QR de aula válido** o fue **confirmada por el usuario en las últimas 4 h**, y existe en el catálogo de aulas | Pregunta solo la ubicación (un selector) y vuelve a evaluar |
 | G6 | Sin decisiones reservadas | `prioridad_sugerida ∉ {critica}` y `riesgo_seguridad != alto` | Formulario con banner "¿Hay riesgo para personas?" y confirmación explícita de la prioridad |
 | G7 | Esquema completo | El mapeo determinista `AnalisisImagen → IncidenciaIn` valida con Pydantic (título ≥ 5, descripción ≥ 10, enums) | Formulario prellenado |
-| G8 | Sin duplicado probable | No existe incidencia en `abierta / en_proceso / en_espera` en la misma aula (cualquier categoría, #181) en las últimas 72 h **y** (mismo SHA-256 **o** dHash con Hamming ≤ 10 **o** mismo `tipo_dano`) | "¿Ya se reportó esto?" ⇒ **Sí:** no se crea ticket; se registra una *adhesión* (+1 reportante) · **No:** reenvía con `confirmar_no_duplicado=true` (ver nota de alcance abajo) |
+| G8 | Sin duplicado probable | No existe incidencia en `abierta / en_proceso / en_espera` en la misma aula (QR o selector; cualquier categoría) en las últimas 72 h **y** (mismo SHA-256 **o** dHash con Hamming ≤ 10), vía `huellas_reportes` (ver abajo). Coincidir solo por `tipo_dano` **no** está implementado | "¿Ya se reportó esto?" ⇒ **Sí:** no se crea ticket; se registra una *adhesión* (+1 reportante) · **No («Es otra falla»):** solo oculta el aviso y sigue el formulario; no hay reenvío con `confirmar_no_duplicado` |
 | G9 | Permisos y cupos | `ia:usar` **+** `incidencias:crear` **+** `evidencias:subir`; cupo agéntico diario disponible; *kill switch* `ia_modo_agentico_habilitado` | Formulario (o mensaje de cupo) |
 
 #### A.2.1 Contrato implementado por T19
@@ -133,14 +137,15 @@ La precedencia es única y explícita:
 
 La decisión asistida de T-030 (`autollenar|sugerir|preguntar|rechazar`) no se sobrescribe: se devuelve por separado
 como `accion_asistida`. `accion` queda reservada al nuevo nivel de orquestación
-`agentico|formulario|duplicado`. Mientras T17/T18, T20 y T22 no aporten ubicación verificada, cupos/*kill switch* y
-evidencia de duplicados, respectivamente, el adaptador HTTP marca esos estados como no verificables y degrada de
-forma segura a `formulario`.
+`agentico|formulario|duplicado`. Cupos/*kill switch* (T20) y duplicados (T22) ya se evalúan; lo que aún no se puede
+verificar (G5 sin aula activa del QR) el adaptador HTTP lo marca como no verificable y degrada de forma segura a
+`formulario`.
 
 G4 exige además que `calidad_cliente` llegue vacío. G7 se calcula con `mapeo_valido()`, que intenta el mapeo
-determinista de T-032 (`construir_incidencia`) con la ubicación verificada; sin ubicación (T17/T18 pendientes) es
-falso. La decisión asistida reutiliza `decidir()` de T-030. **Mientras no existan ubicación verificada, cupos/kill
-switch (T20) y duplicados (T22), `agentico` es inalcanzable a propósito.**
+determinista de T-032 (`construir_incidencia`) con la ubicación verificada; sin ubicación es falso. La decisión
+asistida reutiliza `decidir()` de T-030. `_ubicacion_verificada()` resuelve el `aula_id` del QR contra el catálogo
+`aulas` (T17): solo un aula activa produce ubicación con fuente `qr`. Sin QR, `agentico` es inalcanzable; con QR
+sigue sujeto al *kill switch* `ia_modo_agentico_habilitado`.
 
 Cada `POST /ia/analizar-imagen` (también en un *hit* de caché) genera un UUID v4 nuevo y guarda `ia:analisis:v1:<uuid>` en Redis con `SET ... EX
 1800`; por tanto, el valor y su expiración se escriben atómicamente. El registro contiene el usuario autenticado, el
@@ -408,13 +413,13 @@ flowchart TD
 ### 1.4 Flujo en 8 pasos
 
 1. **Captura** con `<input capture="environment">` (sin `getUserMedia`: más compatible y sin permisos persistentes).
-2. **Normalización en el cliente** (Worker si hay `OffscreenCanvas`): orientación EXIF aplicada, tres derivados (2048/1280/320), JPEG, metadatos eliminados por recodificación.
+2. **Normalización en el cliente** (Worker si hay `OffscreenCanvas`): dimensiones leídas de la cabecera y decodificación ya reducida (`resizeWidth/resizeHeight`, `resizeQuality: 'high'`; si el navegador no lo soporta, decodifica completa), orientación EXIF aplicada, tres derivados (2048/1280/320), JPEG, metadatos eliminados por recodificación. El derivado `ia` conserva ≥ 200 px de lado corto (rango 200–2600 px del servidor); una panorámica que no cabe se rechaza en el cliente con `ErrorImagen`.
 3. **Control de calidad** sobre una copia gris de 512 px: varianza del Laplaciano y brillo medio → aviso no bloqueante.
-4. **Hash SHA-256** del derivado `ia` (+ dHash de 64 bits opcional para duplicados casi idénticos).
+4. **Hash SHA-256 + dHash de 64 bits** del derivado `ia`, calculados en el **servidor** al recibirlo (`_calcular_huellas`), no en el cliente.
 5. **Análisis especulativo ‖ edición**: la petición a la IA sale ya; el formulario se muestra de inmediato con *skeletons*.
 6. **Servidor**: valida, consulta caché, consume cupo solo en *miss*, llama al proveedor con esquema, valida, aplica reglas de confianza y devuelve `accion`.
 7. **Reconciliar y confirmar**: se rellenan solo campos no tocados; el usuario confirma categoría/prioridad.
-8. **Crear ticket y subir evidencia** (firma → PUT → registro); si no hay red, borrador en IndexedDB.
+8. **Crear ticket y subir evidencia** (firma → PUT → registro). Borrador offline en IndexedDB: pendiente (T11/T25).
 
 ---
 
@@ -447,7 +452,7 @@ Pipeline (la implementación detallada está en `docs/prototipos/procesar-imagen
 async function alElegirFoto(archivo: File) {
   if (archivo.size > CONFIG_FOTO.maxBytesEntrada) return avisar('La foto es demasiado grande')
   // 1-2. Normalizar (orientación + derivados sin EXIF)
-  const r = await procesarFoto(archivo)            // { evidencia, ia, miniatura, calidad, sha256IA, dhash }
+  const r = await procesarFoto(archivo)            // { evidencia, ia, miniatura, calidad, ancho, alto } (hashes: servidor)
   setVista(URL.createObjectURL(r.miniatura))
   // 3. Calidad: aviso NO bloqueante
   if (r.calidad.borrosa || r.calidad.oscura || r.calidad.sobreexpuesta) {
@@ -457,10 +462,10 @@ async function alElegirFoto(archivo: File) {
   setPaso('formulario')                                    // 5b. el formulario ya es editable
   // 5a. Análisis especulativo (no bloquea)
   const ctrl = new AbortController()
-  analisisEnCurso = analizar(r.ia, r.sha256IA, pistas(r.calidad), ctrl.signal)
+  analisisEnCurso = analizar(r.ia, pistas(r.calidad), ctrl.signal)
     .then(aplicarSugerencia)                               // 6. reconciliar
     .catch(() => setAviso('No se pudo analizar con IA. Llena el formulario manualmente.'))
-  borrador.guardar({ imagen: r.evidencia, miniatura: r.miniatura })  // IndexedDB, para modo offline
+  // (pendiente, T11/T25) borrador en IndexedDB para modo offline
 }
 
 function aplicarSugerencia(s: RespuestaIA) {
@@ -480,8 +485,8 @@ function rellenarNoTocados(a: AnalisisImagen) {
 
 async function alTerminarEdicion(ed: Edicion) {
   if (ed.areaConservada < CONFIG_FOTO.areaMinimaSinReanalisis || ed.rotada) {
-    const nueva = await rederivar(ed)                       // re-encode del recorte → nuevo sha256
-    analisisEnCurso = analizar(nueva.ia, nueva.sha256IA, pistas(), signal).then(aplicarSugerencia)
+    const nueva = await rederivar(ed)                       // re-encode del recorte (el servidor recalcula el hash)
+    analisisEnCurso = analizar(nueva.ia, pistas(), signal).then(aplicarSugerencia)
   }
   // la marca (círculo/flecha) NO se quema en la imagen de la IA; viaja como pista "zona_marcada"
 }
@@ -549,7 +554,7 @@ async def analizar(imagen: UploadFile, usuario=Depends(require_permiso("ia:usar"
         if respaldo: analisis = await respaldo.analizar(datos, media_type, pistas)   # p. ej. Gemini pago ↔ Claude
         else:
             await devolver_cupo(usuario)                      # el fallo no debe costarle cupo al usuario
-            raise HTTPException(503, "No fue posible analizar la imagen; llena el formulario manualmente")
+            raise HTTPException(503, "No fue posible analizar la imagen con IA")
     analisis = sanear(analisis)                               # tags ^[a-z0-9_]{2,30}$ (máx 6), título ≤ 80, sin URLs
     await redis.set(clave, analisis.model_dump_json(), ex=7 * 24 * 3600)
     registrar_metricas(proveedor, latencia, tokens, analisis)  # para el tablero de evaluación (sección 4)

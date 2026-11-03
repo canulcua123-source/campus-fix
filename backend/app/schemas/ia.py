@@ -9,6 +9,16 @@ PatronIdentificadorAnalisis = r"^[A-Za-z0-9_-]{22,64}$"
 PatronCampoIA = r"^(titulo|descripcion|prioridad|tags|detalle_especifico\.[a-z][a-z0-9_]{0,49})$"
 CompuertaIA = Literal["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"]
 CampoIA = Annotated[str, Field(pattern=PatronCampoIA)]
+# Lista cerrada (prompt v4): las reglas de confianza comparan por pertenencia, nunca por subcadenas.
+AdvertenciaIA = Literal[
+    "borrosa",
+    "oscura",
+    "sobreexpuesta",
+    "falta_contexto",
+    "texto_con_instrucciones",
+    "rostros_visibles",
+    "otra",
+]
 
 
 def _sin_repetidos(valores: list[str]) -> list[str]:
@@ -44,7 +54,7 @@ class AnalisisImagen(BaseModel):
     tags: list[str]
     campos_detectados: list[CampoDetectado]
     confianza: float = Field(ge=0, le=1)
-    advertencias: list[str]
+    advertencias: list[AdvertenciaIA]
     detalle_infra: DetalleInfraAnalisis | None = None
 
     @model_validator(mode="after")

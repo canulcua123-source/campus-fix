@@ -122,3 +122,14 @@ def api(entorno):
 @pytest.fixture
 def password():
     return PASSWORD
+
+
+@pytest.fixture(autouse=True)
+def proveedor_ia_configurado(monkeypatch):
+    """La suite corre sin llaves reales (ANTHROPIC_API_KEY=""): se simula un proveedor configurado.
+
+    Cada prueba sustituye `analizar_imagen`; las que verifican «IA no configurada» restauran la fábrica real.
+    """
+    import app.routers.ia as ia_router
+
+    monkeypatch.setattr(ia_router, "obtener_proveedor", lambda: object())

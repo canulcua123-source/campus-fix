@@ -31,6 +31,17 @@ export const analizarImagenSchema = z.object({
 export type AnalizarImagenIn = z.infer<typeof analizarImagenSchema>
 
 /** DetalleInfraAnalisis: espejo de backend/app/schemas/ia.py. */
+/** Espejo de AdvertenciaIA (backend/app/schemas/ia.py): lista cerrada desde el prompt v4. */
+export const ADVERTENCIAS_IA = [
+  'borrosa',
+  'oscura',
+  'sobreexpuesta',
+  'falta_contexto',
+  'texto_con_instrucciones',
+  'rostros_visibles',
+  'otra',
+] as const
+
 const detalleInfraAnalisisSchema = z.strictObject({
   tipo_dano: z.enum(TIPOS_DANO),
   riesgo_seguridad: z.enum(RIESGOS),
@@ -46,7 +57,7 @@ export const analisisImagenSchema = z.strictObject({
   tags: z.array(z.string()),
   campos_detectados: z.array(z.strictObject({ nombre: z.string(), valor: z.string() })),
   confianza: z.number().min(0).max(1),
-  advertencias: z.array(z.string()),
+  advertencias: z.array(z.enum(ADVERTENCIAS_IA)),
   /** Solo en infraestructura; el backend omite el campo (nunca null) en las demás categorías. */
   detalle_infra: detalleInfraAnalisisSchema.optional(),
 }).superRefine((analisis, ctx) => {
