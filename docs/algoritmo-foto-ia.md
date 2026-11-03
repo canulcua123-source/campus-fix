@@ -114,7 +114,7 @@ Decisiones de UX y su fundamento (diseño; la ventana de deshacer aún no existe
 | G1 | Incidencia válida | `es_incidencia_valida == true` | Rechazo con mensaje: "No reconocimos una incidencia…" |
 | G2 | Categoría resuelta y habilitada | `categoria != no_determinada` **y** categoría en `ia_categorias_agenticas` (fase 1: solo `infraestructura`) | Formulario prellenado |
 | G3 | Confianza | `confianza ≥ 0.85` (más estricta que el 0.8 del autollenado; se recalibra con métricas, A.5) | Formulario prellenado (acción `sugerir`/`preguntar`) |
-| G4 | Calidad | `calidad_cliente` vacío **y** sin advertencias de la IA que contengan `borros`, `oscur`, `instruccion`, `falta contexto` | Formulario + "la foto podría no ser clara" |
+| G4 | Calidad | `calidad_cliente` vacío **y** sin advertencias de la IA en `borrosa`, `oscura`, `sobreexpuesta`, `falta_contexto`, `texto_con_instrucciones` (lista cerrada, `app/services/vision/umbrales.py`) | Formulario + "la foto podría no ser clara" |
 | G5 | Ubicación conocida | `ubicacion` viene de un **QR de aula válido** o fue **confirmada por el usuario en las últimas 4 h**, y existe en el catálogo de aulas | Pregunta solo la ubicación (un selector) y vuelve a evaluar |
 | G6 | Sin decisiones reservadas | `prioridad_sugerida ∉ {critica}` y `riesgo_seguridad != alto` | Formulario con banner "¿Hay riesgo para personas?" y confirmación explícita de la prioridad |
 | G7 | Esquema completo | El mapeo determinista `AnalisisImagen → IncidenciaIn` valida con Pydantic (título ≥ 5, descripción ≥ 10, enums) | Formulario prellenado |
