@@ -11,13 +11,21 @@ from app.services.vision.puerto import ErrorProveedor, ProveedorVision
 _instancias: dict[tuple[str, str], ProveedorVision] = {}
 
 
+def _exigir_api_key(api_key: str, variable: str) -> None:
+    """Sin llave no se llama a la red: se distingue «IA no configurada» de un fallo del proveedor."""
+    if not api_key:
+        raise ErrorProveedor(f"Falta {variable} para el proveedor de IA", tipo="configuracion")
+
+
 def _crear_claude() -> ProveedorVision:
+    _exigir_api_key(settings.anthropic_api_key, "ANTHROPIC_API_KEY")
     from app.services.vision.claude import ProveedorClaude
 
     return ProveedorClaude(api_key=settings.anthropic_api_key, modelo=settings.ia_modelo)
 
 
 def _crear_gemini() -> ProveedorVision:
+    _exigir_api_key(settings.gemini_api_key, "GEMINI_API_KEY")
     # La capa gratuita usa el contenido para mejorar productos: prohibida con fotos reales del campus.
     if settings.gemini_capa == "gratuita" and not settings.ia_permitir_capa_gratuita:
         raise ErrorProveedor(

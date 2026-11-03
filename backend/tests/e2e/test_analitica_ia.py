@@ -667,7 +667,7 @@ async def test_ia_timeout_reintenta_y_503(api, monkeypatch, reintentos_rapidos):
     r = await _post(api)
 
     assert r.status_code == 503
-    assert r.json()["detalle"] == "No fue posible analizar la imagen; llena el formulario manualmente"
+    assert r.json()["detalle"] == "No fue posible analizar la imagen con IA"
     assert intentos == 2
     assert reintentos_rapidos == [ia_service.BACKOFF_MAX_SEGUNDOS]
     assert "secreto" not in r.text.lower()

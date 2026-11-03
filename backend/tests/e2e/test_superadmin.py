@@ -8,6 +8,7 @@ from bson import ObjectId
 
 from app.core.db import get_redis
 from app.schemas.rol import CATALOGO_PERMISOS
+from app.services.vision.cupos import dia_campus
 
 from .helpers import PASSWORD
 
@@ -314,7 +315,7 @@ async def test_resumen_kpis_y_alerta_critica_sin_asignar(api):
 
 async def test_resumen_alerta_cupo_ia(api):
     limite = (await api.c.get("/config/ia", headers=api.h("superadmin"))).json()["limite_diario_global"]
-    clave = f"ia:uso:global:{datetime.now(timezone.utc):%Y-%m-%d}"
+    clave = f"ia:uso:global:{dia_campus(datetime.now(timezone.utc))}"
     redis = get_redis()
     previo = await redis.get(clave)
     await redis.set(clave, int(limite * 0.9) + 1, ex=3600)
