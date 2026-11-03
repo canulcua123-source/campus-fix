@@ -30,7 +30,7 @@ export type TipoMimeEvidencia = (typeof TIPOS_MIME_EVIDENCIA)[number]
 
 /** TRANSICIONES de incidencia.py: estado actual → estados destino permitidos. */
 export const TRANSICIONES: Record<Estado, readonly Estado[]> = {
-  abierta: ['en_proceso', 'en_espera'],
+  abierta: ['en_proceso'],
   en_proceso: ['en_espera', 'resuelta'],
   en_espera: ['en_proceso'],
   resuelta: ['cerrada', 'en_proceso'],

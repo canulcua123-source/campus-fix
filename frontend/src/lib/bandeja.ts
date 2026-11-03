@@ -1,4 +1,5 @@
 import type { IncidenciaListaItem } from '../schemas/incidencia'
+import type { Me } from '../schemas/usuario'
 import { haceCuanto } from './tiempo'
 
 export type PestanaBandeja = 'mias' | 'sin_asignar'
@@ -21,6 +22,18 @@ const ESTADOS_ACTIVOS: readonly string[] = ['abierta', 'en_proceso', 'en_espera'
 /** Mías = asignadas a la persona en sesión (por id de usuario, no por nombre). Sin id no hay "mías". */
 export function esMia(incidencia: IncidenciaListaItem, usuarioId?: string | null): boolean {
   return Boolean(usuarioId) && incidencia.tecnico_asignado?.usuario_id === usuarioId
+}
+
+/** Alcance operativo para tomar o dar seguimiento; ver un reporte propio no amplía estas acciones. */
+export function estaEnAlcanceOperativo(
+  incidencia: IncidenciaListaItem,
+  usuario?: Pick<Me, 'alcance' | 'areas' | 'edificios'> | null,
+): boolean {
+  if (!usuario) return false
+  if (usuario.alcance === 'global') return true
+  if (usuario.alcance === 'area') return usuario.areas?.includes(incidencia.categoria) ?? false
+  if (usuario.alcance === 'edificio') return usuario.edificios?.includes(incidencia.ubicacion.edificio) ?? false
+  return false
 }
 
 export function filtrarBandeja(
@@ -53,7 +66,7 @@ export function antiguedad(fecha: string, ahora = Date.now()): { texto: string; 
 }
 
 /** Vistas de «Mis incidencias» (pantalla única del técnico, `?vista=`). */
-export const VISTAS_BANDEJA = ['todas', 'asignadas', 'por_tomar', 'reportadas', 'resueltas'] as const
+export const VISTAS_BANDEJA = ['asignadas', 'por_tomar', 'reportadas', 'resueltas'] as const
 export type VistaBandeja = (typeof VISTAS_BANDEJA)[number]
 
 export const esVistaBandeja = (valor: string | null): valor is VistaBandeja =>
@@ -85,12 +98,17 @@ export function filtrarVista(
   vista: VistaBandeja,
   usuarioId: string | null | undefined,
   reportadas: ReadonlySet<string>,
+  enAlcanceOperativo: (incidencia: IncidenciaListaItem) => boolean = () => true,
 ): IncidenciaListaItem[] {
   switch (vista) {
     case 'asignadas': return ordenarBandeja(filtrarBandeja(incidencias, 'mias', usuarioId))
-    case 'por_tomar': return ordenarBandeja(filtrarBandeja(incidencias, 'sin_asignar', usuarioId))
-    case 'reportadas': return pendientesPrimero(incidencias.filter((i) => reportadas.has(i._id)))
+    case 'por_tomar': return ordenarBandeja(
+      filtrarBandeja(incidencias, 'sin_asignar', usuarioId).filter(enAlcanceOperativo),
+    )
+    case 'reportadas': return pendientesPrimero(
+      incidencias.filter((i) => reportadas.has(i._id) && !esMia(i, usuarioId)),
+    )
     case 'resueltas': return incidencias.filter((i) => esResueltaPorMi(i, usuarioId))
-    default: return pendientesPrimero(incidencias)
+
   }
 }

@@ -4,7 +4,7 @@ import { TRANSICIONES, etiquetaEstado, transicionesDesde } from './estados'
 describe('transiciones de incidencia', () => {
   it('coinciden con la tabla 9.4', () => {
     expect(TRANSICIONES).toEqual({
-      abierta: ['en_proceso', 'en_espera'],
+      abierta: ['en_proceso'],
       en_proceso: ['en_espera', 'resuelta'],
       en_espera: ['en_proceso'],
       resuelta: ['cerrada', 'en_proceso'],

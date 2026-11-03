@@ -14,6 +14,8 @@ interface TarjetaIncidenciaProps {
   accion?: ReactNode
   /** Tono del tiempo transcurrido (SLA): atención = ámbar, vencida = rojo. */
   tonoTiempo?: 'normal' | 'atencion' | 'vencida'
+  /** Oculta solo el estado visual; prioridad y categoría permanecen visibles. */
+  ocultarEstado?: boolean
   /** Abre el detalle en un panel en lugar de navegar (clic normal); Ctrl/⌘ o clic medio siguen abriendo la página. */
   onAbrir?: (id: string) => void
 }
@@ -39,7 +41,14 @@ function textoUbicacionCorta(u: IncidenciaListaItem['ubicacion']): string {
 }
 
 /** Tarjeta compacta de incidencia: el título es el enlace y su área táctil cubre toda la tarjeta; borde izquierdo con el color de la prioridad. */
-export function TarjetaIncidencia({ incidencia: t, mostrarTecnico = false, accion, tonoTiempo = 'normal', onAbrir }: TarjetaIncidenciaProps) {
+export function TarjetaIncidencia({
+  incidencia: t,
+  mostrarTecnico = false,
+  accion,
+  tonoTiempo = 'normal',
+  ocultarEstado = false,
+  onAbrir,
+}: TarjetaIncidenciaProps) {
   const ubicacion = textoUbicacionCorta(t.ubicacion)
   return (
     <Card
@@ -65,7 +74,7 @@ export function TarjetaIncidencia({ incidencia: t, mostrarTecnico = false, accio
         {t.titulo}
       </Link>
       <div className="flex flex-wrap gap-1.5">
-        <Badge tipo="estado" valor={t.estado} />
+        {!ocultarEstado && <Badge tipo="estado" valor={t.estado} />}
         <Badge tipo="prioridad" valor={t.prioridad} />
         <Badge tipo="categoria" valor={t.categoria} />
       </div>

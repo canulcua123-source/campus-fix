@@ -8,7 +8,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { BASE } from '../../api/client'
 import { useAuth } from '../../auth/store'
-import type { IncidenciaListaItem } from '../../schemas/incidencia'
+import type { IncidenciaDetalle, IncidenciaListaItem } from '../../schemas/incidencia'
 import { servidor } from '../../test/msw/server'
 import Bandeja from '../Bandeja'
 
@@ -49,10 +49,12 @@ function Ubicacion() {
   return <output data-testid="url">{search}</output>
 }
 
-function renderBandeja(ruta = '/bandeja') {
+function renderBandeja(ruta = '/bandeja', perfil: Record<string, unknown> = {}) {
   const sesion = { nombre: 'Ana', rol: 'tecnico', permisos: ['incidencias:ver', 'incidencias:crear', 'seguimiento:registrar'], alcance: 'area' as const }
   useAuth.setState({ token: 'token-prueba', usuario: sesion })
-  servidor.use(http.get(`${BASE}/auth/me`, () => HttpResponse.json({ _id: 'u-ana', ...sesion })))
+  servidor.use(http.get(`${BASE}/auth/me`, () => HttpResponse.json({
+    _id: 'u-ana', ...sesion, areas: ['computo_redes', 'infraestructura', 'academico'], ...perfil,
+  })))
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={cliente}>
@@ -78,33 +80,139 @@ const nombres = (lista: string) => within(screen.getByRole('list', { name: lista
 const chip = (nombre: RegExp) => screen.getByRole('radio', { name: nombre })
 
 describe('Mis incidencias del técnico (T-050)', () => {
-  it('«Asignadas a mí» ordena por prioridad y antigüedad', async () => {
+  it('«Trabajos tomados» ordena por prioridad y antigüedad', async () => {
     responder(INCIDENCIAS)
     renderBandeja('/bandeja?vista=asignadas')
 
     await screen.findByText('Crítica asignada')
-    expect(nombres('Asignadas a mí')).toEqual([
+    expect(nombres('Trabajos tomados')).toEqual([
       expect.stringContaining('Crítica asignada'),
       expect.stringContaining('Alta antigua'),
       expect.stringContaining('Alta reciente'),
       expect.stringContaining('Baja antigua'),
     ])
-    expect(screen.getAllByText('Aceptada por ti')).toHaveLength(4)
+    expect(within(screen.getByRole('list', { name: 'Trabajos tomados' })).queryByText('Abierta')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Tomada por ti')).toHaveLength(4)
   })
 
-  it('«Todas» une la bandeja y lo reportado, sin duplicar, con el conteo de cada filtro', async () => {
+  it('«Trabajos tomados» es la vista por defecto y muestra el conteo de cada filtro', async () => {
     const yaVisible = INCIDENCIAS[4]
     responder([...INCIDENCIAS, REPORTADA], [REPORTADA, yaVisible])
     renderBandeja()
 
     await screen.findByText('Crítica asignada')
-    expect(chip(/^Todas/)).toHaveAttribute('aria-checked', 'true')
-    expect(chip(/^Todas/)).toHaveTextContent('7')
-    expect(chip(/^Asignadas a mí/)).toHaveTextContent('4')
-    expect(chip(/^Por tomar/)).toHaveTextContent('1')
+    expect(chip(/^Trabajos tomados/)).toHaveAttribute('aria-checked', 'true')
+    expect(chip(/^Trabajos tomados/)).toHaveTextContent('4')
+    expect(screen.queryByRole('radio', { name: /^Por tomar/ })).not.toBeInTheDocument()
     expect(chip(/^Reportadas por mí/)).toHaveTextContent('2')
     expect(chip(/^Resueltas/)).toHaveTextContent('0')
-    expect(screen.getAllByText('Pendiente de asignación')).toHaveLength(1)
+    expect(screen.queryByRole('radio', { name: /^Todas/ })).not.toBeInTheDocument()
+    expect(nombres('Trabajos tomados')).toHaveLength(4)
+    const filtrosEstado = screen.getByRole('radiogroup', { name: 'Filtrar por estado' })
+    expect(within(filtrosEstado).queryByRole('radio', { name: /^Abierta/ })).not.toBeInTheDocument()
+    expect(within(filtrosEstado).getByRole('radio', { name: /^Tomados/ })).toHaveTextContent('4')
+    expect(within(filtrosEstado).getByRole('radio', { name: /^Tomados/ })).toHaveAttribute('aria-checked', 'true')
+    expect(within(filtrosEstado).getByRole('radio', { name: /^En proceso/ })).toHaveTextContent('0')
+    expect(within(filtrosEstado).getByRole('radio', { name: /^En espera/ })).toHaveTextContent('0')
+  })
+
+  it('no ofrece tomar un reporte propio fuera del área ni lo cuenta en «Por tomar»', async () => {
+    const fueraDeArea: IncidenciaListaItem = {
+      ...INCIDENCIAS[4],
+      _id: 'reporte-redes',
+      codigo: 'INC-REDES',
+      titulo: 'Reporte de redes fuera de área',
+      categoria: 'computo_redes',
+    }
+    responder([fueraDeArea], [fueraDeArea])
+    renderBandeja('/bandeja?vista=reportadas', { areas: ['infraestructura'] })
+
+    await screen.findByText('Reporte de redes fuera de área')
+    expect(screen.queryByRole('button', { name: 'Tomar INC-REDES' })).not.toBeInTheDocument()
+    expect(screen.getByText('Fuera de tu área de atención')).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /^Por tomar/ })).not.toBeInTheDocument()
+  })
+
+  it('mueve un reporte tomado por el técnico de «Reportadas por mí» a «Trabajos tomados»', async () => {
+    const reportadaYTomada: IncidenciaListaItem = {
+      ...INCIDENCIAS[0],
+      _id: 'reportada-y-tomada',
+      codigo: 'INC-PROPIA',
+      titulo: 'Reportada y tomada por mí',
+    }
+    responder([reportadaYTomada], [reportadaYTomada])
+    renderBandeja('/bandeja?vista=reportadas')
+
+    expect(await screen.findByText('No has reportado incidencias')).toBeInTheDocument()
+    expect(chip(/^Reportadas por mí/)).toHaveTextContent('0')
+    expect(chip(/^Trabajos tomados/)).toHaveTextContent('1')
+  })
+
+  it('mantiene un trabajo tomado en la vista y lo refleja en el estado «En espera»', async () => {
+    const enEspera: IncidenciaListaItem = {
+      ...INCIDENCIAS[0],
+      _id: 'trabajo-en-espera',
+      codigo: 'INC-ESPERA',
+      titulo: 'Trabajo en espera',
+      estado: 'en_espera',
+    }
+    responder([enEspera])
+    renderBandeja('/bandeja?estado=en_espera')
+
+    await screen.findByText('Trabajo en espera')
+    expect(chip(/^Trabajos tomados/)).toHaveTextContent('1')
+    expect(chip(/^En espera/)).toHaveTextContent('1')
+    expect(chip(/^En espera/)).toHaveAttribute('aria-checked', 'true')
+    expect(nombres('Trabajos tomados')).toEqual([expect.stringContaining('Trabajo en espera')])
+    expect(within(screen.getByRole('list', { name: 'Trabajos tomados' })).getByText('En espera')).toBeInTheDocument()
+    expect(screen.getByText('Tomada por ti')).toBeInTheDocument()
+  })
+
+  it('mueve el trabajo recién tomado a «En proceso» al registrar el primer seguimiento', async () => {
+    let estado: IncidenciaListaItem['estado'] = 'abierta'
+    const trabajo = { ...INCIDENCIAS[0], _id: 'trabajo-nuevo', codigo: 'INC-NUEVO', titulo: 'Trabajo recién tomado' }
+    const detalle = (): IncidenciaDetalle => ({
+      ...trabajo,
+      estado,
+      descripcion: 'Incidencia para comprobar el cambio de apartado.',
+      reportante: { usuario_id: 'u-reportante', nombre: 'Reportante' },
+      tecnico_asignado: { usuario_id: 'u-ana', nombre: 'Ana' },
+      detalle_especifico: {
+        categoria: 'infraestructura',
+        tipo_dano: 'luminaria',
+        riesgo_seguridad: 'bajo',
+        requiere_insumos: false,
+        requiere_contratista: false,
+      },
+      evidencias_adjuntas: [],
+      horas_invertidas: 0,
+      historial_seguimiento: [],
+      puede_retirar: false,
+    })
+    servidor.use(
+      http.get(`${BASE}/incidencias`, ({ request }) => HttpResponse.json(
+        new URL(request.url).searchParams.get('propias') === 'true' ? [] : [{ ...trabajo, estado }],
+      )),
+      http.get(`${BASE}/incidencias/trabajo-nuevo`, () => HttpResponse.json(detalle())),
+      http.patch(`${BASE}/incidencias/trabajo-nuevo/seguimiento`, async ({ request }) => {
+        const datos = await request.json() as { estado_nuevo: IncidenciaListaItem['estado'] }
+        estado = datos.estado_nuevo
+        return HttpResponse.json({ ok: true, estado })
+      }),
+    )
+    renderBandeja()
+    const usuario = userEvent.setup()
+
+    await usuario.click(await screen.findByRole('link', { name: 'Trabajo recién tomado' }))
+    await usuario.click(await screen.findByRole('button', { name: 'Registrar seguimiento' }))
+
+    await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent('?ver=trabajo-nuevo&estado=en_proceso'))
+    expect(chip(/^En proceso/)).toHaveAttribute('aria-checked', 'true')
+    await waitFor(() => expect(
+      within(screen.getByRole('list', { name: 'Trabajos tomados' })).getByText('Trabajo recién tomado'),
+    ).toBeInTheDocument())
+    expect(chip(/^Tomados/)).toHaveTextContent('0')
+    expect(chip(/^En proceso/)).toHaveTextContent('1')
   })
 
   it('cada filtro filtra de verdad y queda en la URL', async () => {
@@ -113,11 +221,6 @@ describe('Mis incidencias del técnico (T-050)', () => {
     renderBandeja()
     const usuario = userEvent.setup()
     await screen.findByText('Crítica asignada')
-
-    await usuario.click(chip(/^Por tomar/))
-    expect(nombres('Por tomar')).toEqual([expect.stringContaining('Pendiente de asignación')])
-    expect(screen.getByRole('button', { name: 'Tomar INC-SIN' })).toBeInTheDocument()
-    expect(screen.getByTestId('url')).toHaveTextContent('?vista=por_tomar')
 
     await usuario.click(chip(/^Reportadas por mí/))
     expect(nombres('Reportadas por mí')).toEqual([expect.stringContaining('Fuga reportada por mí')])
@@ -128,14 +231,11 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(nombres('Resueltas')).toEqual([expect.stringContaining('Ya resuelta')])
     expect(screen.getByText(/Esperando confirmación del reportante/)).toBeInTheDocument()
 
-    await usuario.click(chip(/^Asignadas a mí/))
-    expect(nombres('Asignadas a mí')).toHaveLength(4)
+    await usuario.click(chip(/^Trabajos tomados/))
+    expect(nombres('Trabajos tomados')).toHaveLength(4)
     expect(screen.queryByText('Ya resuelta')).not.toBeInTheDocument()
     expect(screen.queryByText('Asignada a Luis')).not.toBeInTheDocument()
-
-    await usuario.click(chip(/^Todas/))
     expect(screen.getByTestId('url')).toHaveTextContent(/^$/)
-    expect(nombres('Todas')).toHaveLength(8)
   })
 
   it('las flechas del teclado cambian de filtro', async () => {
@@ -144,10 +244,10 @@ describe('Mis incidencias del técnico (T-050)', () => {
     const usuario = userEvent.setup()
     await screen.findByText('Crítica asignada')
 
-    chip(/^Todas/).focus()
+    chip(/^Trabajos tomados/).focus()
     await usuario.keyboard('{ArrowRight}')
-    expect(chip(/^Asignadas a mí/)).toHaveAttribute('aria-checked', 'true')
-    expect(chip(/^Asignadas a mí/)).toHaveFocus()
+    expect(chip(/^Reportadas por mí/)).toHaveAttribute('aria-checked', 'true')
+    expect(chip(/^Reportadas por mí/)).toHaveFocus()
     await usuario.keyboard('{End}')
     expect(screen.getByTestId('url')).toHaveTextContent('?vista=resueltas')
   })
@@ -161,16 +261,16 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(screen.queryByText('Crítica asignada')).not.toBeInTheDocument()
     expect(chip(/^En proceso/)).toHaveAttribute('aria-checked', 'true')
 
-    await userEvent.setup().click(chip(/^Todos/))
+    await userEvent.setup().click(chip(/^Tomados/))
     expect(screen.getByText('Crítica asignada')).toBeInTheDocument()
     expect(screen.getByTestId('url')).toHaveTextContent('?vista=asignadas')
   })
 
-  it('estado vacío propio de «Asignadas a mí» con acceso a «Por tomar»', async () => {
+  it('estado vacío propio de «Trabajos tomados» con acceso a «Por tomar»', async () => {
     responder([INCIDENCIAS[4]])
     renderBandeja('/bandeja?vista=asignadas')
 
-    expect(await screen.findByText('No tienes incidencias asignadas')).toBeInTheDocument()
+    expect(await screen.findByText('No tienes trabajos tomados')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Ver por tomar' }))
     expect(nombres('Por tomar')).toEqual([expect.stringContaining('Pendiente de asignación')])
   })
@@ -183,14 +283,41 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(screen.getByRole('link', { name: 'Reportar' })).toHaveAttribute('href', '/reportar')
   })
 
-  it('muestra «Todo al día» si no hay nada', async () => {
+  it('muestra «No tienes trabajos tomados» si no hay nada en trabajos tomados', async () => {
     responder([])
     renderBandeja()
 
-    expect(await screen.findByText('Todo al día')).toBeInTheDocument()
+    expect(await screen.findByText('No tienes trabajos tomados')).toBeInTheDocument()
   })
 
-  it('«Asignadas a mí» usa el id del usuario y no confunde homónimos', async () => {
+  it('los chips de estado y «Todos» se mantienen visibles en vistas vacías y al seleccionar estado', async () => {
+    responder(INCIDENCIAS)
+    renderBandeja('/bandeja?vista=reportadas')
+    const usuario = userEvent.setup()
+
+    await screen.findByText('No has reportado incidencias')
+    expect(chip(/^Todos/)).toBeInTheDocument()
+    expect(chip(/^Todos/)).toHaveTextContent('0')
+    expect(screen.queryByRole('radio', { name: /^Abierta/ })).not.toBeInTheDocument()
+    expect(chip(/^En proceso/)).toBeInTheDocument()
+    expect(chip(/^En espera/)).toBeInTheDocument()
+
+    await usuario.click(chip(/^En proceso/))
+    expect(screen.getByTestId('url')).toHaveTextContent('?vista=reportadas&estado=en_proceso')
+    expect(chip(/^Todos/)).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /^Abierta/ })).not.toBeInTheDocument()
+    expect(chip(/^En proceso/)).toHaveAttribute('aria-checked', 'true')
+    expect(chip(/^En proceso/)).toBeInTheDocument()
+    expect(chip(/^En espera/)).toBeInTheDocument()
+
+    await usuario.click(chip(/^Resueltas/))
+    await screen.findByText('Sin resueltas por confirmar')
+    const filtrosEstado = screen.getByRole('radiogroup', { name: 'Filtrar por estado' })
+    expect(within(filtrosEstado).getByRole('radio', { name: /^Todos/ })).toHaveTextContent('0')
+    expect(within(filtrosEstado).getByRole('radio', { name: /^Resuelta/ })).toHaveTextContent('0')
+  })
+
+  it('«Trabajos tomados» usa el id del usuario y no confunde homónimos', async () => {
     const base = INCIDENCIAS[0]
     responder([
       { ...base, _id: 'mia', codigo: 'INC-MIA', titulo: 'Mía de verdad' },
@@ -226,10 +353,13 @@ describe('Mis incidencias del técnico (T-050)', () => {
     expect(screen.queryByText('Alta antigua')).not.toBeInTheDocument()
 
     await usuario.clear(buscador)
-    await usuario.type(buscador, 'INC-SIN')
-    expect(nombres('Todas')).toEqual([expect.stringContaining('Pendiente de asignación')])
-    expect(chip(/^Por tomar/)).toHaveTextContent('1')
-    expect(chip(/^Asignadas a mí/)).toHaveTextContent('0')
+    await usuario.type(buscador, 'ALTA')
+    expect(nombres('Trabajos tomados')).toEqual([
+      expect.stringContaining('Alta antigua'),
+      expect.stringContaining('Alta reciente'),
+    ])
+    expect(screen.queryByRole('radio', { name: /^Por tomar/ })).not.toBeInTheDocument()
+    expect(chip(/^Trabajos tomados/)).toHaveTextContent('2')
 
     await usuario.clear(buscador)
     await usuario.type(buscador, 'no existe nada')
@@ -263,8 +393,8 @@ describe('Mis incidencias del técnico (T-050)', () => {
     await usuario.click(await screen.findByRole('button', { name: 'Tomar INC-SIN' }))
     expect(await screen.findByText(/Tomaste INC-SIN/)).toBeInTheDocument()
     expect(await screen.findByText('No hay incidencias por tomar')).toBeInTheDocument()
-    await usuario.click(chip(/^Asignadas a mí/))
-    expect(within(screen.getByRole('list', { name: 'Asignadas a mí' })).getByText('Pendiente de asignación')).toBeInTheDocument()
+    await usuario.click(chip(/^Trabajos tomados/))
+    expect(within(screen.getByRole('list', { name: 'Trabajos tomados' })).getByText('Pendiente de asignación')).toBeInTheDocument()
   })
 
   it('muestra el 409 cuando otro técnico la tomó antes y refresca la lista', async () => {
@@ -277,7 +407,7 @@ describe('Mis incidencias del técnico (T-050)', () => {
       http.post(`${BASE}/incidencias/sin-asignar/tomar`, () =>
         HttpResponse.json({ detail: 'La incidencia no está disponible para autoasignación' }, { status: 409 })),
     )
-    renderBandeja()
+    renderBandeja('/bandeja?vista=por_tomar')
     const usuario = userEvent.setup()
     await usuario.click(await screen.findByRole('button', { name: 'Tomar INC-SIN' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('La incidencia no está disponible para autoasignación')

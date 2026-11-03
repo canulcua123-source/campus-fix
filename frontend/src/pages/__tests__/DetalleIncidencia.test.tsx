@@ -225,6 +225,10 @@ describe('DetalleIncidencia (T-046)', () => {
     })
     let tomada = false
     servidor.use(
+      http.get(`${BASE}/auth/me`, () => HttpResponse.json({
+        _id: 'u-luis', nombre: 'Luis', rol: 'tecnico', permisos: ['incidencias:ver', 'seguimiento:registrar'],
+        alcance: 'area', areas: ['infraestructura'],
+      })),
       http.get(RUTA, () => HttpResponse.json(tomada ? { ...detalle(), tecnico_asignado: { usuario_id: 'u-luis', nombre: 'Luis' } } : detalle())),
       http.post(`${RUTA}/tomar`, () => {
         tomada = true
@@ -236,6 +240,27 @@ describe('DetalleIncidencia (T-046)', () => {
     await usuario.click(await screen.findByRole('button', { name: 'Tomar incidencia' }))
     expect(await screen.findByText(/Tomaste la incidencia/)).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Tomar incidencia' })).not.toBeInTheDocument())
+  })
+
+  it('no ofrece tomar ni registrar seguimiento en un reporte propio fuera del área del técnico', async () => {
+    useAuth.setState({
+      token: 't',
+      usuario: { nombre: 'Luis', rol: 'tecnico', permisos: ['incidencias:ver', 'seguimiento:registrar'], alcance: 'area' },
+    })
+    servidor.use(
+      http.get(`${BASE}/auth/me`, () => HttpResponse.json({
+        _id: 'u-luis', nombre: 'Luis', rol: 'tecnico', permisos: ['incidencias:ver', 'seguimiento:registrar'],
+        alcance: 'area', areas: ['infraestructura'],
+      })),
+      http.get(RUTA, () => HttpResponse.json({
+        ...detalle('computo_redes'), reportante: { usuario_id: 'u-luis', nombre: 'Luis' },
+      })),
+    )
+    renderDetalle()
+
+    await screen.findByText('Luminaria fundida')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tomar incidencia' })).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Registrar seguimiento' })).not.toBeInTheDocument()
   })
 
   it('el reportante ve "¿Se resolvió tu problema?" solo cuando está resuelta', async () => {
