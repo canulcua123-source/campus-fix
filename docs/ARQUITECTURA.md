@@ -177,6 +177,7 @@ utm-desk/
 stateDiagram-v2
     [*] --> abierta
     abierta --> en_proceso
+    abierta --> en_espera
     en_proceso --> en_espera
     en_proceso --> resuelta
     en_espera --> en_proceso
