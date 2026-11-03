@@ -11,7 +11,7 @@ from app.schemas.ia import AnalisisImagen
 from app.services.vision.claude import ProveedorClaude
 from app.services.vision.gemini import ProveedorGemini, esquema_sin_referencias
 from app.services.vision.prompt import texto_usuario
-from app.services.vision.puerto import ErrorProveedor
+from app.services.vision.puerto import ErrorProveedor, validar_salida
 
 ANALISIS = AnalisisImagen(
     es_incidencia_valida=True,
@@ -119,6 +119,7 @@ async def test_4xx_y_negativa_no_son_transitorios():
 def test_fabrica_reutiliza_cliente(monkeypatch):
     vision.reiniciar_proveedores()
     monkeypatch.setattr(settings, "ia_proveedor", "claude")
+    monkeypatch.setattr(settings, "anthropic_api_key", "clave-de-prueba")
     try:
         primero = vision.obtener_proveedor()
         assert vision.obtener_proveedor() is primero
@@ -129,6 +130,7 @@ def test_fabrica_reutiliza_cliente(monkeypatch):
 
 def test_bloquea_capa_gratuita_en_produccion(monkeypatch):
     vision.reiniciar_proveedores()
+    monkeypatch.setattr(settings, "gemini_api_key", "clave-de-prueba")
     monkeypatch.setattr(settings, "gemini_capa", "gratuita")
     monkeypatch.setattr(settings, "ia_permitir_capa_gratuita", False)
     with pytest.raises(ErrorProveedor) as exc:
@@ -154,3 +156,83 @@ def test_esquema_sin_referencias_conserva_campos():
 
     assert "$defs" not in esquema
     assert esquema["properties"]["campos_detectados"]["items"]["properties"].keys() == {"nombre", "valor"}
+
+
+@pytest.mark.parametrize(("proveedor", "variable"), [("claude", "anthropic_api_key"), ("gemini", "gemini_api_key")])
+def test_sin_llave_es_error_de_configuracion(monkeypatch, proveedor, variable):
+    """#179: sin llave no se crea el cliente ni se llama a la red; el router responde «no configurado»."""
+    vision.reiniciar_proveedores()
+    monkeypatch.setattr(settings, variable, "")
+    monkeypatch.setattr(settings, "gemini_capa", "pagada")
+    with pytest.raises(ErrorProveedor) as exc:
+        vision.obtener_proveedor(proveedor)
+    assert exc.value.tipo == "configuracion"
+    assert exc.value.transitorio is False
+    vision.reiniciar_proveedores()
+
+
+async def test_gemini_limita_tokens_de_salida():
+    peticiones = []
+
+    def manejador(peticion: httpx.Request):
+        peticiones.append(json.loads(peticion.content))
+        return httpx.Response(200, json=_respuesta_gemini(ANALISIS.model_dump_json()))
+
+    await _gemini_con(manejador).analizar(b"img", "image/jpeg", None)
+    assert peticiones[0]["generationConfig"]["maxOutputTokens"] == 2048
+
+
+@pytest.mark.parametrize("motivo", ["MAX_TOKENS", "RECITATION"])
+async def test_gemini_respuesta_cortada_es_respuesta_invalida(motivo):
+    truncado = ANALISIS.model_dump_json()[:40]
+
+    def manejador(_peticion):
+        return httpx.Response(
+            200, json={"candidates": [{"content": {"parts": [{"text": truncado}]}, "finishReason": motivo}]}
+        )
+
+    with pytest.raises(ErrorProveedor) as exc:
+        await _gemini_con(manejador).analizar(b"img", "image/jpeg", None)
+    assert exc.value.tipo == "respuesta_invalida"
+    assert motivo in str(exc.value)
+
+
+def test_detalle_infra_en_otra_categoria_se_descarta():
+    datos = ANALISIS.model_dump(mode="json") | {"categoria": "computo_redes"}
+
+    reparado = validar_salida(json.dumps(datos))
+
+    assert reparado.categoria == "computo_redes"
+    assert reparado.detalle_infra is None
+
+
+def test_infraestructura_sin_detalle_baja_a_no_determinada():
+    datos = ANALISIS.model_dump(mode="json")
+    datos.pop("detalle_infra")
+
+    reparado = validar_salida(json.dumps(datos))
+
+    assert reparado.categoria == "no_determinada"
+    assert reparado.detalle_infra is None
+    assert reparado.titulo == ANALISIS.titulo
+
+
+def test_infraestructura_con_detalle_nulo_baja_a_no_determinada():
+    datos = ANALISIS.model_dump(mode="json") | {"detalle_infra": None}
+
+    assert validar_salida(json.dumps(datos)).categoria == "no_determinada"
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        '{"categoria": "infraestructura"',  # JSON truncado
+        "[]",
+        json.dumps(ANALISIS.model_dump(mode="json") | {"confianza": 7}),  # otro error: no se repara
+        json.dumps(ANALISIS.model_dump(mode="json") | {"categoria": "computo_redes", "confianza": 7}),
+    ],
+)
+def test_solo_se_repara_la_coherencia_de_detalle_infra(texto):
+    with pytest.raises(ErrorProveedor) as exc:
+        validar_salida(texto)
+    assert exc.value.tipo == "respuesta_invalida"

@@ -208,7 +208,10 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     setPaso('formulario')
   }
 
-  /** Aborta la petición en curso (no gasta más cupo) y deja el formulario manual. */
+  /**
+   * Deja de esperar el análisis y abre el formulario manual. Abortar solo corta la espera en el navegador:
+   * el servidor puede terminar la llamada a la IA y ese análisis sí cuenta en el cupo diario.
+   */
   function continuarSinIA() {
     cancelarAnalisis()
     setCriticaPendiente(false)
@@ -259,7 +262,9 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
       setAviso(e instanceof ErrorImagen
         ? `${e.message} Puedes llenar el formulario sin foto.`
         : e instanceof ApiError && e.message
-          ? `${e.message.replace(/\.$/, '')}. Puedes llenar el formulario manualmente.`
+          ? /manualmente/i.test(e.message)
+            ? e.message
+            : `${e.message.replace(/\.$/, '')}. Puedes llenar el formulario manualmente.`
           : 'No se pudo analizar la imagen con IA. Puedes llenar el formulario manualmente.')
     } finally {
       if (montado.current && operacionIA.current === control) {

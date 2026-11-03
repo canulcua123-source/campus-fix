@@ -541,7 +541,7 @@ async def analizar(imagen: UploadFile, usuario=Depends(require_permiso("ia:usar"
         if respaldo: analisis = await respaldo.analizar(datos, media_type, pistas)   # p. ej. Gemini pago ↔ Claude
         else:
             await devolver_cupo(usuario)                      # el fallo no debe costarle cupo al usuario
-            raise HTTPException(503, "No fue posible analizar la imagen; llena el formulario manualmente")
+            raise HTTPException(503, "No fue posible analizar la imagen con IA")
     analisis = sanear(analisis)                               # tags ^[a-z0-9_]{2,30}$ (máx 6), título ≤ 80, sin URLs
     await redis.set(clave, analisis.model_dump_json(), ex=7 * 24 * 3600)
     registrar_metricas(proveedor, latencia, tokens, analisis)  # para el tablero de evaluación (sección 4)

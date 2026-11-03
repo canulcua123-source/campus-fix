@@ -1,5 +1,6 @@
 """Puerto de visión: contrato común para cualquier proveedor de IA (T-028)."""
 
+import json
 from typing import Protocol
 
 from pydantic import ValidationError
@@ -41,4 +42,34 @@ def validar_salida(texto: str | None) -> AnalisisImagen:
     try:
         return AnalisisImagen.model_validate_json(texto)
     except ValidationError as exc:
+        reparado = _reparar_detalle_infra(texto)
+        if reparado is not None:
+            return reparado
         raise ErrorProveedor("El proveedor de IA devolvió una respuesta no válida", tipo="respuesta_invalida") from exc
+
+
+def _reparar_detalle_infra(texto: str) -> AnalisisImagen | None:
+    """Repara de forma determinista solo la incoherencia categoría ↔ detalle_infra; otro error → ``None``.
+
+    - ``detalle_infra`` en una categoría que no es infraestructura: se descarta.
+    - infraestructura sin ``detalle_infra``: la categoría baja a ``no_determinada`` (la PWA pregunta la categoría).
+    """
+    try:
+        datos = json.loads(texto)
+    except ValueError:
+        return None
+    if not isinstance(datos, dict):
+        return None
+    categoria = datos.get("categoria")
+    detalle = datos.get("detalle_infra")
+    if categoria == "infraestructura" and detalle is None:
+        datos["categoria"] = "no_determinada"
+        datos.pop("detalle_infra", None)
+    elif categoria != "infraestructura" and detalle is not None:
+        datos.pop("detalle_infra")
+    else:
+        return None
+    try:
+        return AnalisisImagen.model_validate(datos)
+    except ValidationError:
+        return None
