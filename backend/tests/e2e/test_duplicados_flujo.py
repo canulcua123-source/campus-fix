@@ -93,8 +93,9 @@ def ia_falsa(monkeypatch):
     return estado
 
 
-async def _analizar(api, quien: str, foto: bytes = FOTO, aula_id: str | None = AULA):
+async def _analizar(api, quien: str, foto: bytes = FOTO, aula_id: str | None = AULA, selector: dict | None = None):
     datos = {"aula_id": aula_id} if aula_id is not None else {}
+    datos.update(selector or {})
     return await api.c.post(
         "/ia/analizar-imagen",
         files={"imagen": ("foto.png", foto, "image/png")},
@@ -194,7 +195,7 @@ async def test_foto_casi_igual_tambien_es_duplicado(api, ia_falsa):
     assert r.json()["duplicado"]["codigo"] == original["codigo"]
 
 
-async def test_otra_aula_otra_categoria_u_otra_foto_no_son_duplicado(api, ia_falsa):
+async def test_otra_aula_u_otra_foto_no_son_duplicado(api, ia_falsa):
     await _reportar_con_foto(api)
 
     otra_aula = await _analizar(api, "reportante_b", aula_id=AULA_OTRA)
@@ -204,12 +205,6 @@ async def test_otra_aula_otra_categoria_u_otra_foto_no_son_duplicado(api, ia_fal
     otra_foto = await _analizar(api, "reportante_b", foto=_foto(inversa=True))
     assert otra_foto.json()["accion"] != "duplicado"
 
-    ia_falsa["analisis"] = ACADEMICO
-    redis = get_redis()
-    await redis.delete(*[clave async for clave in redis.scan_iter(match="ia:cache:*")])
-    otra_categoria = await _analizar(api, "reportante_b")
-    assert otra_categoria.status_code == 200, otra_categoria.text
-    assert otra_categoria.json()["accion"] != "duplicado"
 
 
 async def test_sin_aula_no_busca_duplicados(api, ia_falsa):
@@ -258,3 +253,106 @@ async def test_ubicacion_fuera_del_catalogo_crea_sin_huella(api, ia_falsa):
 async def test_crear_sin_analisis_no_registra_huella(api):
     creada = await api.crear("reportante_a", edificio=EDIFICIO)
     assert await api.db.huellas_reportes.count_documents({"incidencia_id": ObjectId(creada["_id"])}) == 0
+
+
+async def _compuertas_fallidas(api, analisis_id: str) -> list[str]:
+    oferta = await api.db.ia_eventos.find_one({"analisis_id": analisis_id})
+    assert oferta is not None
+    return oferta.get("compuertas_fallidas", [])
+
+
+async def test_categoria_distinta_de_la_ia_tambien_es_duplicado(api, ia_falsa):
+    """#181: la huella guarda la categoría final; si la IA clasifica distinto la misma foto, G8 la encuentra."""
+    original = await _reportar_con_foto(api)
+    ia_falsa["analisis"] = ACADEMICO
+    redis = get_redis()
+    await redis.delete(*[clave async for clave in redis.scan_iter(match="ia:cache:*")])
+
+    r = await _analizar(api, "reportante_b")
+
+    assert r.status_code == 200, r.text
+    assert r.json()["accion"] == "duplicado"
+    assert r.json()["duplicado"]["codigo"] == original["codigo"]
+    assert r.json()["duplicado"]["categoria"] == "infraestructura"
+
+
+async def test_aula_del_selector_activa_g8_sin_qr(api, ia_falsa):
+    original = await _reportar_con_foto(api)
+    selector = {"ubicacion_edificio": EDIFICIO, "ubicacion_piso": "1", "ubicacion_aula": "101"}
+
+    r = await _analizar(api, "reportante_b", aula_id=None, selector=selector)
+
+    assert r.status_code == 200, r.text
+    assert r.json()["accion"] == "duplicado"
+    assert r.json()["duplicado"]["codigo"] == original["codigo"]
+    # El selector solo sirve a G8: G5 exige el aula del QR.
+    assert "G5" in await _compuertas_fallidas(api, r.json()["analisis_id"])
+
+
+async def test_selector_fuera_del_catalogo_no_busca_duplicados(api, ia_falsa):
+    await _reportar_con_foto(api)
+    selector = {"ubicacion_edificio": "Edificio Sin Catalogo", "ubicacion_piso": "1", "ubicacion_aula": "101"}
+
+    r = await _analizar(api, "reportante_b", aula_id=None, selector=selector)
+
+    assert r.status_code == 200, r.text
+    assert r.json()["accion"] != "duplicado"
+
+
+async def test_descartar_sugerencia_igual_registra_huella(api, ia_falsa):
+    """#181: aunque la persona descarte la sugerencia, el reporte con foto deja huella para G8."""
+    r = await _analizar(api, "reportante_a")
+    analisis_id = r.json()["analisis_id"]
+    descarte = await api.c.post(
+        "/ia/eventos", json={"analisis_id": analisis_id, "evento": "fallback"}, headers=api.h("reportante_a")
+    )
+    assert descarte.status_code in (200, 201), descarte.text
+
+    creada = await api.c.post(
+        "/incidencias",
+        json=cuerpo("infraestructura", edificio=EDIFICIO, analisis_id=analisis_id),
+        headers=api.h("reportante_a"),
+    )
+
+    assert creada.status_code == 201, creada.text
+    assert await api.db.huellas_reportes.count_documents({"incidencia_id": ObjectId(creada.json()["_id"])}) == 1
+    # La telemetría conserva el descarte: crear no lo convierte en enviado.
+    oferta = await api.db.ia_eventos.find_one({"analisis_id": analisis_id})
+    assert oferta["resultado_final"] == "fallback"
+    assert "incidencia_id" not in oferta
+
+    segundo = await _analizar(api, "reportante_b")
+    assert segundo.json()["accion"] == "duplicado"
+
+
+async def test_analisis_ajeno_no_registra_huella(api, ia_falsa):
+    r = await _analizar(api, "reportante_a")
+    creada = await api.c.post(
+        "/incidencias",
+        json=cuerpo("infraestructura", edificio=EDIFICIO, analisis_id=r.json()["analisis_id"]),
+        headers=api.h("reportante_b"),
+    )
+    assert creada.status_code == 201, creada.text
+    assert await api.db.huellas_reportes.count_documents({"incidencia_id": ObjectId(creada.json()["_id"])}) == 0
+
+
+async def test_g5_pasa_con_aula_del_qr_activa(api, ia_falsa):
+    r = await _analizar(api, "reportante_a")
+    assert r.status_code == 200, r.text
+    fallidas = await _compuertas_fallidas(api, r.json()["analisis_id"])
+    assert "G5" not in fallidas
+    assert "G7" not in fallidas
+    # El kill switch sigue apagado por defecto: aun con G5 la salida es el formulario.
+    assert "G9" in fallidas
+    assert r.json()["accion"] == "formulario"
+
+
+async def test_g5_falla_con_aula_desconocida_o_inactiva(api, ia_falsa):
+    desconocida = await _analizar(api, "reportante_a", aula_id="Dup0Aula0Qr0NoExiste01")
+    assert desconocida.status_code == 200, desconocida.text
+    assert "G5" in await _compuertas_fallidas(api, desconocida.json()["analisis_id"])
+
+    await api.db.aulas.update_one({"id_publico": AULA_OTRA}, {"$set": {"activa": False}})
+    inactiva = await _analizar(api, "reportante_b", aula_id=AULA_OTRA)
+    assert inactiva.status_code == 200, inactiva.text
+    assert "G5" in await _compuertas_fallidas(api, inactiva.json()["analisis_id"])

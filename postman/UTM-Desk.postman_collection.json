@@ -2599,7 +2599,28 @@
                   "value": "{{aula_id_publico}}",
                   "type": "text",
                   "disabled": true,
-                  "description": "Opcional: id_publico del aula (QR). Con él, G8 busca en huellas_reportes un reporte igual (misma aula y categoría, últimas 24 h); si lo hay responde accion=duplicado y el objeto duplicado {coincidencia_id, codigo, categoria, reportado_hace_minutos, adhesiones}."
+                  "description": "Opcional: id_publico del aula (QR). Con él, G8 busca en huellas_reportes un reporte igual (misma aula, cualquier categoría, últimas 72 h, SHA-256 igual o dHash a distancia ≤ 10; gana la más cercana) y G5 verifica que el aula exista y esté activa en el catálogo; si hay coincidencia responde accion=duplicado y el objeto duplicado {coincidencia_id, codigo, categoria, reportado_hace_minutos, adhesiones}."
+                },
+                {
+                  "key": "ubicacion_edificio",
+                  "value": "Edificio B",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Opcional, sin aula_id: edificio elegido en el selector. Con piso y aula, el servidor resuelve el aula activa del catálogo y la usa solo para G8 (no para G5)."
+                },
+                {
+                  "key": "ubicacion_piso",
+                  "value": "1",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Opcional, sin aula_id: piso elegido en el selector (-5 a 50)."
+                },
+                {
+                  "key": "ubicacion_aula",
+                  "value": "Aula 105",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Opcional, sin aula_id: aula elegida en el selector."
                 }
               ]
             }
@@ -2631,7 +2652,7 @@
                 "value": "application/json"
               }
             ],
-            "description": "Envía el analisis_id de «Analizar imagen»: el servidor cierra la oferta en ia_eventos como enviado (o editado si cambian título, prioridad o categoría). Un analisis_id ajeno o vencido no impide crear la incidencia (201).",
+            "description": "Envía el analisis_id de «Analizar imagen»: el servidor cierra la oferta en ia_eventos como enviado (o editado si cambian título, prioridad o categoría). También registra la huella de la foto en huellas_reportes (G8), aunque la sugerencia se haya descartado: una oferta ya cerrada como fallback o deshecho conserva ese resultado. Un analisis_id ajeno o vencido no impide crear la incidencia (201).",
             "url": {
               "raw": "{{base_url}}/incidencias",
               "host": [

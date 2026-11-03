@@ -17,6 +17,7 @@ from app.core.imagen import (
     FormatoImagenNoPermitido,
     ImagenDemasiadoGrande,
     ImagenNoProcesable,
+    ImagenValidada,
     leer_y_validar_imagen,
 )
 from app.core.limiter import clave_usuario, limiter
@@ -24,6 +25,7 @@ from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn, PosibleDuplicadoOut
 from app.schemas.ia import AnalisisImagen, DecisionAsistida, EventoIAIn, EventoIAOut, OfertaIAInterna, RespuestaIA
 from app.schemas.config import ConfigIA
+from app.schemas.incidencia import Ubicacion
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
     CoincidenciaNoElegible,
@@ -35,7 +37,14 @@ from app.services.duplicados import (
     detectar_duplicado_por_huellas,
 )
 from app.services import ia as ia_service
-from app.services.ia import PROMPT_VERSION, IAError, analizar_imagen, identidad_proveedor
+from app.services.ia import (
+    IA_DEADLINE_TOTAL_SEGUNDOS,
+    PROMPT_VERSION,
+    IAError,
+    analizar_imagen,
+    identidad_proveedor,
+)
+from app.services.vision import ErrorProveedor, obtener_proveedor
 from app.services.vision.analisis_temporal import ANALISIS_TTL, RegistroAnalisis, cargar_analisis, guardar_analisis
 from app.services.vision.compuertas import (
     DecisionCompuertas,
@@ -44,7 +53,7 @@ from app.services.vision.compuertas import (
     evaluar_compuertas,
     mapeo_valido,
 )
-from app.services.vision.cupos import consumir_cupo_agentico, cupo_usuario_disponible
+from app.services.vision.cupos import consumir_cupo_agentico, cupo_usuario_disponible, dia_campus
 from app.services.vision.decision import decidir
 from app.services.ia_eventos import (
     EventoIAConflictivo,
@@ -66,6 +75,15 @@ TIMEOUT_TELEMETRIA_SEGUNDOS = 2.0
 TIMEOUT_DUPLICADOS_SEGUNDOS = 2.0
 PATRON_AULA_ID = r"^[A-Za-z0-9_-]{22}$"
 CUPO_TTL = 2 * 24 * 3600
+# Candado por clave de caché: dos peticiones idénticas simultáneas pagan una sola llamada al proveedor.
+CANDADO_TTL = int(IA_DEADLINE_TOTAL_SEGUNDOS) + 5
+ESPERA_CANDADO_SEGUNDOS = IA_DEADLINE_TOTAL_SEGUNDOS
+SONDEO_CANDADO_SEGUNDOS = 0.5
+
+_LIBERAR_CANDADO = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+return 0
+"""
 
 _CONSUMIR_CUPO = """
 local uso_usuario = tonumber(redis.call('GET', KEYS[1]) or '0')
@@ -92,16 +110,73 @@ return 1
 """
 
 
+DATO_PERSONAL = "[dato personal]"
+_PATRON_CORREO = re.compile(r"[\w.%+-]+@[\w-]+(?:\.[\w-]+)+")
+# Teléfonos genéricos: 8 a 13 dígitos con separadores opcionales (espacio, punto, guion o paréntesis).
+_PATRON_TELEFONO = re.compile(r"(?<!\w)\+?\(?\d(?:[\s.()-]{0,2}\d){7,12}(?!\w)")
+LONGITUD_MINIMA_TOKEN = 3
+
+
+def _plegar(texto: str) -> tuple[str, list[int]]:
+    """Minúsculas sin acentos y, por cada carácter plegado, su índice en ``texto``."""
+    plegado: list[str] = []
+    indices: list[int] = []
+    for indice, caracter in enumerate(texto):
+        for parte in unicodedata.normalize("NFKD", caracter.lower()):
+            if not unicodedata.combining(parte):
+                plegado.append(parte)
+                indices.append(indice)
+    return "".join(plegado), indices
+
+
+def _tokens_personales(usuario: dict) -> list[str]:
+    """Nombre completo, cada nombre/apellido (≥3 letras), correo, su parte local y matrícula, ya plegados."""
+    candidatos: set[str] = set()
+    nombre = usuario.get("nombre")
+    if isinstance(nombre, str) and nombre.strip():
+        nombre_plegado = _plegar(_normalizar_contexto(nombre))[0]
+        candidatos.add(nombre_plegado)
+        candidatos.update(t for t in re.split(r"[\s,.-]+", nombre_plegado) if len(t) >= LONGITUD_MINIMA_TOKEN)
+    correo = usuario.get("correo")
+    if isinstance(correo, str) and correo.strip():
+        correo_plegado = _plegar(_normalizar_contexto(correo))[0]
+        candidatos.add(correo_plegado)
+        local = correo_plegado.split("@", 1)[0]
+        if len(local) >= LONGITUD_MINIMA_TOKEN:
+            candidatos.add(local)
+    matricula = usuario.get("matricula")
+    if isinstance(matricula, (str, int)) and str(matricula).strip():
+        candidatos.add(_plegar(_normalizar_contexto(str(matricula)))[0])
+    return sorted((c for c in candidatos if c), key=len, reverse=True)
+
+
 def _minimizar_contexto(contexto: str | None, usuario: dict) -> str | None:
-    """Conserva solo el texto necesario y elimina datos del perfil autenticado."""
+    """Normaliza el contexto y reemplaza datos personales por ``[dato personal]``.
+
+    Primero normaliza (NFKC + espacios colapsados) para que espacios extra o formas Unicode no evadan el
+    filtro; después omite correos y teléfonos genéricos y, sin distinguir mayúsculas ni acentos y con
+    límites de palabra, los datos del perfil autenticado (nombre completo o por partes, correo y matrícula).
+    """
     if contexto is None:
         return None
-    limpio = contexto
-    for campo in ("nombre", "correo"):
-        valor = usuario.get(campo)
-        if isinstance(valor, str) and valor:
-            limpio = re.sub(re.escape(valor), "[dato omitido]", limpio, flags=re.IGNORECASE)
-    return limpio
+    limpio = _normalizar_contexto(contexto)
+    limpio = _PATRON_CORREO.sub(DATO_PERSONAL, limpio)
+    limpio = _PATRON_TELEFONO.sub(DATO_PERSONAL, limpio)
+    tokens = _tokens_personales(usuario)
+    if not tokens:
+        return limpio
+    alternativas = "|".join(r"\s+".join(re.escape(parte) for parte in token.split()) for token in tokens)
+    patron = re.compile(rf"(?<!\w)(?:{alternativas})(?!\w)")
+    plegado, indices = _plegar(limpio)
+    partes: list[str] = []
+    anterior = 0
+    for coincidencia in patron.finditer(plegado):
+        inicio = indices[coincidencia.start()]
+        fin = indices[coincidencia.end() - 1] + 1
+        partes.extend((limpio[anterior:inicio], DATO_PERSONAL))
+        anterior = fin
+    partes.append(limpio[anterior:])
+    return "".join(partes)
 
 
 def _normalizar_contexto(contexto: str | None) -> str:
@@ -127,7 +202,7 @@ def _clave_cache(
 
 
 def _claves_cupo(usuario_id: object, ahora: datetime) -> tuple[str, str]:
-    dia = f"{ahora:%Y-%m-%d}"
+    dia = dia_campus(ahora)
     return f"ia:uso:{usuario_id}:{dia}", f"ia:uso:global:{dia}"
 
 
@@ -140,13 +215,80 @@ async def _consumir_cupo(redis, claves: tuple[str, str], *, limite_usuario: int,
         raise HTTPException(503, "El análisis con IA no está disponible por hoy")
 
 
-def _estado_por_verificar(usuario: dict) -> tuple[UbicacionCompuertas | None, str]:
-    """Ubicación verificada (T17/T18) todavía no existe; G8 la sustituye ``_evaluar_duplicado`` cuando hay aula.
+def _verificar_proveedor_configurado() -> None:
+    """Sin llave del proveedor no se gasta cupo ni se llama a la red: 503 distinto al de un fallo real."""
+    try:
+        obtener_proveedor()
+    except ErrorProveedor as exc:
+        if exc.tipo != "configuracion":
+            raise
+        logger.warning("El análisis con IA no está configurado: proveedor=%s motivo=%s", settings.ia_proveedor, exc)
+        raise HTTPException(503, "El análisis con IA no está configurado en este servidor") from exc
 
-    Mientras tanto la ubicación es ``None`` y el duplicado ``no_verificable``: G5 y G7 fallan, así que el modo
-    agéntico es inalcanzable a propósito y la salida segura es ``formulario`` (aunque el kill switch esté encendido).
+
+async def _leer_cache(redis, clave_cache: str) -> AnalisisImagen | None:
+    guardado = await redis.get(clave_cache)
+    if guardado is None:
+        return None
+    try:
+        return AnalisisImagen.model_validate_json(guardado)
+    except ValueError:
+        logger.warning("Entrada inválida en la caché de IA; se regenerará", exc_info=True)
+        return None
+
+
+async def _esperar_cache(redis, clave_cache: str) -> AnalisisImagen | None:
+    """Otra petición idéntica ya está pagando el análisis: se espera su resultado en caché (hasta el deadline)."""
+    limite = time.monotonic() + ESPERA_CANDADO_SEGUNDOS
+    while time.monotonic() < limite:
+        await asyncio.sleep(SONDEO_CANDADO_SEGUNDOS)
+        analisis = await _leer_cache(redis, clave_cache)
+        if analisis is not None:
+            return analisis
+        if not await redis.exists(f"{clave_cache}:candado"):
+            # El dueño terminó: pudo guardar la caché justo después de la lectura anterior; si no, falló.
+            return await _leer_cache(redis, clave_cache)
+    return None
+
+
+async def _ubicacion_verificada(aula_id: str | None) -> UbicacionCompuertas | None:
+    """G5: ubicación del QR solo si el aula existe y está activa en el catálogo (T17/T18).
+
+    Sin aula del QR, aula desconocida/inactiva o error al consultar devuelve ``None``: G5 y G7 fallan y la salida
+    segura es ``formulario``. La ubicación elegida en el selector nunca llega aquí (solo sirve a G8).
     """
-    return None, "no_verificable"
+    if aula_id is None:
+        return None
+    try:
+        aula = await asyncio.wait_for(
+            get_db().aulas.find_one(
+                {"id_publico": aula_id, "activa": True}, {"_id": 0, "edificio": 1, "piso": 1, "aula": 1}
+            ),
+            timeout=TIMEOUT_DUPLICADOS_SEGUNDOS,
+        )
+        if aula is None:
+            return None
+        return UbicacionCompuertas(datos=Ubicacion(**aula), fuente="qr", existe_en_catalogo=True)
+    except Exception:
+        logger.warning("No se pudo verificar el aula del QR; G5 falla cerrado", exc_info=True)
+        return None
+
+
+async def _aula_por_ubicacion(edificio: str | None, piso: int | None, aula: str | None) -> str | None:
+    """id_publico del aula activa elegida en el selector (como al crear la incidencia); solo para G8."""
+    if not edificio or piso is None or not aula:
+        return None
+    try:
+        encontrada = await asyncio.wait_for(
+            get_db().aulas.find_one(
+                {"edificio": edificio, "piso": piso, "aula": aula, "activa": True}, {"_id": 0, "id_publico": 1}
+            ),
+            timeout=TIMEOUT_DUPLICADOS_SEGUNDOS,
+        )
+    except Exception:
+        logger.warning("No se pudo resolver el aula del selector; el análisis sigue sin G8", exc_info=True)
+        return None
+    return None if encontrada is None else encontrada["id_publico"]
 
 
 # Pistas del control de calidad del cliente (frontend/src/lib/calidad.ts); cualquiera hace fallar G4.
@@ -170,10 +312,10 @@ def _entrada_compuertas(
     cupo_agentico_disponible: bool,
     calidad_cliente: tuple[str, ...] = (),
     estado_duplicado: str | None = None,
+    ubicacion: UbicacionCompuertas | None = None,
 ) -> EntradaCompuertas:
-    ubicacion, duplicado = _estado_por_verificar(usuario)
-    if estado_duplicado is not None:
-        duplicado = estado_duplicado
+    # Sin evidencia de G8 (sin aula o sin huella) el duplicado queda no_verificable y G8 falla cerrado.
+    duplicado = estado_duplicado or "no_verificable"
     return EntradaCompuertas(
         analisis=analisis,
         ahora=ahora,
@@ -215,14 +357,13 @@ async def _evaluar_duplicado(
     aula_id: str | None,
     ahora: datetime,
 ) -> tuple[str | None, PosibleDuplicadoOut | None]:
-    """G8 (T-038): busca solo en huellas_reportes con el aula del QR y la categoría detectada.
+    """G8 (T-038): busca solo en huellas_reportes con el aula (QR o selector), sin depender de la categoría.
 
-    Devuelve ``(None, None)`` si falta contexto (sin aula o sin categoría): el estado queda como lo deja
-    ``_estado_por_verificar``. Un error o un tiempo excedido se degradan a ``no_verificable``.
+    La huella se registra con la categoría final del reporte; la IA puede clasificar distinto la misma foto, así
+    que la búsqueda es por aula + ventana + distancia del dHash. Devuelve ``(None, None)`` si falta contexto (sin
+    aula, sin huella o la foto no es una incidencia). Un error o un tiempo excedido se degradan a ``no_verificable``.
     """
     if aula_id is None or huellas is None or not analisis.es_incidencia_valida:
-        return None, None
-    if analisis.categoria == "no_determinada":
         return None, None
     try:
         posible = await asyncio.wait_for(
@@ -230,7 +371,6 @@ async def _evaluar_duplicado(
                 get_db(),
                 huellas=huellas,
                 aula_id=aula_id,
-                categoria=analisis.categoria,
                 usuario_id=usuario["_id"],
                 secreto=settings.jwt_secret,
                 ahora=ahora,
@@ -319,19 +459,26 @@ async def _responder(
     latencia_ms: int | None = None,
     huellas: HuellasImagen | None = None,
     aula_id: str | None = None,
+    aula_duplicados: str | None = None,
 ) -> RespuestaIA:
     """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
     # Las pistas del cliente (borrosa/oscura/sobreexpuesta) también topan la confianza: nunca autollena.
     asistida = decidir(analisis, calidad_cliente, cache=cache)
-    estado_duplicado, posible_duplicado = await _evaluar_duplicado(usuario, analisis, huellas, aula_id, ahora)
+    # aula_id solo llega del QR (G5); G8 también acepta el aula resuelta desde el selector.
+    estado_duplicado, posible_duplicado = await _evaluar_duplicado(
+        usuario, analisis, huellas, aula_id or aula_duplicados, ahora
+    )
+    ubicacion = await _ubicacion_verificada(aula_id)
+    # Las compuertas reciben la confianza efectiva (topada), la misma que vio decidir.
     entrada = _entrada_compuertas(
-        analisis,
+        asistida.analisis,
         usuario,
         ahora,
         config,
         cupo_agentico_disponible=cupo_agentico_disponible,
         calidad_cliente=calidad_cliente,
         estado_duplicado=estado_duplicado,
+        ubicacion=ubicacion,
     )
     decision = evaluar_compuertas(entrada)
     if decision.accion == "agentico" and entrada.ubicacion is not None:
@@ -382,6 +529,8 @@ async def _responder(
     response_model=RespuestaIA,
     response_model_exclude_none=True,
     responses={
+        429: {"description": "Límite de uso alcanzado (por minuto o diario)"},
+        503: {"description": "IA no configurada, deshabilitada, sin cupo global o el proveedor falló"},
         413: {
             "description": "El archivo supera 5 MB",
             "content": {"application/json": {"example": {"detalle": "La imagen excede 5 MB"}}},
@@ -402,7 +551,9 @@ async def _responder(
         },
     },
 )
+@limiter.limit(lambda: settings.limite_escritura, key_func=clave_usuario)
 async def analizar(
+    request: Request,
     imagen: UploadFile,
     usuario: Annotated[dict, Depends(require_permiso("ia:usar"))],
     contexto: Annotated[str | None, Form(max_length=500)] = None,
@@ -411,8 +562,19 @@ async def analizar(
         str | None,
         Form(
             pattern=PATRON_AULA_ID,
-            description="id_publico del aula (QR). Con él, G8 busca un reporte igual en las últimas 24 h.",
+            description=(
+                "id_publico del aula (QR). Con él, G8 busca un reporte igual en las últimas 72 h y G5 "
+                "verifica que el aula exista y esté activa en el catálogo."
+            ),
         ),
+    ] = None,
+    ubicacion_edificio: Annotated[
+        str | None,
+        Form(min_length=1, max_length=60, description="Edificio elegido en el selector (sin QR); solo para G8."),
+    ] = None,
+    ubicacion_piso: Annotated[int | None, Form(ge=-5, le=50, description="Piso elegido en el selector.")] = None,
+    ubicacion_aula: Annotated[
+        str | None, Form(min_length=1, max_length=60, description="Aula elegida en el selector.")
     ] = None,
 ):
     pistas_calidad = _calidad_cliente(calidad_cliente)
@@ -432,7 +594,9 @@ async def analizar(
         raise HTTPException(503, "La configuración de IA no está disponible") from exc
     if not config.habilitada:
         raise HTTPException(503, "El análisis con IA está deshabilitado")
+    _verificar_proveedor_configurado()
     # Lista de datos permitidos para el proveedor: imagen, MIME y contexto sin datos del perfil.
+    # _minimizar_contexto normaliza antes de omitir; la normalización externa es idempotente (clave de caché).
     contexto_normalizado = _normalizar_contexto(_minimizar_contexto(contexto, usuario))
     proveedor, modelo = identidad_proveedor()
     clave_cache = _clave_cache(
@@ -447,12 +611,7 @@ async def analizar(
     analisis_cache = None
     try:
         redis = get_redis()
-        guardado = await redis.get(clave_cache)
-        if guardado is not None:
-            try:
-                analisis_cache = AnalisisImagen.model_validate_json(guardado)
-            except ValueError:
-                logger.warning("Entrada inválida en la caché de IA; se regenerará", exc_info=True)
+        analisis_cache = await _leer_cache(redis, clave_cache)
     except Exception:
         logger.warning("Redis no disponible al consultar la caché de IA", exc_info=True)
     ahora = datetime.now(timezone.utc)
@@ -462,17 +621,74 @@ async def analizar(
         "ahora": ahora,
         "cupo_agentico_disponible": cupo_agentico,
         "calidad_cliente": pistas_calidad,
-        "huellas": await _calcular_huellas(validada.datos, validada.tipo_mime),
         "aula_id": aula_id,
+        "aula_duplicados": None
+        if aula_id is not None
+        else await _aula_por_ubicacion(ubicacion_edificio, ubicacion_piso, ubicacion_aula),
     }
-    if analisis_cache is not None:
-        return await _responder(redis, usuario, validada.datos, analisis_cache, cache=True, **contexto_respuesta)
 
-    # Falla cerrado: si no se puede contabilizar el cupo no se llama al proveedor (el costo queda acotado).
-    claves_cupo = _claves_cupo(usuario["_id"], datetime.now(timezone.utc))
+    async def responder_desde_cache(analisis: AnalisisImagen) -> RespuestaIA:
+        huellas = await _calcular_huellas(validada.datos, validada.tipo_mime)
+        return await _responder(
+            redis, usuario, validada.datos, analisis, cache=True, huellas=huellas, **contexto_respuesta
+        )
+
+    if analisis_cache is not None:
+        return await responder_desde_cache(analisis_cache)
+
+    # Falla cerrado: sin Redis no hay candado ni cupo, así que no se llama al proveedor (el costo queda acotado).
+    clave_candado = f"{clave_cache}:candado"
+    token_candado = uuid4().hex
     try:
         if redis is None:
             raise RuntimeError("Redis no disponible")
+        tengo_candado = bool(await redis.set(clave_candado, token_candado, nx=True, ex=CANDADO_TTL))
+        analisis_ajeno = None if tengo_candado else await _esperar_cache(redis, clave_cache)
+    except Exception as exc:
+        logger.warning("Redis no disponible al tomar el candado de IA", exc_info=True)
+        raise HTTPException(503, "El análisis con IA no está disponible en este momento") from exc
+    if not tengo_candado:
+        if analisis_ajeno is None:
+            raise HTTPException(503, "Ya se está analizando esta foto; inténtalo en unos segundos")
+        return await responder_desde_cache(analisis_ajeno)
+    try:
+        # Otra petición pudo terminar entre la consulta de caché y el candado.
+        try:
+            analisis_ajeno = await _leer_cache(redis, clave_cache)
+        except Exception:
+            logger.warning("Redis no disponible al consultar la caché de IA", exc_info=True)
+        if analisis_ajeno is not None:
+            return await responder_desde_cache(analisis_ajeno)
+        return await _analizar_con_cupo(
+            redis,
+            usuario,
+            validada,
+            contexto_normalizado,
+            clave_cache,
+            config=config,
+            contexto_respuesta=contexto_respuesta,
+        )
+    finally:
+        try:
+            await redis.eval(_LIBERAR_CANDADO, 1, clave_candado, token_candado)
+        except Exception:
+            # El TTL lo libera solo; las peticiones en espera se rinden al vencer el deadline.
+            logger.warning("No se pudo liberar el candado de IA", exc_info=True)
+
+
+async def _analizar_con_cupo(
+    redis,
+    usuario: dict,
+    validada: ImagenValidada,
+    contexto_normalizado: str,
+    clave_cache: str,
+    *,
+    config: ConfigIA,
+    contexto_respuesta: dict,
+) -> RespuestaIA:
+    """Consume el cupo diario, llama al proveedor (con reintento) y guarda el resultado en caché."""
+    claves_cupo = _claves_cupo(usuario["_id"], contexto_respuesta["ahora"])
+    try:
         await _consumir_cupo(
             redis,
             claves_cupo,
@@ -503,15 +719,24 @@ async def analizar(
             await redis.eval(_DEVOLVER_CUPO, 2, *claves_cupo)
         except Exception:
             logger.error("No se pudo devolver el cupo tras un fallo del proveedor de IA", exc_info=True)
-        raise HTTPException(503, "No fue posible analizar la imagen; llena el formulario manualmente") from e
+        raise HTTPException(503, "No fue posible analizar la imagen con IA") from e
     latencia_ms = round((time.perf_counter() - inicio) * 1000)
 
     try:
         await redis.set(clave_cache, analisis.model_dump_json(), ex=CACHE_TTL)
     except Exception:
         logger.warning("Redis no disponible al guardar la caché de IA", exc_info=True)
+    # La huella (dHash) solo se calcula cuando ya hay análisis pagado: un rechazo temprano no gasta CPU.
+    huellas = await _calcular_huellas(validada.datos, validada.tipo_mime)
     return await _responder(
-        redis, usuario, validada.datos, analisis, cache=False, latencia_ms=latencia_ms, **contexto_respuesta
+        redis,
+        usuario,
+        validada.datos,
+        analisis,
+        cache=False,
+        latencia_ms=latencia_ms,
+        huellas=huellas,
+        **contexto_respuesta,
     )
 
 

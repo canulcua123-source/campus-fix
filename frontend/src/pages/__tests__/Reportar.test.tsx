@@ -159,6 +159,14 @@ describe('Reportar: robustez del análisis con IA', () => {
     expect(await screen.findByText('Alcanzaste el límite de 20 análisis por día. Puedes llenar el formulario manualmente.')).toBeInTheDocument()
   })
 
+  it('no repite «manualmente» si el mensaje del servidor ya lo dice', async () => {
+    dobles.analizarImagen.mockRejectedValue(new ApiError(503, 'no_disponible', 'No fue posible analizar la imagen; llena el formulario manualmente'))
+    renderReportar()
+    seleccionarFoto()
+    expect(await screen.findByText('No fue posible analizar la imagen; llena el formulario manualmente')).toBeInTheDocument()
+    expect(screen.queryByText(/Puedes llenar el formulario manualmente/)).not.toBeInTheDocument()
+  })
+
   it('recorta lo que propone la IA a los límites del formulario y avisa de «crítica» aunque la prioridad ya esté elegida', async () => {
     const tags = Array.from({ length: 20 }, (_, i) => `etiqueta_${i}`)
     dobles.analizarImagen.mockResolvedValue({
@@ -477,6 +485,58 @@ describe('Reportar: telemetría de la oferta de IA', () => {
 
     expect(dobles.registrarEventoIA).toHaveBeenCalledOnce()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('tras "Llenar sin IA" igual envía el analisis_id al crear para registrar la huella de la foto (#181)', async () => {
+    let cuerpo: Record<string, unknown> = {}
+    servidor.use(http.post(`${BASE}/incidencias`, async ({ request }) => {
+      cuerpo = await request.json() as Record<string, unknown>
+      return HttpResponse.json({ _id: 'inc1', codigo: 'INC-2026-1026-RED-0001', estado: 'abierta' }, { status: 201 })
+    }))
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+    seleccionarFoto()
+    await waitFor(() => expect(screen.getByLabelText('Título')).toHaveValue('Proyector no enciende'))
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Llenar sin IA' }))
+    await user.type(screen.getByLabelText('Título'), 'Switch sin enlace')
+    await user.type(screen.getByLabelText('Descripción'), 'El switch del laboratorio no tiene enlace')
+    await user.type(screen.getByLabelText('Edificio'), 'Edificio A')
+    await user.type(screen.getByLabelText('Aula'), 'A-301')
+    await user.type(screen.getByLabelText('IP'), '10.0.0.5')
+
+    await user.click(screen.getByRole('button', { name: 'Enviar reporte' }))
+
+    expect(await screen.findByText('INC-2026-1026-RED-0001')).toBeInTheDocument()
+    expect(cuerpo).toMatchObject({ analisis_id: ID_ANALISIS, titulo: 'Switch sin enlace' })
+    // La telemetría no cambia: solo el fallback del descarte, una vez.
+    expect(dobles.registrarEventoIA).toHaveBeenCalledExactlyOnceWith({ analisis_id: ID_ANALISIS, evento: 'fallback' })
+  })
+
+  it('sin QR envía al análisis el aula ya elegida para que G8 busque duplicados (#181)', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Llenar sin foto' }))
+    await user.type(screen.getByLabelText('Edificio'), 'Edificio A')
+    await user.type(screen.getByLabelText('Piso (opcional)'), '3')
+    await user.type(screen.getByLabelText('Aula'), 'A-301')
+
+    seleccionarFoto()
+
+    await waitFor(() => expect(dobles.analizarImagen).toHaveBeenCalledOnce())
+    expect(dobles.analizarImagen.mock.calls[0][0]).toMatchObject({
+      aula_id: undefined, ubicacion: { edificio: 'Edificio A', piso: 3, aula: 'A-301' },
+    })
+  })
+
+  it('sin aula elegida todavía no envía ubicación al análisis', async () => {
+    dobles.analizarImagen.mockResolvedValue(respuestaIA())
+    renderReportar()
+    seleccionarFoto()
+
+    await waitFor(() => expect(dobles.analizarImagen).toHaveBeenCalledOnce())
+    expect(dobles.analizarImagen.mock.calls[0][0].ubicacion).toBeUndefined()
   })
 
   it('envía el analisis_id al crear el reporte y no reporta eventos desde el cliente', async () => {

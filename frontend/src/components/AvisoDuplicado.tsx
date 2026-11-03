@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { Adhesion, PosibleDuplicado } from '../schemas/ia'
 import { Badge, Button, Card } from './ui'
 
-/** "hace un momento" · "hace 12 min" · "hace 3 h" (la ventana de G8 es de 24 h). */
+/** "hace un momento" · "hace 12 min" · "hace 3 h" (la ventana de G8 es de 72 h). */
 function haceCuanto(minutos: number): string {
   if (minutos < 1) return 'hace un momento'
   if (minutos < 60) return `hace ${minutos} min`

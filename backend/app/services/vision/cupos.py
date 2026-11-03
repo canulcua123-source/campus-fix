@@ -4,6 +4,7 @@ import hashlib
 from datetime import datetime
 from typing import Literal
 
+from app.dominio.folio import fecha_local_campus
 from app.schemas.incidencia import Ubicacion
 
 TTL_CUPO_USUARIO = 2 * 24 * 3600
@@ -39,12 +40,17 @@ def _identificador_aula(ubicacion: Ubicacion) -> str:
     return hashlib.sha256(texto).hexdigest()
 
 
+def dia_campus(ahora: datetime) -> str:
+    """Día de los cupos diarios: se corta a medianoche del campus, no en UTC (18:00 locales)."""
+    return f"{fecha_local_campus(ahora):%Y-%m-%d}"
+
+
 def clave_cupo_usuario(usuario_id: object, ahora: datetime) -> str:
-    return f"ia:agentico:usuario:{usuario_id}:{ahora:%Y-%m-%d}"
+    return f"ia:agentico:usuario:{usuario_id}:{dia_campus(ahora)}"
 
 
 def clave_cupo_aula(ubicacion: Ubicacion, ahora: datetime) -> str:
-    return f"ia:agentico:aula:{_identificador_aula(ubicacion)}:{ahora:%Y-%m-%dT%H}"
+    return f"ia:agentico:aula:{_identificador_aula(ubicacion)}:{fecha_local_campus(ahora):%Y-%m-%dT%H}"
 
 
 async def cupo_usuario_disponible(redis, usuario_id: object, ahora: datetime, *, limite: int) -> bool:
