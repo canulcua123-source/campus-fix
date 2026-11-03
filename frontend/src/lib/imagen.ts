@@ -2,13 +2,15 @@ import { aEscalaDeGrises, medirCalidad, type Calidad } from './calidad'
 
 /**
  * Procesamiento de la foto en el cliente (T-047, docs/algoritmo-foto-ia.md §1.2 y §2.1):
- * decodifica con orientación EXIF → genera derivados JPEG sin metadatos (la recodificación descarta EXIF/GPS).
+ * lee las dimensiones de la cabecera → decodifica ya reducida (resizeWidth/resizeHeight) con orientación EXIF → genera derivados JPEG sin metadatos (la recodificación descarta EXIF/GPS).
  * Corre en el hilo principal o en un Web Worker (usa OffscreenCanvas si existe); ver `fotoEnSegundoPlano.ts`.
  */
 
 export const CONFIG_FOTO = {
   ladoLargoEvidencia: 2048, calidadEvidencia: 0.85,
   ladoLargoIA: 1280, calidadIA: 0.8,
+  /** Rango que acepta el servidor en /ia/analizar-imagen (MIN/MAX_LADO_IMAGEN en backend/app/core/imagen.py). */
+  ladoMinimoIA: 200, ladoMaximoIA: 2600,
   ladoLargoMiniatura: 320, calidadMiniatura: 0.7,
   /** JPEG y no WebP: Safari no codifica WebP en canvas (devuelve PNG en silencio). */
   formato: 'image/jpeg' as const,
@@ -42,7 +44,7 @@ export class ErrorImagen extends Error {
 export interface DerivadosFoto {
   /** 2048 px, q 0.85: se sube como evidencia. */
   evidencia: Blob
-  /** 1280 px, q 0.80 (≤ 1.5 MB): se manda a /ia/analizar-imagen. */
+  /** 1280 px (corto ≥ 200, largo ≤ 2600 en panorámicas), q 0.80 (≤ 1.5 MB): se manda a /ia/analizar-imagen. */
   ia: Blob
   /** 320 px, q 0.70: vista previa. */
   miniatura: Blob
@@ -79,15 +81,27 @@ export interface Lienzo {
   toBlob?: (cb: (b: Blob | null) => void, tipo: string, calidad: number) => void
 }
 
+export interface TamanoDecodificacion { ancho: number; alto: number }
+
 export interface EntornoImagen {
-  decodificar(archivo: Blob): Promise<MapaBits>
+  /** Con `tamano`, pide al navegador decodificar ya reducido (no carga los 48–200 MP en memoria). */
+  decodificar(archivo: Blob, tamano?: TamanoDecodificacion): Promise<MapaBits>
   crearLienzo(ancho: number, alto: number): Lienzo
 }
 
 export function entornoNavegador(): EntornoImagen {
   return {
-    async decodificar(archivo) {
+    async decodificar(archivo, tamano) {
       if (typeof createImageBitmap !== 'function') throw new ErrorImagen('Tu navegador no puede procesar fotos. Actualízalo e intenta de nuevo.')
+      if (tamano) {
+        try {
+          return await createImageBitmap(archivo, {
+            imageOrientation: 'from-image', resizeWidth: tamano.ancho, resizeHeight: tamano.alto, resizeQuality: 'high',
+          })
+        } catch {
+          // Navegador sin soporte de resizeWidth/resizeHeight: se decodifica completa abajo.
+        }
+      }
       try {
         // 'from-image' aplica la orientación EXIF (valor por defecto según la especificación).
         return await createImageBitmap(archivo, { imageOrientation: 'from-image' })
@@ -160,8 +174,36 @@ export function leerDimensionesJpeg(bytes: Uint8Array): { ancho: number; alto: n
   return null
 }
 
+/** Ancho y alto de un PNG (IHDR) o WebP (VP8/VP8L/VP8X) sin decodificar; null si no se reconoce. */
+function leerDimensionesPngWebp(bytes: Uint8Array): { ancho: number; alto: number } | null {
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const texto = (i: number, n: number) => String.fromCharCode(...bytes.subarray(i, i + n))
+  if (bytes.length >= 24 && bytes[0] === 0x89 && texto(1, 3) === 'PNG' && texto(12, 4) === 'IHDR') {
+    return { ancho: v.getUint32(16), alto: v.getUint32(20) }
+  }
+  if (bytes.length < 30 || texto(0, 4) !== 'RIFF' || texto(8, 4) !== 'WEBP') return null
+  const trozo = texto(12, 4)
+  const u24 = (i: number) => bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16)
+  if (trozo === 'VP8X') return { ancho: 1 + u24(24), alto: 1 + u24(27) }
+  if (trozo === 'VP8L' && bytes[20] === 0x2f) {
+    const bits = v.getUint32(21, true)
+    return { ancho: (bits & 0x3fff) + 1, alto: ((bits >>> 14) & 0x3fff) + 1 }
+  }
+  if (trozo === 'VP8 ' && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
+    return { ancho: v.getUint16(26, true) & 0x3fff, alto: v.getUint16(28, true) & 0x3fff }
+  }
+  return null
+}
+
 /** Orientaciones 5–8 intercambian ancho y alto (fotos verticales de teléfono). */
 export const intercambiaEjes = (orientacion: number) => orientacion >= 5 && orientacion <= 8
+
+/** Dimensiones del original ya orientado leídas de la cabecera (sin decodificar); null si no se pueden leer. */
+export function leerDimensionesOrientadas(bytes: Uint8Array): { ancho: number; alto: number } | null {
+  const d = leerDimensionesJpeg(bytes) ?? leerDimensionesPngWebp(bytes)
+  if (!d || d.ancho < 1 || d.alto < 1) return null
+  return intercambiaEjes(leerOrientacionExif(bytes)) ? { ancho: d.alto, alto: d.ancho } : d
+}
 
 /**
  * Orientación que falta aplicar al mapa de bits. Los navegadores actuales ya la aplican al decodificar;
@@ -197,11 +239,54 @@ export function medidasDerivado(ancho: number, alto: number, ladoLargo: number) 
   return { ancho: Math.max(1, Math.round(ancho * escala)), alto: Math.max(1, Math.round(alto * escala)), escala }
 }
 
+interface Medidas { ancho: number; alto: number; escala: number }
+
+/**
+ * Medidas del derivado `ia`: lado largo ≤ `ladoLargoIA`, pero el corto nunca baja de `ladoMinimoIA`
+ * (una panorámica se deja más larga, hasta `ladoMaximoIA`). null si la proporción no cabe en ese rango.
+ */
+export function medidasDerivadoIA(ancho: number, alto: number, cfg = CONFIG_FOTO): Medidas | null {
+  const largo = Math.max(ancho, alto)
+  const corto = Math.min(ancho, alto)
+  const escala = Math.max(Math.min(1, cfg.ladoLargoIA / largo), cfg.ladoMinimoIA / corto)
+  const m = { ancho: Math.round(ancho * escala), alto: Math.round(alto * escala), escala }
+  if (Math.max(m.ancho, m.alto) > cfg.ladoMaximoIA || Math.min(m.ancho, m.alto) < cfg.ladoMinimoIA) return null
+  return m
+}
+
+/** Tamaño al que conviene decodificar: el mayor que pida algún derivado (evidencia o ia), nunca más que el original. */
+export function medidasDecodificacion(ancho: number, alto: number, cfg = CONFIG_FOTO): Medidas {
+  const escalaIA = medidasDerivadoIA(ancho, alto, cfg)?.escala ?? 0
+  const escala = Math.min(1, Math.max(cfg.ladoLargoEvidencia / Math.max(ancho, alto), escalaIA))
+  return { ancho: Math.max(1, Math.round(ancho * escala)), alto: Math.max(1, Math.round(alto * escala)), escala }
+}
+
+export const MENSAJE_FOTO_ALARGADA = 'La foto es demasiado alargada o pequeña para analizarla. Toma una foto normal (no panorámica) de la falla.'
+
 interface Fuente { mapa: MapaBits; orientacion: number; ancho: number; alto: number }
 
+const coincide = (mapa: MapaBits, ancho: number, alto: number) =>
+  Math.abs(mapa.width - ancho) <= 1 && Math.abs(mapa.height - alto) <= 1
+
+/**
+ * Decodifica ya reducido cuando se conoce el tamaño. Si el navegador ignoró el redimensionado se usa el mapa completo;
+ * si lo aplicó sin orientar (ejes cruzados, imagen deformada) se descarta y se decodifica completa.
+ */
+async function decodificarAjustada(
+  entorno: EntornoImagen, archivo: Blob, cabecera: Uint8Array, objetivo: Medidas | null,
+): Promise<{ mapa: MapaBits; orientacion: number }> {
+  if (objetivo && objetivo.escala < 1) {
+    const mapa = await entorno.decodificar(archivo, { ancho: objetivo.ancho, alto: objetivo.alto })
+    if (coincide(mapa, objetivo.ancho, objetivo.alto)) return { mapa, orientacion: 1 }
+    if (!coincide(mapa, objetivo.alto, objetivo.ancho)) return { mapa, orientacion: orientacionPendiente(cabecera, mapa) }
+    mapa.close?.()
+  }
+  const mapa = await entorno.decodificar(archivo)
+  return { mapa, orientacion: orientacionPendiente(cabecera, mapa) }
+}
+
 /** Dibuja directo al tamaño destino (sin lienzo a resolución completa: cuida la memoria en iOS). */
-function dibujar(entorno: EntornoImagen, f: Fuente, ladoLargo: number): Lienzo {
-  const { ancho, alto, escala } = medidasDerivado(f.ancho, f.alto, ladoLargo)
+function dibujar(entorno: EntornoImagen, f: Fuente, { ancho, alto, escala }: Medidas): Lienzo {
   const lienzo = entorno.crearLienzo(ancho, alto)
   const ctx = lienzo.getContext('2d')
   if (!ctx) throw new ErrorImagen('No se pudo procesar la foto en este dispositivo.')
@@ -237,7 +322,7 @@ async function codificarConTope(lienzo: Lienzo, calidad: number, maxBytes: numbe
 
 /** Copia gris reducida para el control de calidad (~5–30 ms a 512 px en un teléfono medio). */
 function escalaDeGrises(entorno: EntornoImagen, f: Fuente, ladoLargo: number) {
-  const lienzo = dibujar(entorno, f, ladoLargo)
+  const lienzo = dibujar(entorno, f, medidasDerivado(f.ancho, f.alto, ladoLargo))
   const ctx = lienzo.getContext('2d')
   if (!ctx) throw new ErrorImagen('No se pudo procesar la foto en este dispositivo.')
   return aEscalaDeGrises(ctx.getImageData(0, 0, lienzo.width, lienzo.height).data, lienzo.width, lienzo.height)
@@ -252,18 +337,23 @@ export async function procesarFoto(archivo: Blob, entorno: EntornoImagen = entor
     throw new ErrorImagen('El archivo no es una imagen. Elige un JPEG, PNG o WebP.')
   }
   const cabecera = new Uint8Array(await archivo.slice(0, BYTES_CABECERA).arrayBuffer())
-  const mapa = await entorno.decodificar(archivo)
+  const original = leerDimensionesOrientadas(cabecera)
+  if (original && !medidasDerivadoIA(original.ancho, original.alto, cfg)) throw new ErrorImagen(MENSAJE_FOTO_ALARGADA)
+  const objetivo = original && medidasDecodificacion(original.ancho, original.alto, cfg)
+  const { mapa, orientacion } = await decodificarAjustada(entorno, archivo, cabecera, objetivo)
   try {
-    const orientacion = orientacionPendiente(cabecera, mapa)
     const gira = intercambiaEjes(orientacion)
     const fuente: Fuente = {
       mapa, orientacion, ancho: gira ? mapa.height : mapa.width, alto: gira ? mapa.width : mapa.height,
     }
-    const evidencia = await aBlob(dibujar(entorno, fuente, cfg.ladoLargoEvidencia), cfg.calidadEvidencia)
-    const ia = await codificarConTope(dibujar(entorno, fuente, cfg.ladoLargoIA), cfg.calidadIA, cfg.maxBytesIA, cfg.calidadMinima)
-    const miniatura = await aBlob(dibujar(entorno, fuente, cfg.ladoLargoMiniatura), cfg.calidadMiniatura)
+    const medidasIA = medidasDerivadoIA(fuente.ancho, fuente.alto, cfg)
+    if (!medidasIA) throw new ErrorImagen(MENSAJE_FOTO_ALARGADA)
+    const derivado = (ladoLargo: number) => dibujar(entorno, fuente, medidasDerivado(fuente.ancho, fuente.alto, ladoLargo))
+    const evidencia = await aBlob(derivado(cfg.ladoLargoEvidencia), cfg.calidadEvidencia)
+    const ia = await codificarConTope(dibujar(entorno, fuente, medidasIA), cfg.calidadIA, cfg.maxBytesIA, cfg.calidadMinima)
+    const miniatura = await aBlob(derivado(cfg.ladoLargoMiniatura), cfg.calidadMiniatura)
     const calidad = medirCalidad(escalaDeGrises(entorno, fuente, cfg.ladoAnalisisCalidad), cfg)
-    return { evidencia, ia, miniatura, calidad, ancho: fuente.ancho, alto: fuente.alto }
+    return { evidencia, ia, miniatura, calidad, ancho: original?.ancho ?? fuente.ancho, alto: original?.alto ?? fuente.alto }
   } finally {
     mapa.close?.()
   }
