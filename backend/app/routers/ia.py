@@ -25,6 +25,7 @@ from app.core.security import require_permiso
 from app.schemas.duplicado import AdhesionOut, ConfirmarAdhesionIn, PosibleDuplicadoOut
 from app.schemas.ia import AnalisisImagen, DecisionAsistida, EventoIAIn, EventoIAOut, OfertaIAInterna, RespuestaIA
 from app.schemas.config import ConfigIA
+from app.schemas.incidencia import Ubicacion
 from app.services.config_ia import ConfiguracionIANoDisponible, obtener_config_ia
 from app.services.duplicados import (
     CoincidenciaNoElegible,
@@ -250,13 +251,44 @@ async def _esperar_cache(redis, clave_cache: str) -> AnalisisImagen | None:
     return None
 
 
-def _estado_por_verificar(usuario: dict) -> tuple[UbicacionCompuertas | None, str]:
-    """Ubicación verificada (T17/T18) todavía no existe; G8 la sustituye ``_evaluar_duplicado`` cuando hay aula.
+async def _ubicacion_verificada(aula_id: str | None) -> UbicacionCompuertas | None:
+    """G5: ubicación del QR solo si el aula existe y está activa en el catálogo (T17/T18).
 
-    Mientras tanto la ubicación es ``None`` y el duplicado ``no_verificable``: G5 y G7 fallan, así que el modo
-    agéntico es inalcanzable a propósito y la salida segura es ``formulario`` (aunque el kill switch esté encendido).
+    Sin aula del QR, aula desconocida/inactiva o error al consultar devuelve ``None``: G5 y G7 fallan y la salida
+    segura es ``formulario``. La ubicación elegida en el selector nunca llega aquí (solo sirve a G8).
     """
-    return None, "no_verificable"
+    if aula_id is None:
+        return None
+    try:
+        aula = await asyncio.wait_for(
+            get_db().aulas.find_one(
+                {"id_publico": aula_id, "activa": True}, {"_id": 0, "edificio": 1, "piso": 1, "aula": 1}
+            ),
+            timeout=TIMEOUT_DUPLICADOS_SEGUNDOS,
+        )
+        if aula is None:
+            return None
+        return UbicacionCompuertas(datos=Ubicacion(**aula), fuente="qr", existe_en_catalogo=True)
+    except Exception:
+        logger.warning("No se pudo verificar el aula del QR; G5 falla cerrado", exc_info=True)
+        return None
+
+
+async def _aula_por_ubicacion(edificio: str | None, piso: int | None, aula: str | None) -> str | None:
+    """id_publico del aula activa elegida en el selector (como al crear la incidencia); solo para G8."""
+    if not edificio or piso is None or not aula:
+        return None
+    try:
+        encontrada = await asyncio.wait_for(
+            get_db().aulas.find_one(
+                {"edificio": edificio, "piso": piso, "aula": aula, "activa": True}, {"_id": 0, "id_publico": 1}
+            ),
+            timeout=TIMEOUT_DUPLICADOS_SEGUNDOS,
+        )
+    except Exception:
+        logger.warning("No se pudo resolver el aula del selector; el análisis sigue sin G8", exc_info=True)
+        return None
+    return None if encontrada is None else encontrada["id_publico"]
 
 
 # Pistas del control de calidad del cliente (frontend/src/lib/calidad.ts); cualquiera hace fallar G4.
@@ -280,10 +312,10 @@ def _entrada_compuertas(
     cupo_agentico_disponible: bool,
     calidad_cliente: tuple[str, ...] = (),
     estado_duplicado: str | None = None,
+    ubicacion: UbicacionCompuertas | None = None,
 ) -> EntradaCompuertas:
-    ubicacion, duplicado = _estado_por_verificar(usuario)
-    if estado_duplicado is not None:
-        duplicado = estado_duplicado
+    # Sin evidencia de G8 (sin aula o sin huella) el duplicado queda no_verificable y G8 falla cerrado.
+    duplicado = estado_duplicado or "no_verificable"
     return EntradaCompuertas(
         analisis=analisis,
         ahora=ahora,
@@ -325,14 +357,13 @@ async def _evaluar_duplicado(
     aula_id: str | None,
     ahora: datetime,
 ) -> tuple[str | None, PosibleDuplicadoOut | None]:
-    """G8 (T-038): busca solo en huellas_reportes con el aula del QR y la categoría detectada.
+    """G8 (T-038): busca solo en huellas_reportes con el aula (QR o selector), sin depender de la categoría.
 
-    Devuelve ``(None, None)`` si falta contexto (sin aula o sin categoría): el estado queda como lo deja
-    ``_estado_por_verificar``. Un error o un tiempo excedido se degradan a ``no_verificable``.
+    La huella se registra con la categoría final del reporte; la IA puede clasificar distinto la misma foto, así
+    que la búsqueda es por aula + ventana + distancia del dHash. Devuelve ``(None, None)`` si falta contexto (sin
+    aula, sin huella o la foto no es una incidencia). Un error o un tiempo excedido se degradan a ``no_verificable``.
     """
     if aula_id is None or huellas is None or not analisis.es_incidencia_valida:
-        return None, None
-    if analisis.categoria == "no_determinada":
         return None, None
     try:
         posible = await asyncio.wait_for(
@@ -340,7 +371,6 @@ async def _evaluar_duplicado(
                 get_db(),
                 huellas=huellas,
                 aula_id=aula_id,
-                categoria=analisis.categoria,
                 usuario_id=usuario["_id"],
                 secreto=settings.jwt_secret,
                 ahora=ahora,
@@ -429,11 +459,16 @@ async def _responder(
     latencia_ms: int | None = None,
     huellas: HuellasImagen | None = None,
     aula_id: str | None = None,
+    aula_duplicados: str | None = None,
 ) -> RespuestaIA:
     """Evalúa G1–G9, emite un analisis_id opaco y guarda el contexto temporal (falla cerrado sin Redis)."""
     # Las pistas del cliente (borrosa/oscura/sobreexpuesta) también topan la confianza: nunca autollena.
     asistida = decidir(analisis, calidad_cliente, cache=cache)
-    estado_duplicado, posible_duplicado = await _evaluar_duplicado(usuario, analisis, huellas, aula_id, ahora)
+    # aula_id solo llega del QR (G5); G8 también acepta el aula resuelta desde el selector.
+    estado_duplicado, posible_duplicado = await _evaluar_duplicado(
+        usuario, analisis, huellas, aula_id or aula_duplicados, ahora
+    )
+    ubicacion = await _ubicacion_verificada(aula_id)
     # Las compuertas reciben la confianza efectiva (topada), la misma que vio decidir.
     entrada = _entrada_compuertas(
         asistida.analisis,
@@ -443,6 +478,7 @@ async def _responder(
         cupo_agentico_disponible=cupo_agentico_disponible,
         calidad_cliente=calidad_cliente,
         estado_duplicado=estado_duplicado,
+        ubicacion=ubicacion,
     )
     decision = evaluar_compuertas(entrada)
     if decision.accion == "agentico" and entrada.ubicacion is not None:
@@ -526,8 +562,19 @@ async def analizar(
         str | None,
         Form(
             pattern=PATRON_AULA_ID,
-            description="id_publico del aula (QR). Con él, G8 busca un reporte igual en las últimas 24 h.",
+            description=(
+                "id_publico del aula (QR). Con él, G8 busca un reporte igual en las últimas 72 h y G5 "
+                "verifica que el aula exista y esté activa en el catálogo."
+            ),
         ),
+    ] = None,
+    ubicacion_edificio: Annotated[
+        str | None,
+        Form(min_length=1, max_length=60, description="Edificio elegido en el selector (sin QR); solo para G8."),
+    ] = None,
+    ubicacion_piso: Annotated[int | None, Form(ge=-5, le=50, description="Piso elegido en el selector.")] = None,
+    ubicacion_aula: Annotated[
+        str | None, Form(min_length=1, max_length=60, description="Aula elegida en el selector.")
     ] = None,
 ):
     pistas_calidad = _calidad_cliente(calidad_cliente)
@@ -575,6 +622,9 @@ async def analizar(
         "cupo_agentico_disponible": cupo_agentico,
         "calidad_cliente": pistas_calidad,
         "aula_id": aula_id,
+        "aula_duplicados": None
+        if aula_id is not None
+        else await _aula_por_ubicacion(ubicacion_edificio, ubicacion_piso, ubicacion_aula),
     }
 
     async def responder_desde_cache(analisis: AnalisisImagen) -> RespuestaIA:

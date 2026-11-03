@@ -11,7 +11,7 @@ from app.services.duplicados import (
     calcular_huellas,
     calcular_sha256,
     distancia_hamming,
-    dentro_ventana_24h,
+    dentro_ventana_duplicados,
     validar_dhash,
     validar_sha256,
 )
@@ -117,14 +117,14 @@ def test_validacion_rechaza_dhash_invalido(valor):
         validar_dhash(valor)
 
 
-def test_ventana_incluye_exactamente_24_horas_y_excluye_mas():
+def test_ventana_incluye_exactamente_72_horas_y_excluye_mas():
     ahora = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
-    assert dentro_ventana_24h(ahora, ahora)
-    assert dentro_ventana_24h(ahora - timedelta(hours=24), ahora)
-    assert not dentro_ventana_24h(ahora - timedelta(hours=24, microseconds=1), ahora)
-    assert not dentro_ventana_24h(ahora + timedelta(microseconds=1), ahora)
+    assert dentro_ventana_duplicados(ahora, ahora)
+    assert dentro_ventana_duplicados(ahora - timedelta(hours=72), ahora)
+    assert not dentro_ventana_duplicados(ahora - timedelta(hours=72, microseconds=1), ahora)
+    assert not dentro_ventana_duplicados(ahora + timedelta(microseconds=1), ahora)
 
 
 def test_ventana_rechaza_fecha_sin_zona_horaria():
     with pytest.raises(ValueError, match="zona horaria"):
-        dentro_ventana_24h(datetime(2026, 10, 25), datetime.now(timezone.utc))
+        dentro_ventana_duplicados(datetime(2026, 10, 25), datetime.now(timezone.utc))

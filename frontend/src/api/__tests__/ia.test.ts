@@ -51,6 +51,23 @@ describe('analizarImagen', () => {
     expect(cuerpo.get('aula_id')).toBe('AbCdEfGhIjKlMnOpQrStUv')
   })
 
+  it('sin QR envía el aula del selector como campos de ubicación; con QR solo aula_id', async () => {
+    const fetchMock = vi.fn(async () => respuesta(200, ANALISIS))
+    vi.stubGlobal('fetch', fetchMock)
+    const ubicacion = { edificio: 'Edificio A', piso: 0, aula: 'A-101' }
+
+    await analizarImagen({ imagen: imagen(), ubicacion })
+    await analizarImagen({ imagen: imagen(), aula_id: 'AbCdEfGhIjKlMnOpQrStUv', ubicacion })
+
+    const [selector, qr] = fetchMock.mock.calls.map((c) => (c as unknown as [string, RequestInit])[1].body as FormData)
+    expect(selector.get('ubicacion_edificio')).toBe('Edificio A')
+    expect(selector.get('ubicacion_piso')).toBe('0')
+    expect(selector.get('ubicacion_aula')).toBe('A-101')
+    expect(selector.has('aula_id')).toBe(false)
+    expect(qr.get('aula_id')).toBe('AbCdEfGhIjKlMnOpQrStUv')
+    expect(qr.has('ubicacion_edificio')).toBe(false)
+  })
+
   it('aborta a los 30s', async () => {
     vi.useFakeTimers()
     const señales: AbortSignal[] = []

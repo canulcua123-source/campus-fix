@@ -87,7 +87,6 @@ async def _detectar(
     datos: bytes | None = None,
     *,
     aula_id: str = AULA_A,
-    categoria: str = "infraestructura",
     quien: str = "reportante_b",
     ahora: datetime | None = None,
 ):
@@ -96,7 +95,6 @@ async def _detectar(
         datos_imagen=datos or _imagen(),
         tipo_mime="image/png",
         aula_id=aula_id,
-        categoria=categoria,
         usuario_id=api.oid(quien),
         secreto=settings.jwt_secret,
         ahora=ahora,
@@ -133,12 +131,12 @@ async def test_otra_aula_no_dup(api):
     assert await _detectar(api, aula_id=AULA_B) is None
 
 
-async def test_mas_24h_no_dup(api):
+async def test_mas_72h_no_dup(api):
     _, huella = await _registrar_reporte(api)
     ahora = datetime.now(timezone.utc)
     await api.db.huellas_reportes.update_one(
         {"_id": huella["_id"]},
-        {"$set": {"fecha": ahora - timedelta(hours=24, seconds=1)}},
+        {"$set": {"fecha": ahora - timedelta(hours=72, seconds=1)}},
     )
 
     assert await _detectar(api, ahora=ahora) is None
@@ -163,7 +161,7 @@ async def test_respuesta_sin_pii_ajena(api):
         assert prohibido not in serializado
 
 
-async def test_categoria_distinta_y_dhash_11_no_coinciden(api):
+async def test_categoria_distinta_si_coincide_y_dhash_11_no(api):
     ahora = datetime.now(timezone.utc)
     await api.db.huellas_reportes.insert_one(
         {
@@ -177,22 +175,20 @@ async def test_categoria_distinta_y_dhash_11_no_coinciden(api):
             "elegible": True,
         }
     )
-    assert (
-        await buscar_por_huellas(
-            api.db,
-            aula_id=AULA_A,
-            categoria="academico",
-            sha256="b" * 64,
-            dhash="0000000000000000",
-            ahora=ahora,
-        )
-        is None
+    # #181: la huella guarda la categoría final del reporte; la búsqueda no depende de la categoría de la IA.
+    misma_foto = await buscar_por_huellas(
+        api.db,
+        aula_id=AULA_A,
+        sha256="b" * 64,
+        dhash="0000000000000000",
+        ahora=ahora,
     )
+    assert misma_foto is not None
+    assert misma_foto["categoria"] == "infraestructura"
     assert (
         await buscar_por_huellas(
             api.db,
             aula_id=AULA_A,
-            categoria="infraestructura",
             sha256="b" * 64,
             dhash="00000000000007ff",
             ahora=ahora,
@@ -201,7 +197,7 @@ async def test_categoria_distinta_y_dhash_11_no_coinciden(api):
     )
 
 
-async def test_dhash_10_y_exactamente_24h_si_coinciden(api):
+async def test_dhash_10_y_exactamente_72h_si_coinciden(api):
     ahora = datetime.now(timezone.utc)
     await api.db.huellas_reportes.insert_one(
         {
@@ -211,17 +207,17 @@ async def test_dhash_10_y_exactamente_24h_si_coinciden(api):
             "dhash": "0000000000000000",
             "incidencia_id": ObjectId(),
             "codigo": "INF-PRUEBA-2",
-            "fecha": ahora - timedelta(hours=24),
+            # Fecha real de hace 71 h y búsqueda "1 h en el futuro": borde exacto de 72 h sin que el TTL la borre antes.
+            "fecha": ahora - timedelta(hours=71),
             "elegible": True,
         }
     )
     resultado = await buscar_por_huellas(
         api.db,
         aula_id=AULA_A,
-        categoria="infraestructura",
         sha256="b" * 64,
         dhash="00000000000003ff",
-        ahora=ahora,
+        ahora=ahora + timedelta(hours=1),
     )
     assert resultado is not None
 
@@ -360,7 +356,9 @@ async def test_colecciones_t038_tienen_validadores_e_indices(api):
         assert configuracion["validator"]["$jsonSchema"]["additionalProperties"] is False
 
     huellas = await api.db.huellas_reportes.index_information()
-    ttl = huellas["huellas_ttl_24h"]  # index_information() usa el nombre como clave
-    assert ttl["expireAfterSeconds"] == 86400
+    # El nombre depende de cuándo se creó la base (huellas_ttl_24h ajustado por collMod o huellas_ttl_ventana).
+    ttl = [i for i in huellas.values() if i["key"] == [("fecha", 1)] and "expireAfterSeconds" in i]
+    assert len(ttl) == 1
+    assert ttl[0]["expireAfterSeconds"] == 72 * 3600
     compuesto = huellas["huellas_aula_categoria_fecha"]["key"]
     assert compuesto == [("aula_id", 1), ("categoria", 1), ("fecha", -1)]

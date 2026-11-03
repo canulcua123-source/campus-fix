@@ -29,7 +29,11 @@ from app.core.security import filtro_alcance
 from app.schemas.duplicado import AdhesionOut, PosibleDuplicadoOut
 
 MAX_BYTES_IMAGEN = 5 * 1024 * 1024
-VENTANA_DUPLICADOS = timedelta(hours=24)
+VENTANA_DUPLICADOS = timedelta(hours=72)
+# Minutos maximos que puede reportar una coincidencia (la ventana completa).
+MAX_MINUTOS_COINCIDENCIA = int(VENTANA_DUPLICADOS.total_seconds() // 60)
+# Tope de huellas candidatas por aula al comparar dHash (la ventana y el TTL ya las acotan).
+MAX_CANDIDATAS = 200
 TTL_COINCIDENCIA = timedelta(minutes=30)
 DISTANCIA_DHASH_MAXIMA = 10
 ESTADOS_ELEGIBLES = frozenset({"abierta", "en_proceso", "en_espera"})
@@ -135,15 +139,19 @@ def distancia_hamming(dhash_a: str, dhash_b: str) -> int:
     return (a ^ b).bit_count()
 
 
-def dentro_ventana_24h(fecha: datetime, ahora: datetime | None = None) -> bool:
+def dentro_ventana_duplicados(fecha: datetime, ahora: datetime | None = None) -> bool:
     ahora_utc = _fecha_utc(ahora or datetime.now(timezone.utc), "ahora")
     fecha_utc = _fecha_utc(fecha, "fecha")
     return ahora_utc - VENTANA_DUPLICADOS <= fecha_utc <= ahora_utc
 
 
-def _validar_contexto(aula_id: str, categoria: str) -> None:
+def _validar_aula(aula_id: str) -> None:
     if not isinstance(aula_id, str) or PATRON_AULA.fullmatch(aula_id) is None:
         raise ValueError("aula_id no tiene el formato esperado")
+
+
+def _validar_contexto(aula_id: str, categoria: str) -> None:
+    _validar_aula(aula_id)
     if not isinstance(categoria, str) or PATRON_CATEGORIA.fullmatch(categoria) is None:
         raise ValueError("categoria no tiene el formato esperado")
 
@@ -161,19 +169,23 @@ async def buscar_por_huellas(
     db: AsyncDatabase,
     *,
     aula_id: str,
-    categoria: str,
     sha256: str,
     dhash: str,
     ahora: datetime | None = None,
 ) -> dict[str, Any] | None:
-    """Busca solo en huellas_reportes y aplica una ventana explicita de 24 h."""
-    _validar_contexto(aula_id, categoria)
+    """Busca solo en huellas_reportes, por aula y dentro de ``VENTANA_DUPLICADOS``.
+
+    No filtra por categoria: la huella se registra con la categoria final que eligio la persona y la IA puede
+    clasificar distinto la misma foto. Gana la coincidencia exacta (SHA-256); si no hay, la de menor distancia
+    de Hamming del dHash dentro de ``DISTANCIA_DHASH_MAXIMA`` (empate: la mas reciente). El indice
+    ``{aula_id, categoria, fecha}`` sigue sirviendo: igualdad en aula_id y rango de fecha en los limites.
+    """
+    _validar_aula(aula_id)
     validar_sha256(sha256)
     validar_dhash(dhash)
     instante = _fecha_utc(ahora or datetime.now(timezone.utc), "ahora")
     base = {
         "aula_id": aula_id,
-        "categoria": categoria,
         "elegible": True,
         "fecha": {"$gte": instante - VENTANA_DUPLICADOS, "$lte": instante},
     }
@@ -181,11 +193,15 @@ async def buscar_por_huellas(
     exacta = await db.huellas_reportes.find_one({**base, "sha256": sha256}, proyeccion, sort=[("fecha", -1)])
     if exacta is not None:
         return exacta
-    cursor = db.huellas_reportes.find(base, proyeccion).sort("fecha", -1)
+    cursor = db.huellas_reportes.find(base, proyeccion).sort("fecha", -1).limit(MAX_CANDIDATAS)
+    mejor: dict[str, Any] | None = None
+    mejor_distancia = DISTANCIA_DHASH_MAXIMA + 1
     async for candidata in cursor:
-        if distancia_hamming(dhash, candidata["dhash"]) <= DISTANCIA_DHASH_MAXIMA:
-            return candidata
-    return None
+        distancia = distancia_hamming(dhash, candidata["dhash"])
+        # Orden por fecha descendente: con "<" estricto, a igual distancia queda la mas reciente.
+        if distancia < mejor_distancia:
+            mejor, mejor_distancia = candidata, distancia
+    return mejor
 
 
 async def _crear_coincidencia(
@@ -220,7 +236,7 @@ async def _crear_coincidencia(
         coincidencia_id=token,
         codigo=huella["codigo"],
         categoria=huella["categoria"],
-        reportado_hace_minutos=min(minutos, 1440),
+        reportado_hace_minutos=min(minutos, MAX_MINUTOS_COINCIDENCIA),
         adhesiones=adhesiones,
     )
 
@@ -231,7 +247,6 @@ async def detectar_duplicado(
     datos_imagen: bytes,
     tipo_mime: str,
     aula_id: str,
-    categoria: str,
     usuario_id: ObjectId,
     secreto: str,
     ahora: datetime | None = None,
@@ -241,7 +256,6 @@ async def detectar_duplicado(
         db,
         huellas=calcular_huellas(datos_imagen, tipo_mime),
         aula_id=aula_id,
-        categoria=categoria,
         usuario_id=usuario_id,
         secreto=secreto,
         ahora=ahora,
@@ -253,7 +267,6 @@ async def detectar_duplicado_por_huellas(
     *,
     huellas: HuellasImagen,
     aula_id: str,
-    categoria: str,
     usuario_id: ObjectId,
     secreto: str,
     ahora: datetime | None = None,
@@ -263,7 +276,6 @@ async def detectar_duplicado_por_huellas(
     coincidencia = await buscar_por_huellas(
         db,
         aula_id=aula_id,
-        categoria=categoria,
         sha256=huellas.sha256,
         dhash=huellas.dhash,
         ahora=instante,

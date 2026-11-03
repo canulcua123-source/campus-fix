@@ -40,6 +40,21 @@ UBICACION = UbicacionCompuertas(
     existe_en_catalogo=True,
 )
 
+
+
+def _ubicacion_y_sin_duplicado(monkeypatch) -> None:
+    """G5 con aula del QR verificada y G8 sin duplicado, sin depender del catálogo ni de huellas_reportes."""
+
+    async def ubicacion(_aula_id):
+        return UBICACION
+
+    async def sin_duplicado(*_args):
+        return "no_encontrado", None
+
+    monkeypatch.setattr(ia_router, "_ubicacion_verificada", ubicacion)
+    monkeypatch.setattr(ia_router, "_evaluar_duplicado", sin_duplicado)
+
+
 # Ruta de prueba: T-036 (POST /incidencias/desde-foto) usará exactamente esta dependencia.
 _ruta_prueba = APIRouter()
 
@@ -88,7 +103,7 @@ def ia_falsa(monkeypatch):
 @pytest_asyncio.fixture(loop_scope="session")
 async def agentico_verificable(api, monkeypatch):
     """Simula lo que aportarán T17/T18/T22 (ubicación por QR y sin duplicados) y enciende el kill switch."""
-    monkeypatch.setattr(ia_router, "_estado_por_verificar", lambda _usuario: (UBICACION, "no_encontrado"))
+    _ubicacion_y_sin_duplicado(monkeypatch)
     inicial = (await api.c.get("/config/ia", headers=api.h("superadmin"))).json()
     r = await api.c.patch("/config/ia", json={"modo_agentico_habilitado": True}, headers=api.h("superadmin"))
     assert r.status_code == 200, r.text
@@ -218,7 +233,7 @@ async def test_cupo_por_aula_y_hora_agotado_degrada_a_formulario(api, ia_falsa, 
 
 
 async def test_kill_switch_apagado_siempre_devuelve_formulario(api, ia_falsa, monkeypatch):
-    monkeypatch.setattr(ia_router, "_estado_por_verificar", lambda _usuario: (UBICACION, "no_encontrado"))
+    _ubicacion_y_sin_duplicado(monkeypatch)
     clave_usuario, clave_aula = _claves(api)
     assert (await api.c.get("/config/ia", headers=api.h("superadmin"))).json()["modo_agentico_habilitado"] is False
 

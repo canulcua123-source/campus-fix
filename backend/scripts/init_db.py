@@ -793,6 +793,23 @@ async def asegurar_coleccion(db, nombre: str, validador: dict | None = None) -> 
         print(f"~ validador actualizado en {nombre}")
 
 
+async def asegurar_indice_ttl(db, nombre_coleccion: str, campo: str, segundos: int, nombre: str) -> None:
+    """Crea el índice TTL o, si ya existe sobre ``campo`` con otro plazo, lo ajusta con ``collMod`` (BD-10).
+
+    Idempotente: con el mismo plazo no hace nada. Conserva el nombre del índice existente (p. ej. el antiguo
+    ``huellas_ttl_24h``) para no borrar ni recrear índices; solo cambia ``expireAfterSeconds``.
+    """
+    coleccion = getattr(db, nombre_coleccion)
+    for nombre_actual, info in (await coleccion.index_information()).items():
+        if [tuple(k) for k in info.get("key", [])] != [(campo, 1)] or "expireAfterSeconds" not in info:
+            continue
+        if int(info["expireAfterSeconds"]) != segundos:
+            await db.command("collMod", nombre_coleccion, index={"name": nombre_actual, "expireAfterSeconds": segundos})
+            print(f"~ TTL de {nombre_coleccion}.{nombre_actual} ajustado a {segundos} s")
+        return
+    await coleccion.create_index(campo, expireAfterSeconds=segundos, name=nombre)
+
+
 async def crear_indices(db) -> None:
     inc = db.incidencias_campus
     await inc.create_index([("categoria", ASCENDING), ("estado", ASCENDING), ("ubicacion.edificio", ASCENDING)])
@@ -827,11 +844,8 @@ async def crear_indices(db) -> None:
             [("aula_id", ASCENDING), ("categoria", ASCENDING), ("fecha", DESCENDING)],
             name="huellas_aula_categoria_fecha",
         )
-        await db.huellas_reportes.create_index(
-            "fecha",
-            expireAfterSeconds=24 * 3600,
-            name="huellas_ttl_24h",
-        )
+        # Ventana de duplicados de G8 (VENTANA_DUPLICADOS en app/services/duplicados.py): 72 h.
+        await asegurar_indice_ttl(db, "huellas_reportes", "fecha", 72 * 3600, "huellas_ttl_ventana")
         await db.huellas_reportes.create_index(
             "incidencia_id",
             unique=True,

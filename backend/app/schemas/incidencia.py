@@ -96,7 +96,8 @@ class IncidenciaIn(BaseModel):
         default=None,
         description=(
             "Análisis de POST /ia/analizar-imagen del que parte el reporte. No se guarda en la incidencia: "
-            "el servidor lo usa para cerrar la oferta en ia_eventos (enviado, editado o fallback)."
+            "el servidor lo usa para cerrar la oferta en ia_eventos (enviado, editado o fallback) y para registrar "
+            "la huella de la foto en huellas_reportes (G8), aunque la sugerencia se haya descartado."
         ),
     )
 
