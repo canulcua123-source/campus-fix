@@ -16,7 +16,7 @@ class PosibleDuplicadoOut(BaseModel):
     coincidencia_id: str = Field(pattern=PATRON_COINCIDENCIA)
     codigo: str = Field(min_length=1, max_length=64)
     categoria: str = Field(pattern=PATRON_CATEGORIA)
-    reportado_hace_minutos: int = Field(ge=0, le=1440)
+    reportado_hace_minutos: int = Field(ge=0, le=4320)  # ventana de G8: 72 h
     adhesiones: int = Field(ge=0)
 
 

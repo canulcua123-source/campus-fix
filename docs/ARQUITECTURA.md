@@ -167,7 +167,7 @@ utm-desk/
 | `auditoria` | Quién hizo qué (solo superadmin) |
 | `configuracion_ia` | Ajustes de la IA |
 | `ia_eventos` | Cada sugerencia de IA y si se aceptó (base de Métricas IA) |
-| `huellas_reportes` | Huella de cada foto (SHA-256 exacto + dHash parecido), ventana de 24 h |
+| `huellas_reportes` | Huella de cada foto (SHA-256 exacto + dHash parecido), ventana de 72 h |
 | `coincidencias_duplicados` | Cuando una foto nueva se parece a una existente |
 | `adhesiones_reportes` | Cuando alguien se une a un reporte existente en lugar de crear otro |
 

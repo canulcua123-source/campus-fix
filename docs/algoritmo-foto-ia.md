@@ -114,7 +114,7 @@ Decisiones de UX y su fundamento:
 | G5 | Ubicación conocida | `ubicacion` viene de un **QR de aula válido** o fue **confirmada por el usuario en las últimas 4 h**, y existe en el catálogo de aulas | Pregunta solo la ubicación (un selector) y vuelve a evaluar |
 | G6 | Sin decisiones reservadas | `prioridad_sugerida ∉ {critica}` y `riesgo_seguridad != alto` | Formulario con banner "¿Hay riesgo para personas?" y confirmación explícita de la prioridad |
 | G7 | Esquema completo | El mapeo determinista `AnalisisImagen → IncidenciaIn` valida con Pydantic (título ≥ 5, descripción ≥ 10, enums) | Formulario prellenado |
-| G8 | Sin duplicado probable | No existe incidencia en `abierta / en_proceso / en_espera` con el mismo `edificio + aula + categoria` en las últimas 24 h **y** (mismo SHA-256 **o** dHash con Hamming ≤ 10 **o** mismo `tipo_dano`) | "¿Ya se reportó esto?" ⇒ **Sí:** no se crea ticket; se registra una *adhesión* (+1 reportante) · **No:** reenvía con `confirmar_no_duplicado=true` (ver nota de alcance abajo) |
+| G8 | Sin duplicado probable | No existe incidencia en `abierta / en_proceso / en_espera` en la misma aula (cualquier categoría, #181) en las últimas 72 h **y** (mismo SHA-256 **o** dHash con Hamming ≤ 10 **o** mismo `tipo_dano`) | "¿Ya se reportó esto?" ⇒ **Sí:** no se crea ticket; se registra una *adhesión* (+1 reportante) · **No:** reenvía con `confirmar_no_duplicado=true` (ver nota de alcance abajo) |
 | G9 | Permisos y cupos | `ia:usar` **+** `incidencias:crear` **+** `evidencias:subir`; cupo agéntico diario disponible; *kill switch* `ia_modo_agentico_habilitado` | Formulario (o mensaje de cupo) |
 
 #### A.2.1 Contrato implementado por T19
@@ -154,20 +154,28 @@ disponible, tanto la creación como la consulta fallan cerradas con `503`; nunca
 decisión sin poder guardar su contexto temporal.
 
 **G8 implementado (T-033/T-038).** `POST /ia/analizar-imagen` calcula SHA-256 y dHash de los bytes que recibe (el
-derivado `ia`) y los guarda en el análisis temporal (`imagen_sha256`, `imagen_dhash`). Si la PWA manda `aula_id` (QR) y la
-IA determinó la categoría, consulta `huellas_reportes` (misma aula + categoría, `elegible`, últimas 24 h, SHA-256 igual o
-Hamming ≤ 10): coincidencia ⇒ G8 `probable` y `accion: "duplicado"` con `duplicado` (folio, categoría, minutos,
+derivado `ia`) y los guarda en el análisis temporal (`imagen_sha256`, `imagen_dhash`). Si la PWA manda `aula_id` (QR) o,
+sin QR, el aula ya elegida en el selector (`ubicacion_edificio/piso/aula`, que el servidor resuelve en el catálogo
+`aulas`), consulta `huellas_reportes` (misma aula, `elegible`, últimas 72 h, SHA-256 igual o la menor distancia de
+Hamming ≤ 10). No filtra por categoría (#181): la huella guarda la categoría final del reporte y la IA puede clasificar
+distinto la misma foto. Coincidencia ⇒ G8 `probable` y `accion: "duplicado"` con `duplicado` (folio, categoría, minutos,
 adhesiones y un `coincidencia_id` opaco de 30 min ligado al actor por HMAC); sin coincidencia ⇒ `no_encontrado`; sin
 aula ⇒ `no_verificable`; error o > 2 s ⇒ `no_verificable` (el análisis sigue). `POST /incidencias` con `analisis_id`
-registra la huella con esas mismas huellas (la foto no vuelve a pasar por la API) resolviendo el aula por
+registra la huella con esas mismas huellas (la foto no vuelve a pasar por la API), aunque la persona haya descartado
+la sugerencia (la oferta conserva su resultado `fallback`/`deshecho`), resolviendo el aula por
 `edificio + piso + aula` en el catálogo `aulas`; si no existe, falla o venció el análisis, no hay huella y el reporte se
 crea igual. «Yo también lo vi» llama a `POST /ia/duplicados/adhesiones` (+1 adhesión, ningún ticket nuevo, cierra la
 oferta como `duplicado_sumado`); «Es otra falla» sigue el formulario normal. La elegibilidad se apaga al cerrar,
 resolver o retirar el reporte (`actualizar_elegibilidad_huella`).
 
+**G5 implementado (#181).** Con `aula_id` del QR que existe y está activa en `aulas`, el servidor construye
+`UbicacionCompuertas(fuente="qr", existe_en_catalogo=True)` con su edificio, piso y aula; un aula desconocida, inactiva o
+un error al consultar dejan la ubicación vacía y G5/G7 fallan. El aula del selector solo sirve a G8. El *kill switch*
+(`modo_agentico_habilitado`) sigue apagado por defecto, así que G9 mantiene la salida `formulario` hasta que se encienda.
+
 **Nota de alcance para G8 (choca con `AGENTS.md`, regla 6).** Toda consulta a `incidencias_campus` debe llevar `filtro_alcance(usuario)`, y un alumno tiene alcance `propio`. Buscar duplicados de **otros** usuarios en esa colección violaría la regla y filtraría datos ajenos.
 
-Propuesta, **que requiere aprobación del PO y de quien mantiene `AGENTS.md`**: una colección aparte `huellas_reportes` con TTL de 24 h, que se escribe al crear cada ticket con foto:
+Propuesta, **que requiere aprobación del PO y de quien mantiene `AGENTS.md`**: una colección aparte `huellas_reportes` con TTL de 72 h (era 24 h; ampliado en #181), que se escribe al crear cada ticket con foto:
 
 ```json
 { "aula_id": "…", "categoria": "infraestructura", "tipo_dano": "filtracion",

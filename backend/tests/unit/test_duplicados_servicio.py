@@ -38,6 +38,9 @@ class CursorFalso:
     def sort(self, *_args):
         return self
 
+    def limit(self, *_args):
+        return self
+
     def __aiter__(self):
         async def iterador():
             for documento in self.documentos:
@@ -70,7 +73,6 @@ async def test_busqueda_exacta_solo_usa_huellas_y_filtro_temporal():
     resultado = await buscar_por_huellas(
         db,
         aula_id=AULA_ID,
-        categoria="infraestructura",
         sha256="a" * 64,
         dhash="f" * 16,
         ahora=ahora,
@@ -79,8 +81,29 @@ async def test_busqueda_exacta_solo_usa_huellas_y_filtro_temporal():
     assert resultado == documento
     filtro = coleccion.find_one.await_args.args[0]
     assert filtro["elegible"] is True
-    assert filtro["fecha"] == {"$gte": ahora - timedelta(hours=24), "$lte": ahora}
+    assert filtro["fecha"] == {"$gte": ahora - timedelta(hours=72), "$lte": ahora}
+    assert "categoria" not in filtro  # la categoría de la IA no restringe la búsqueda
     assert not hasattr(db, "incidencias_campus")
+
+
+@pytest.mark.asyncio
+async def test_busqueda_perceptual_ignora_categoria_y_elige_menor_distancia():
+    ahora = datetime.now(timezone.utc)
+    lejana = {**_huella(ahora, dhash="00000000000000ff"), "categoria": "computo_redes"}
+    cercana = {**_huella(ahora, dhash="0000000000000003"), "categoria": "academico"}
+    filtros = []
+
+    def find(filtro, *_args):
+        filtros.append(filtro)
+        return CursorFalso([lejana, cercana])  # la más reciente primero, pero más lejana
+
+    db = SimpleNamespace(huellas_reportes=SimpleNamespace(find_one=AsyncMock(return_value=None), find=find))
+
+    resultado = await buscar_por_huellas(db, aula_id=AULA_ID, sha256="b" * 64, dhash="0000000000000000", ahora=ahora)
+
+    assert resultado is cercana
+    assert "categoria" not in filtros[0]
+    assert filtros[0]["aula_id"] == AULA_ID
 
 
 @pytest.mark.asyncio
@@ -95,7 +118,6 @@ async def test_busqueda_perceptual_incluye_10_y_excluye_11():
     dentro = await buscar_por_huellas(
         db,
         aula_id=AULA_ID,
-        categoria="infraestructura",
         sha256="b" * 64,
         dhash="00000000000003ff",
         ahora=ahora,
@@ -103,7 +125,6 @@ async def test_busqueda_perceptual_incluye_10_y_excluye_11():
     fuera = await buscar_por_huellas(
         db,
         aula_id=AULA_ID,
-        categoria="infraestructura",
         sha256="b" * 64,
         dhash="00000000000007ff",
         ahora=ahora,
@@ -127,7 +148,6 @@ async def test_detectar_emite_capacidad_opaca_y_respuesta_sin_pii():
         datos_imagen=_png(),
         tipo_mime="image/png",
         aula_id=AULA_ID,
-        categoria="infraestructura",
         usuario_id=ObjectId(),
         secreto=SECRETO,
         ahora=ahora,

@@ -19,7 +19,7 @@ import { procesarFotoEnSegundoPlano } from '../lib/fotoEnSegundoPlano'
 import { pistasCalidad, type CalidadCliente } from '../lib/calidad'
 import { ETIQUETAS_PRIORIDAD, OPCIONES_CATEGORIA } from '../lib/etiquetas'
 import { ACCEPT_CAMARA, ACCEPT_FOTO, ErrorImagen } from '../lib/imagen'
-import type { Adhesion, EventoIAIn, PosibleDuplicado, RespuestaIA } from '../schemas/ia'
+import { ubicacionAnalisisSchema, type Adhesion, type EventoIAIn, type PosibleDuplicado, type RespuestaIA } from '../schemas/ia'
 import { incidenciaSchema, LIMITES, PRIORIDADES, type Categoria, type IncidenciaCreada, type IncidenciaForm, type Prioridad } from '../schemas/incidencia'
 import ReporteEnviado, { type EstadoFoto } from './ReporteEnviado'
 
@@ -104,6 +104,8 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const vistaUrl = useRef<string | null>(null)
   /** Oferta de IA aún sin resolver: se cierra al enviar (servidor) o al descartarla (POST /ia/eventos). */
   const ofertaPendiente = useRef<string | null>(null)
+  /** Análisis de la foto actual: se envía al crear aunque la oferta se haya descartado, para registrar su huella (G8). */
+  const analisisFoto = useRef<string | null>(null)
   const [paso, setPaso] = useState<'foto' | 'formulario'>('foto')
   const [vista, setVista] = useState<string | null>(null)
   const [foto, setFoto] = useState<Blob | null>(null)
@@ -119,7 +121,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const [errorFoto, setErrorFoto] = useState<string | null>(null)
   const [estadoFoto, setEstadoFoto] = useState<EstadoFoto>('sin_foto')
   const [calidadPendiente, setCalidadPendiente] = useState<{ ia: Blob; pistas: CalidadCliente[] } | null>(null)
-  /** G8: la misma falla ya se reportó en esta aula (solo llega con el aula del QR). */
+  /** G8: la misma falla ya se reportó en esta aula (con el aula del QR o la ya elegida en el selector). */
   const [duplicado, setDuplicado] = useState<PosibleDuplicado | null>(null)
   const [sumando, setSumando] = useState(false)
   const [errorSumar, setErrorSumar] = useState<string | null>(null)
@@ -127,7 +129,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
   const progresoFoto = useRef<ReanudarSubida>({}) // conserva firma y PUT hechos para reintentar solo el paso fallido
 
   const galeria = useRef<HTMLInputElement>(null)
-  const { register, handleSubmit, setValue, setError, clearErrors, getFieldState, control, formState } = useForm<IncidenciaForm>({
+  const { register, handleSubmit, setValue, getValues, setError, clearErrors, getFieldState, control, formState } = useForm<IncidenciaForm>({
     // Valida al salir del campo y, una vez tocado, al corregirlo (UX-15, doc §7.1).
     mode: 'onTouched',
     resolver: zodResolver(incidenciaSchema),
@@ -248,6 +250,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     setCriticaPendiente(false)
     setCamposIA([])
     resolverOferta('deshecho') // otra foto reemplaza la sugerencia anterior sin usarla
+    analisisFoto.current = null
     setIa(null) // no deja visible la sugerencia de la foto anterior
     setDuplicado(null)
     setErrorSumar(null)
@@ -269,18 +272,27 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     }
   }
 
+  /** Sin QR, el aula ya elegida en el selector deja que G8 busque duplicados; incompleta o inválida no se envía. */
+  function ubicacionElegida() {
+    const elegida = ubicacionAnalisisSchema.safeParse(getValues('ubicacion'))
+    return elegida.success ? elegida.data : undefined
+  }
+
   async function analizar(imagen: Blob, pistas: CalidadCliente[], control: AbortController) {
+    const qr = AULA_ID_VALIDO.test(aulaId)
     const sugerencia = await analizarImagen(
       {
         imagen,
         contexto: contexto.trim() || undefined,
         calidad_cliente: pistas.length ? pistas : undefined,
-        aula_id: AULA_ID_VALIDO.test(aulaId) ? aulaId : undefined,
+        aula_id: qr ? aulaId : undefined,
+        ubicacion: qr ? undefined : ubicacionElegida(),
       },
       { signal: control.signal },
     )
     if (!vigente(control)) return
     ofertaPendiente.current = sugerencia.analisis_id
+    analisisFoto.current = sugerencia.analisis_id
     setIa(sugerencia)
     setDuplicado(sugerencia.accion === 'duplicado' && sugerencia.duplicado ? sugerencia.duplicado : null)
     // rechazar/preguntar: solo se muestra el mensaje; el usuario llena el formulario.
@@ -364,6 +376,7 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
         analisisId ? { coincidencia_id: duplicado.coincidencia_id, analisis_id: analisisId } : { coincidencia_id: duplicado.coincidencia_id },
       )
       ofertaPendiente.current = null // el servidor la cerró como duplicado_sumado
+      analisisFoto.current = null
       if (montado.current) setSumado(adhesion)
     } catch (e) {
       if (!montado.current) return
@@ -434,10 +447,12 @@ function FlujoReporte({ onReportarOtro }: { onReportarOtro: () => void }) {
     cancelarAnalisis()
     setErrorEnvio(null)
     try {
-      // El servidor compara con la sugerencia guardada y cierra la oferta como enviada, editada o fallback.
-      const analisisId = ofertaPendiente.current
+      // El servidor registra la huella de la foto (G8) y, si la oferta sigue abierta, la cierra como enviada,
+      // editada o fallback; una oferta ya descartada conserva su evento (resultado final único en ia_eventos).
+      const analisisId = analisisFoto.current
       const nueva = await crear(analisisId ? { ...datos, analisis_id: analisisId } : datos)
       ofertaPendiente.current = null
+      analisisFoto.current = null
       setCreada(nueva)
       if (foto) await adjuntarFoto(nueva._id)
     } catch (e) {

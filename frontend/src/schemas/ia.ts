@@ -7,6 +7,13 @@ import { RIESGOS, TIPOS_DANO } from './infraestructura'
 export const TIPOS_IMAGEN_IA = ['image/jpeg', 'image/png', 'image/webp'] as const
 export const MAX_BYTES_IMAGEN_IA = 5 * 1024 * 1024
 
+/** Aula elegida en el selector (Form `ubicacion_edificio/piso/aula`): mismos límites que `Ubicacion` de Pydantic. */
+export const ubicacionAnalisisSchema = z.object({
+  edificio: z.string().min(1).max(60),
+  piso: z.number().int().min(-5).max(50),
+  aula: z.string().min(1).max(60),
+})
+
 /** Entrada multipart: `imagen` (JPEG/PNG/WebP ≤ 5 MB) y `contexto` opcional (≤ 500). */
 export const analizarImagenSchema = z.object({
   imagen: z
@@ -16,8 +23,10 @@ export const analizarImagenSchema = z.object({
   contexto: z.string().max(500, 'Máximo 500 caracteres').optional(),
   /** Pistas del control de calidad del cliente (Form `calidad_cliente`, CALIDADES_CLIENTE de routers/ia.py). */
   calidad_cliente: z.array(z.enum(['borrosa', 'oscura', 'sobreexpuesta'])).max(3).optional(),
-  /** id_publico del aula (QR): con él, G8 busca el mismo reporte en las últimas 24 h. */
+  /** id_publico del aula (QR): con él, G8 busca el mismo reporte en las últimas 72 h y G5 verifica el aula. */
   aula_id: z.string().regex(/^[A-Za-z0-9_-]{22}$/).optional(),
+  /** Sin QR: aula elegida en el selector; el servidor la resuelve en el catálogo y solo la usa para G8. */
+  ubicacion: ubicacionAnalisisSchema.optional(),
 })
 export type AnalizarImagenIn = z.infer<typeof analizarImagenSchema>
 
@@ -59,7 +68,7 @@ export const posibleDuplicadoSchema = z.strictObject({
   coincidencia_id: coincidenciaIdSchema,
   codigo: z.string().min(1).max(64),
   categoria: categoriaSchema,
-  reportado_hace_minutos: z.number().int().min(0).max(1440),
+  reportado_hace_minutos: z.number().int().min(0).max(4320),
   adhesiones: z.number().int().min(0),
 })
 export type PosibleDuplicado = z.infer<typeof posibleDuplicadoSchema>
@@ -77,7 +86,7 @@ export const respuestaIaSchema = z.strictObject({
   mensaje: z.string().min(1),
   /** true si reutilizó un análisis sin consumir cupo. */
   cache: z.boolean(),
-  /** Solo con accion=duplicado: el reporte que ya existe en esa aula y categoría (últimas 24 h). */
+  /** Solo con accion=duplicado: el reporte que ya existe en esa aula y categoría (últimas 72 h). */
   duplicado: posibleDuplicadoSchema.optional(),
 })
 export type RespuestaIA = z.infer<typeof respuestaIaSchema>

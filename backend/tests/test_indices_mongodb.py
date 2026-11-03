@@ -32,6 +32,10 @@ class ColeccionFalsa:
     def __init__(self) -> None:
         self.llamadas: list[tuple[Any, dict[str, Any]]] = []
         self.definiciones: set[Any] = set()
+        self.existentes: dict[str, dict[str, Any]] = {}
+
+    async def index_information(self) -> dict[str, dict[str, Any]]:
+        return self.existentes
 
     async def create_index(self, claves: Any, **opciones: Any) -> str:
         self.llamadas.append((claves, opciones))
@@ -80,9 +84,13 @@ class BaseIndicesT038Falsa(BaseIndicesFalsa):
         self.huellas_reportes = ColeccionFalsa()
         self.coincidencias_duplicados = ColeccionFalsa()
         self.adhesiones_reportes = ColeccionFalsa()
+        self.comandos: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
     async def list_collection_names(self) -> list[str]:
         return ["huellas_reportes", "coincidencias_duplicados", "adhesiones_reportes"]
+
+    async def command(self, *args: Any, **opciones: Any) -> None:
+        self.comandos.append((args, opciones))
 
 
 class BaseIndicesT035Falsa(BaseIndicesFalsa):
@@ -236,7 +244,7 @@ async def test_crear_indices_repite_definiciones_sin_duplicados_incompatibles():
 
 
 @pytest.mark.asyncio
-async def test_indices_t038_incluyen_ttl_24h_y_consulta_compuesta():
+async def test_indices_t038_incluyen_ttl_72h_y_consulta_compuesta():
     db = BaseIndicesT038Falsa()
 
     await crear_indices(db)
@@ -246,7 +254,7 @@ async def test_indices_t038_incluyen_ttl_24h_y_consulta_compuesta():
             [("aula_id", 1), ("categoria", 1), ("fecha", -1)],
             {"name": "huellas_aula_categoria_fecha"},
         ),
-        ("fecha", {"expireAfterSeconds": 86_400, "name": "huellas_ttl_24h"}),
+        ("fecha", {"expireAfterSeconds": 259_200, "name": "huellas_ttl_ventana"}),
         ("incidencia_id", {"unique": True, "name": "huellas_incidencia_unica"}),
     ]
     assert db.coincidencias_duplicados.llamadas == [
@@ -259,6 +267,36 @@ async def test_indices_t038_incluyen_ttl_24h_y_consulta_compuesta():
             {"name": "adhesiones_incidencia_fecha"},
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_ttl_huellas_existente_de_24h_se_ajusta_a_72h_con_collmod():
+    db = BaseIndicesT038Falsa()
+    db.huellas_reportes.existentes = {
+        "_id_": {"key": [("_id", 1)]},
+        "huellas_ttl_24h": {"key": [("fecha", 1)], "expireAfterSeconds": 86_400},
+    }
+
+    await crear_indices(db)
+
+    assert db.comandos == [
+        (("collMod", "huellas_reportes"), {"index": {"name": "huellas_ttl_24h", "expireAfterSeconds": 259_200}})
+    ]
+    assert all(claves != "fecha" for claves, _ in db.huellas_reportes.llamadas)
+
+
+@pytest.mark.asyncio
+async def test_ttl_huellas_con_72h_es_idempotente():
+    db = BaseIndicesT038Falsa()
+    db.huellas_reportes.existentes = {
+        "huellas_ttl_ventana": {"key": [("fecha", 1)], "expireAfterSeconds": 259_200},
+    }
+
+    await crear_indices(db)
+    await crear_indices(db)
+
+    assert db.comandos == []
+    assert all(claves != "fecha" for claves, _ in db.huellas_reportes.llamadas)
 
 
 @pytest.mark.asyncio
