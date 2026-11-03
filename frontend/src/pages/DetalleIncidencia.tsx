@@ -2,6 +2,7 @@ import { Clock, Eye, MapPin } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { useState } from 'react'
 import { ApiError } from '../api/client'
+import { useMe } from '../api/hooks/auth'
 import { useIncidencia, useRetirar } from '../api/hooks/incidencias'
 import { useAuth } from '../auth/store'
 import { GaleriaEvidencias } from '../components/GaleriaEvidencias'
@@ -15,7 +16,8 @@ import { AgregarInformacion } from '../components/AgregarInformacion'
 import { TomarIncidencia } from '../components/TomarIncidencia'
 import { AvatarIniciales } from '../components/TarjetaIncidencia'
 import { Badge, BottomSheet, Button, Card, ErrorState, PageHeader, Seccion, Skeleton } from '../components/ui'
-import { transicionesDesde } from '../lib/estados'
+import { transicionesDesde, type Estado } from '../lib/estados'
+import { estaEnAlcanceOperativo } from '../lib/bandeja'
 import { haceCuanto } from '../lib/tiempo'
 import {
   datosDetalle, esSoloLectura, formatearFecha, formatearHoras, mensajeErrorDetalle, textoUbicacion,
@@ -35,9 +37,18 @@ export default function DetalleIncidencia() {
 }
 
 /** Detalle completo de una incidencia; `enPanel` lo adapta al panel lateral (una columna, sin «Volver»). */
-export function VistaDetalleIncidencia({ id, enPanel = false }: { id: string; enPanel?: boolean }) {
+export function VistaDetalleIncidencia({
+  id,
+  enPanel = false,
+  onSeguimientoGuardado,
+}: {
+  id: string
+  enPanel?: boolean
+  onSeguimientoGuardado?: (estado: Estado) => void
+}) {
   const { data: detalle, isPending, isError, error, isFetching, refetch } = useIncidencia(id)
   const retirar = useRetirar(id)
+  const me = useMe()
   const { usuario } = useAuth()
   const [confirmandoRetiro, setConfirmandoRetiro] = useState(false)
   const [retiroExitoso, setRetiroExitoso] = useState(false)
@@ -92,12 +103,15 @@ export function VistaDetalleIncidencia({ id, enPanel = false }: { id: string; en
   const soloLectura = esSoloLectura(usuario?.permisos ?? [])
   const puedeCambiarPrioridad = (usuario?.permisos.includes('incidencias:asignar') ?? false)
     && detalle.estado !== 'cerrada' && detalle.estado !== 'retirada'
-  // Espejo de POST /tomar: solo rol técnico, sin técnico asignado y en estado activo (la API decide).
+  const enAlcanceOperativo = estaEnAlcanceOperativo(detalle, me.data)
+  const asignadaAlTecnicoActual = detalle.tecnico_asignado?.usuario_id === me.data?._id
+  // Espejo de POST /tomar: solo rol técnico, dentro de su alcance operativo, sin técnico y en estado activo.
   const puedeTomar = usuario?.rol === 'tecnico' && (usuario.permisos.includes('seguimiento:registrar'))
-    && !detalle.tecnico_asignado && ['abierta', 'en_proceso', 'en_espera'].includes(detalle.estado)
+    && enAlcanceOperativo && !detalle.tecnico_asignado && ['abierta', 'en_proceso', 'en_espera'].includes(detalle.estado)
   const permisos = usuario?.permisos ?? []
   const puedeCerrar = permisos.includes('incidencias:asignar')
-  const puedeSeguimiento = permisos.includes('seguimiento:registrar')
+  const puedeSeguimientoPorActor = usuario?.rol !== 'tecnico' || (enAlcanceOperativo && asignadaAlTecnicoActual)
+  const puedeSeguimiento = permisos.includes('seguimiento:registrar') && puedeSeguimientoPorActor
     && transicionesDesde(detalle.estado).some((e) => e !== 'cerrada' || puedeCerrar)
   const generales = [
     { etiqueta: 'Ubicación', valor: textoUbicacion(detalle.ubicacion) },
@@ -220,6 +234,7 @@ export function VistaDetalleIncidencia({ id, enPanel = false }: { id: string; en
               onSeguimientoGuardado={(estado) => {
                 setAviso(AVISO_TRAS_SEGUIMIENTO[estado] ?? 'Seguimiento registrado.')
                 void refetch()
+                onSeguimientoGuardado?.(estado)
               }}
             />
           )}

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 VENTANA_RETIRO = timedelta(minutes=15)
 
 TRANSICIONES: dict[str, list[str]] = {
-    "abierta": ["en_proceso", "en_espera"],
+    "abierta": ["en_proceso"],
     "en_proceso": ["en_espera", "resuelta"],
     "en_espera": ["en_proceso"],
     "resuelta": ["cerrada", "en_proceso"],

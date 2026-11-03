@@ -5,7 +5,7 @@ export type { Estado, EstadoSeguimiento }
 
 /** Tabla 9.4 (`backend/app/dominio/estados.py`): destinos que el API admite desde cada estado actual. */
 export const TRANSICIONES: Record<Estado, readonly EstadoSeguimiento[]> = {
-  abierta: ['en_proceso', 'en_espera'],
+  abierta: ['en_proceso'],
   en_proceso: ['en_espera', 'resuelta'],
   en_espera: ['en_proceso'],
   resuelta: ['cerrada', 'en_proceso'],

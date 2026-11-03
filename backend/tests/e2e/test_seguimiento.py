@@ -10,7 +10,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio(loop_scope="session")]
 
 ESTADOS = ["abierta", "en_proceso", "en_espera", "resuelta", "cerrada"]
 VALIDAS = {
-    "abierta": {"en_proceso", "en_espera"},
+    "abierta": {"en_proceso"},
     "en_proceso": {"en_espera", "resuelta"},
     "en_espera": {"en_proceso"},
     "resuelta": {"cerrada", "en_proceso"},

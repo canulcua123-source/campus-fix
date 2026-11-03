@@ -43,6 +43,20 @@ const AYUDA_COMENTARIO: Partial<Record<Estado, string>> = {
   cerrada: 'Motivo del cierre.',
 }
 
+const INICIO_TRABAJO: SeguimientoIn = {
+  estado_nuevo: 'en_proceso',
+  horas: 0,
+  comentario: 'Trabajo iniciado por el técnico.',
+}
+
+function mensajeDeError(error: unknown): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return 'El estado cambió mientras registrabas el seguimiento. Actualiza la incidencia e inténtalo de nuevo.'
+  }
+  if (error instanceof ApiError) return error.mensaje
+  return 'No se pudo registrar el seguimiento. Inténtalo de nuevo.'
+}
+
 /** Hoja para registrar una transición de estado y su bitácora. En móvil el botón queda fijo sobre la barra inferior. */
 export function FormSeguimiento({
   incidenciaId,
@@ -78,6 +92,21 @@ export function FormSeguimiento({
     setAbierto(false)
   }
 
+  const registrarSeguimiento = async () => {
+    setMensajeError(null)
+    if (estadoActual !== 'abierta') {
+      setAbierto(true)
+      return
+    }
+
+    try {
+      await seguimiento.mutateAsync(INICIO_TRABAJO)
+      onSeguimientoGuardado?.('en_proceso')
+    } catch (error) {
+      setMensajeError(mensajeDeError(error))
+    }
+  }
+
   const enviar = form.handleSubmit(async (datos) => {
     setMensajeError(null)
     try {
@@ -85,13 +114,7 @@ export function FormSeguimiento({
       cerrar()
       onSeguimientoGuardado?.(datos.estado_nuevo)
     } catch (error) {
-      setMensajeError(
-        error instanceof ApiError && error.status === 409
-          ? 'El estado cambió mientras registrabas el seguimiento. Actualiza la incidencia e inténtalo de nuevo.'
-          : error instanceof ApiError
-            ? error.mensaje
-            : 'No se pudo registrar el seguimiento. Inténtalo de nuevo.',
-      )
+      setMensajeError(mensajeDeError(error))
     }
   })
 
@@ -102,8 +125,17 @@ export function FormSeguimiento({
         className="max-lg:fixed max-lg:inset-x-0 max-lg:z-20 max-lg:border-t max-lg:border-line max-lg:bg-panel max-lg:px-4 max-lg:py-2"
         style={{ bottom: 'calc(var(--tabbar-height) + var(--safe-bottom))' }}
       >
-        <Button bloque icono={<ClipboardPen size={18} />} onClick={() => setAbierto(true)}>Registrar seguimiento</Button>
+        <Button
+          bloque
+          icono={<ClipboardPen size={18} />}
+          cargando={estadoActual === 'abierta' && seguimiento.isPending}
+          textoCargando="Iniciando…"
+          onClick={() => void registrarSeguimiento()}
+        >
+          Registrar seguimiento
+        </Button>
       </div>
+      {mensajeError && !abierto && <p className="m-0 ui-campo__error" role="alert">{mensajeError}</p>}
       <BottomSheet abierto={abierto} onCerrar={cerrar} titulo="Registrar seguimiento">
         <form id="form-seguimiento" className="flex flex-col gap-4" onSubmit={enviar} noValidate>
           {mensajeError && <p className="m-0 ui-campo__error" role="alert">{mensajeError}</p>}

@@ -19,6 +19,8 @@ def test_transiciones_validas():
 
 def test_transicion_invalida_lanza():
     assert not transicion_permitida("abierta", "cerrada")
+    assert not transicion_permitida("abierta", "en_espera")
+    assert origenes_permitidos("en_espera") == ["en_proceso"]
     assert not transicion_permitida("desconocida", "abierta")
     with pytest.raises(TransicionEstadoInvalida):
         validar_transicion("abierta", "cerrada")

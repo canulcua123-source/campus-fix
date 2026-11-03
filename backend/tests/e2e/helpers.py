@@ -41,7 +41,7 @@ DETALLES = {
 RUTAS = {
     "abierta": [],
     "en_proceso": ["en_proceso"],
-    "en_espera": ["en_espera"],
+    "en_espera": ["en_proceso", "en_espera"],
     "resuelta": ["en_proceso", "resuelta"],
     "cerrada": ["en_proceso", "resuelta", "cerrada"],
 }

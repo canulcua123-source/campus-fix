@@ -316,6 +316,7 @@ async def test_carga_tecnicos_suma_horas(api):
         )
         assert asignacion.status_code == 200, asignacion.text
     assert (await api.seguimiento(primera["_id"], "en_proceso", horas=1.25)).status_code == 200
+    assert (await api.seguimiento(segunda["_id"], "en_proceso", horas=0)).status_code == 200
     assert (await api.seguimiento(segunda["_id"], "en_espera", horas=2.5)).status_code == 200
 
     sin_asignar = await api.crear()
