@@ -31,7 +31,7 @@ export function TomarIncidencia({ incidenciaId, onHecho }: Props) {
         bloque
         cargando={tomar.isPending}
         textoCargando="Tomando…"
-        onClick={() => tomar.mutate(incidenciaId, { onSuccess: () => onHecho('Tomaste la incidencia. Ya aparece en tus asignadas.') })}
+        onClick={() => tomar.mutate(incidenciaId, { onSuccess: () => onHecho('Tomaste la incidencia. Ya aparece en «Trabajos tomados».') })}
       >
         Tomar incidencia
       </Button>

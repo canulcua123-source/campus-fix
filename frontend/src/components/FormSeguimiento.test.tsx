@@ -50,7 +50,7 @@ it('no muestra acciones de seguimiento a quien no puede registrarlo', () => {
   expect(screen.queryByRole('button', { name: 'Registrar seguimiento' })).not.toBeInTheDocument()
 })
 
-it('registra una transición permitida con horas y comentario', async () => {
+it('inicia el trabajo y pasa una incidencia abierta a en proceso con un solo clic', async () => {
   seguimiento.mutateAsync.mockResolvedValue({ ok: true, estado: 'en_proceso' })
   const alGuardar = vi.fn()
   render(
@@ -63,18 +63,14 @@ it('registra una transición permitida con horas y comentario', async () => {
     />,
   )
 
-  const { horas, comentario } = abrirFormulario()
-  expect(screen.queryByRole('radio', { name: /^Cerrar/ })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('radio', { name: /^En proceso/ }))
-  fireEvent.change(horas, { target: { value: '1.5' } })
-  fireEvent.change(comentario, { target: { value: 'Se revisó el equipo y se inició la reparación.' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Guardar seguimiento' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Registrar seguimiento' }))
 
   await waitFor(() => expect(seguimiento.mutateAsync).toHaveBeenCalledWith({
     estado_nuevo: 'en_proceso',
-    horas: 1.5,
-    comentario: 'Se revisó el equipo y se inició la reparación.',
+    horas: 0,
+    comentario: 'Trabajo iniciado por el técnico.',
   }))
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(alGuardar).toHaveBeenCalledWith('en_proceso')
 })
 
@@ -89,10 +85,7 @@ it('informa el conflicto cuando el estado cambió durante el registro', async ()
     />,
   )
 
-  const { horas, comentario } = abrirFormulario()
-  fireEvent.change(horas, { target: { value: '1' } })
-  fireEvent.change(comentario, { target: { value: 'Se documentó la revisión realizada.' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Guardar seguimiento' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Registrar seguimiento' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'El estado cambió mientras registrabas el seguimiento. Actualiza la incidencia e inténtalo de nuevo.',
@@ -120,15 +113,21 @@ it('no muestra acciones si la incidencia ya no admite transiciones', () => {
   expect(screen.queryByRole('button', { name: 'Registrar seguimiento' })).not.toBeInTheDocument()
 })
 
-it('reinicia el estado inicial cuando cambia el estado actual de la incidencia', async () => {
+it('después de iniciar el trabajo ofrece únicamente espera o resolución', async () => {
   seguimiento.mutateAsync.mockResolvedValue({ ok: true, estado: 'en_espera' })
-  const props = { incidenciaId: 'inc-1', puedeCerrar: false, puedeRegistrar: true }
-  const { rerender } = render(<FormSeguimiento {...props} estadoActual="abierta" />)
+  render(
+    <FormSeguimiento
+      incidenciaId="inc-1"
+      estadoActual="en_proceso"
+      puedeCerrar={false}
+      puedeRegistrar
+    />,
+  )
 
-  // Tras guardar y refrescar, la incidencia pasó a "en_proceso": el estado inicial anterior ya no es válido.
-  rerender(<FormSeguimiento {...props} estadoActual="en_proceso" />)
   const { horas, comentario } = abrirFormulario()
   expect(screen.getByRole('radio', { name: /^En espera/ })).toBeChecked()
+  expect(screen.getByRole('radio', { name: /^Resuelta/ })).toBeInTheDocument()
+  expect(screen.queryByRole('radio', { name: /^En proceso/ })).not.toBeInTheDocument()
   fireEvent.change(horas, { target: { value: '1' } })
   fireEvent.change(comentario, { target: { value: 'Se dejó en espera por falta de refacciones.' } })
   fireEvent.click(screen.getByRole('button', { name: 'Guardar seguimiento' }))

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { IncidenciaListaItem } from '../schemas/incidencia'
-import { antiguedad, esVistaBandeja, filtrarBandeja, filtrarVista, ordenarBandeja, unirIncidencias } from './bandeja'
+import {
+  antiguedad, estaEnAlcanceOperativo, esVistaBandeja, filtrarBandeja, filtrarVista, ordenarBandeja, unirIncidencias,
+} from './bandeja'
 
 const base = {
   categoria: 'computo_redes' as const,
@@ -58,6 +60,18 @@ describe('Bandeja del técnico', () => {
     expect(filtrarBandeja([], 'sin_asignar', 'u1')).toEqual([])
   })
 
+  it('distingue el alcance operativo de la visibilidad de un reporte propio', () => {
+    expect(estaEnAlcanceOperativo(incidencias[0], {
+      alcance: 'area', areas: ['computo_redes'], edificios: [],
+    })).toBe(true)
+    expect(estaEnAlcanceOperativo(incidencias[0], {
+      alcance: 'area', areas: ['infraestructura'], edificios: [],
+    })).toBe(false)
+    expect(estaEnAlcanceOperativo(incidencias[0], {
+      alcance: 'edificio', areas: [], edificios: ['A'],
+    })).toBe(true)
+  })
+
   it('marca la antigüedad de atención a partir de 8 h y vencida a partir de 24 h', () => {
     const ahora = new Date('2026-10-05T10:00:00Z').getTime()
     expect(antiguedad('2026-10-05T05:00:00Z', ahora)).toEqual({ texto: 'Hace 5 h', nivel: 'normal' })
@@ -79,13 +93,17 @@ describe('Vistas de «Mis incidencias»', () => {
     inc('ajena', { tecnico_asignado: { usuario_id: 'u2', nombre: 'Otro' } }),
   ]
   const ids = (l: IncidenciaListaItem[]) => l.map((i) => i._id)
-  const reportadas = new Set(['ajena', 'cerrada-mia'])
+  const reportadas = new Set(['mia', 'ajena', 'cerrada-mia'])
 
   it('separa cada vista', () => {
     expect(ids(filtrarVista(lista, 'asignadas', 'u1', reportadas))).toEqual(['mia'])
     expect(ids(filtrarVista(lista, 'por_tomar', 'u1', reportadas))).toEqual(['libre'])
     expect(ids(filtrarVista(lista, 'resueltas', 'u1', reportadas))).toEqual(['resuelta-mia'])
-    expect(ids(filtrarVista(lista, 'reportadas', 'u1', reportadas))).toEqual(['ajena', 'cerrada-mia'])
+    expect(ids(filtrarVista(lista, 'reportadas', 'u1', reportadas))).toEqual(['ajena'])
+  })
+
+  it('por tomar excluye reportes visibles que están fuera del alcance operativo', () => {
+    expect(ids(filtrarVista(lista, 'por_tomar', 'u1', reportadas, () => false))).toEqual([])
   })
 
   it('une listas sin duplicar y valida la vista de la URL', () => {

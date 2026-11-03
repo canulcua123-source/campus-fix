@@ -1,6 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 import { useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import type { Estado } from '../lib/estados'
 import { VistaDetalleIncidencia } from '../pages/DetalleIncidencia'
 import { PanelLateral } from './ui'
 
@@ -8,7 +9,7 @@ import { PanelLateral } from './ui'
  * Detalle de incidencia en panel lateral controlado por `?ver=<id>` en la URL:
  * «Atrás» del navegador lo cierra y el enlace se puede compartir.
  */
-export function usePanelIncidencia() {
+export function usePanelIncidencia(opciones: { onSeguimientoGuardado?: (estado: Estado) => void } = {}) {
   const [params, setParams] = useSearchParams()
   const id = params.get('ver')
 
@@ -31,7 +32,13 @@ export function usePanelIncidencia() {
         </Link>
       ) : null}
     >
-      {id && <VistaDetalleIncidencia id={id} enPanel />}
+      {id && (
+        <VistaDetalleIncidencia
+          id={id}
+          enPanel
+          onSeguimientoGuardado={opciones.onSeguimientoGuardado}
+        />
+      )}
     </PanelLateral>
   )
 
