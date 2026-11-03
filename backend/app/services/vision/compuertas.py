@@ -1,4 +1,3 @@
-import unicodedata
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -7,13 +6,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from app.schemas.ia import AccionCompuertas, AnalisisImagen
 from app.schemas.incidencia import Ubicacion
 from app.services.vision.mapeo import construir_incidencia
-from app.services.vision.decision import ADVERTENCIAS_DUDOSAS
+from app.services.vision.umbrales import UMBRAL_AGENTICO, UMBRAL_AUTOLLENAR, confianza_efectiva, hay_señal_dudosa
 
-UMBRAL_AGENTICO = 0.85
 VIGENCIA_UBICACION = timedelta(hours=4)
 CATEGORIAS_AGENTICAS = frozenset({"infraestructura"})
 PERMISOS_AGENTICOS = frozenset({"ia:usar", "incidencias:crear", "evidencias:subir"})
-SEÑALES_CALIDAD = ADVERTENCIAS_DUDOSAS
+# G3 nunca ofrece el modo agéntico con una confianza menor que la de autollenar.
+UMBRAL_G3 = max(UMBRAL_AGENTICO, UMBRAL_AUTOLLENAR)
 
 
 class UbicacionCompuertas(BaseModel):
@@ -72,12 +71,6 @@ class DecisionCompuertas(BaseModel):
     compuertas: tuple[ResultadoCompuerta, ...]
 
 
-def _normalizar(texto: str) -> str:
-    return "".join(
-        caracter for caracter in unicodedata.normalize("NFKD", texto.lower()) if not unicodedata.combining(caracter)
-    )
-
-
 def _ubicacion_valida(entrada: EntradaCompuertas) -> bool:
     ubicacion = entrada.ubicacion
     if ubicacion is None or not ubicacion.existe_en_catalogo:
@@ -105,11 +98,11 @@ def evaluar_compuertas(entrada: EntradaCompuertas) -> DecisionCompuertas:
     solo nueve pases producen ``agentico``; cualquier fallo o estado no
     verificable produce ``formulario``. Los motivos conservan el orden G1→G9.
     """
-    analisis = entrada.analisis
-    calidad = _normalizar(" ".join((*analisis.advertencias, *entrada.calidad_cliente)))
+    # G3 usa la misma confianza efectiva (topada) que ``decidir``; aplicar el tope es idempotente.
+    analisis = confianza_efectiva(entrada.analisis, entrada.calidad_cliente)
     ubicacion_ok = _ubicacion_valida(entrada)
     # G4 (docs/algoritmo-foto-ia.md): sin señales de calidad del modelo y con el control del cliente vacío.
-    calidad_ok = not entrada.calidad_cliente and not any(señal in calidad for señal in SEÑALES_CALIDAD)
+    calidad_ok = not entrada.calidad_cliente and not hay_señal_dudosa(analisis.advertencias)
     resultados = (
         ResultadoCompuerta(
             id="G1",
@@ -131,10 +124,10 @@ def evaluar_compuertas(entrada: EntradaCompuertas) -> DecisionCompuertas:
         ),
         ResultadoCompuerta(
             id="G3",
-            paso=analisis.confianza >= UMBRAL_AGENTICO,
+            paso=analisis.confianza >= UMBRAL_G3,
             motivo=(
                 "La confianza del análisis es suficiente para continuar."
-                if analisis.confianza >= UMBRAL_AGENTICO
+                if analisis.confianza >= UMBRAL_G3
                 else "La confianza del análisis no es suficiente; revisa los datos en el formulario."
             ),
         ),

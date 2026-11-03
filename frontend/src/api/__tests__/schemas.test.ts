@@ -208,6 +208,15 @@ describe('contratos T-038 sin datos personales', () => {
     expect(respuestaIaSchema.safeParse({ ...respuesta, duplicado: { ...coincidencia, correo: 'a@b.mx' } }).success).toBe(false)
   })
 
+  it('AnalisisImagen solo acepta advertencias de la lista cerrada (prompt v4)', () => {
+    const ia = {
+      es_incidencia_valida: true, categoria: 'computo_redes', titulo: 'Proyector sin imagen', descripcion: 'No proyecta',
+      prioridad_sugerida: 'media', tags: [], campos_detectados: [], confianza: 0.7, advertencias: ['borrosa', 'rostros_visibles'],
+    }
+    expect(analisisImagenSchema.safeParse(ia).success).toBe(true)
+    expect(analisisImagenSchema.safeParse({ ...ia, advertencias: ['foto borrosa'] }).success).toBe(false)
+  })
+
   it('valida la respuesta idempotente de adhesion', () => {
     const adhesion = { ok: true, codigo: coincidencia.codigo, categoria: coincidencia.categoria, adhesiones: 1, registrada: true }
     expect(adhesionSchema.safeParse(adhesion).success).toBe(true)

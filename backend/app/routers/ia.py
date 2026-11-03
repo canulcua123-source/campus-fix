@@ -92,16 +92,73 @@ return 1
 """
 
 
+DATO_PERSONAL = "[dato personal]"
+_PATRON_CORREO = re.compile(r"[\w.%+-]+@[\w-]+(?:\.[\w-]+)+")
+# Teléfonos genéricos: 8 a 13 dígitos con separadores opcionales (espacio, punto, guion o paréntesis).
+_PATRON_TELEFONO = re.compile(r"(?<!\w)\+?\(?\d(?:[\s.()-]{0,2}\d){7,12}(?!\w)")
+LONGITUD_MINIMA_TOKEN = 3
+
+
+def _plegar(texto: str) -> tuple[str, list[int]]:
+    """Minúsculas sin acentos y, por cada carácter plegado, su índice en ``texto``."""
+    plegado: list[str] = []
+    indices: list[int] = []
+    for indice, caracter in enumerate(texto):
+        for parte in unicodedata.normalize("NFKD", caracter.lower()):
+            if not unicodedata.combining(parte):
+                plegado.append(parte)
+                indices.append(indice)
+    return "".join(plegado), indices
+
+
+def _tokens_personales(usuario: dict) -> list[str]:
+    """Nombre completo, cada nombre/apellido (≥3 letras), correo, su parte local y matrícula, ya plegados."""
+    candidatos: set[str] = set()
+    nombre = usuario.get("nombre")
+    if isinstance(nombre, str) and nombre.strip():
+        nombre_plegado = _plegar(_normalizar_contexto(nombre))[0]
+        candidatos.add(nombre_plegado)
+        candidatos.update(t for t in re.split(r"[\s,.-]+", nombre_plegado) if len(t) >= LONGITUD_MINIMA_TOKEN)
+    correo = usuario.get("correo")
+    if isinstance(correo, str) and correo.strip():
+        correo_plegado = _plegar(_normalizar_contexto(correo))[0]
+        candidatos.add(correo_plegado)
+        local = correo_plegado.split("@", 1)[0]
+        if len(local) >= LONGITUD_MINIMA_TOKEN:
+            candidatos.add(local)
+    matricula = usuario.get("matricula")
+    if isinstance(matricula, (str, int)) and str(matricula).strip():
+        candidatos.add(_plegar(_normalizar_contexto(str(matricula)))[0])
+    return sorted((c for c in candidatos if c), key=len, reverse=True)
+
+
 def _minimizar_contexto(contexto: str | None, usuario: dict) -> str | None:
-    """Conserva solo el texto necesario y elimina datos del perfil autenticado."""
+    """Normaliza el contexto y reemplaza datos personales por ``[dato personal]``.
+
+    Primero normaliza (NFKC + espacios colapsados) para que espacios extra o formas Unicode no evadan el
+    filtro; después omite correos y teléfonos genéricos y, sin distinguir mayúsculas ni acentos y con
+    límites de palabra, los datos del perfil autenticado (nombre completo o por partes, correo y matrícula).
+    """
     if contexto is None:
         return None
-    limpio = contexto
-    for campo in ("nombre", "correo"):
-        valor = usuario.get(campo)
-        if isinstance(valor, str) and valor:
-            limpio = re.sub(re.escape(valor), "[dato omitido]", limpio, flags=re.IGNORECASE)
-    return limpio
+    limpio = _normalizar_contexto(contexto)
+    limpio = _PATRON_CORREO.sub(DATO_PERSONAL, limpio)
+    limpio = _PATRON_TELEFONO.sub(DATO_PERSONAL, limpio)
+    tokens = _tokens_personales(usuario)
+    if not tokens:
+        return limpio
+    alternativas = "|".join(r"\s+".join(re.escape(parte) for parte in token.split()) for token in tokens)
+    patron = re.compile(rf"(?<!\w)(?:{alternativas})(?!\w)")
+    plegado, indices = _plegar(limpio)
+    partes: list[str] = []
+    anterior = 0
+    for coincidencia in patron.finditer(plegado):
+        inicio = indices[coincidencia.start()]
+        fin = indices[coincidencia.end() - 1] + 1
+        partes.extend((limpio[anterior:inicio], DATO_PERSONAL))
+        anterior = fin
+    partes.append(limpio[anterior:])
+    return "".join(partes)
 
 
 def _normalizar_contexto(contexto: str | None) -> str:
@@ -324,8 +381,9 @@ async def _responder(
     # Las pistas del cliente (borrosa/oscura/sobreexpuesta) también topan la confianza: nunca autollena.
     asistida = decidir(analisis, calidad_cliente, cache=cache)
     estado_duplicado, posible_duplicado = await _evaluar_duplicado(usuario, analisis, huellas, aula_id, ahora)
+    # Las compuertas reciben la confianza efectiva (topada), la misma que vio decidir.
     entrada = _entrada_compuertas(
-        analisis,
+        asistida.analisis,
         usuario,
         ahora,
         config,
@@ -433,6 +491,7 @@ async def analizar(
     if not config.habilitada:
         raise HTTPException(503, "El análisis con IA está deshabilitado")
     # Lista de datos permitidos para el proveedor: imagen, MIME y contexto sin datos del perfil.
+    # _minimizar_contexto normaliza antes de omitir; la normalización externa es idempotente (clave de caché).
     contexto_normalizado = _normalizar_contexto(_minimizar_contexto(contexto, usuario))
     proveedor, modelo = identidad_proveedor()
     clave_cache = _clave_cache(

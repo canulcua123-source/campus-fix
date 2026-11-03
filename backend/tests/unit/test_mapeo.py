@@ -5,7 +5,7 @@ import pytest
 from hypothesis import given, settings, strategies as st
 from pydantic import ValidationError
 
-from app.schemas.ia import AnalisisImagen
+from app.schemas.ia import AdvertenciaIA, AnalisisImagen
 from app.schemas.infraestructura import RiesgoSeguridad, TipoDano
 from app.schemas.incidencia import DetalleInfra, IncidenciaIn, Ubicacion
 from app.services.vision.mapeo import construir_incidencia
@@ -127,8 +127,8 @@ def test_enums_se_serializan_como_cadenas_en_json_schema_y_respuesta():
     assert esquema["$defs"]["RiesgoSeguridad"]["enum"] == [valor.value for valor in RiesgoSeguridad]
 
 
-def test_prompt_v3_declara_el_contrato_cerrado():
-    assert PROMPT_VERSION == "v3"
+def test_prompt_v4_declara_el_contrato_cerrado():
+    assert PROMPT_VERSION == "v4"
     assert "detalle_infra" in PROMPT_SISTEMA
     assert "texto_con_instrucciones" in PROMPT_SISTEMA
     for valor in (*TipoDano, *RiesgoSeguridad):
@@ -146,7 +146,7 @@ def _analisis_infra_validos(draw) -> AnalisisImagen:
         tags=draw(st.lists(st.text(max_size=50), max_size=25)),
         campos_detectados=[],
         confianza=draw(st.floats(min_value=0, max_value=1, allow_nan=False)),
-        advertencias=draw(st.lists(st.text(max_size=50), max_size=5)),
+        advertencias=draw(st.lists(st.sampled_from(get_args(AdvertenciaIA)), max_size=5)),
         detalle_infra={
             "tipo_dano": draw(st.sampled_from(tuple(TipoDano))),
             "riesgo_seguridad": draw(st.sampled_from(tuple(RiesgoSeguridad))),

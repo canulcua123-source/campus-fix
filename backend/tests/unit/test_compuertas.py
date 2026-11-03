@@ -60,7 +60,6 @@ CASOS_FALLO = [
         "formulario",
     ),
     ("G3", {"analisis": _analisis(confianza=0.84)}, "formulario"),
-    ("G4", {"analisis": _analisis(advertencias=["Foto borrosa"])}, "formulario"),
     ("G4", {"calidad_cliente": ("nitidez_baja",)}, "formulario"),
     (
         "G5",
@@ -101,6 +100,14 @@ def test_cada_compuerta_falla_de_forma_independiente(compuerta, cambios, accion)
     assert all(motivo.strip() and "_id" not in motivo for motivo in decision.motivos)
 
 
+def test_advertencia_de_calidad_falla_g4_y_topa_la_confianza_de_g3():
+    # Con advertencia dudosa la confianza efectiva queda en 0.79 (#180): G3 y G4 fallan juntas.
+    decision = evaluar_compuertas(_entrada(analisis=_analisis(advertencias=["borrosa"])))
+    assert decision.accion == "formulario"
+    assert [resultado.id for resultado in decision.compuertas if not resultado.paso] == ["G3", "G4"]
+    assert decision.motivos == tuple(r.motivo for r in decision.compuertas if not r.paso)
+
+
 def test_duplicado_tiene_precedencia_y_motivos_conservan_orden():
     decision = evaluar_compuertas(
         _entrada(
@@ -122,7 +129,7 @@ def test_estado_no_verificable_degrada_a_formulario():
 
 
 def test_determinismo():
-    entrada = _entrada(analisis=_analisis(advertencias=["falta contexto"]), esquema_valido=False)
+    entrada = _entrada(analisis=_analisis(advertencias=["falta_contexto"]), esquema_valido=False)
     assert evaluar_compuertas(entrada) == evaluar_compuertas(entrada)
 
 

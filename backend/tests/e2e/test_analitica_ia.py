@@ -781,7 +781,7 @@ async def test_payload_ia_sin_datos_personales(api, monkeypatch):
     payload = json.dumps(capturado, default=str)
     assert usuario["nombre"] not in payload
     assert usuario["correo"] not in payload
-    assert "[dato omitido]" in payload
+    assert "[dato personal]" in payload
 
 
 # ---------- Configuración de IA ----------
