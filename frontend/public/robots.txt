@@ -1,0 +1,3 @@
+# UTM Desk es una app con sesión, no contenido público indexable.
+User-agent: *
+Disallow: /
