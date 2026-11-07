@@ -35,14 +35,19 @@ async def test_login_rate_limit_429(api):
     t = ASGITransport(app=app, raise_app_exceptions=False, client=("10.66.66.66", 4000))
     async with ClienteSeguro(transport=t, base_url="http://test") as c:
         codigos = []
+        # El primer intento entra; los 9 fallos usan cuentas distintas para no activar
+        # el bloqueo por intentos fallidos (5 por cuenta) antes que el límite de slowapi.
         for i in range(11):
-            pwd = PASSWORD if i == 0 else "incorrecta"
-            r = await c.post("/auth/login", json={"correo": "reportante_a@e2e.local", "password": pwd})
+            if i == 0:
+                correo, pwd = "reportante_a@e2e.local", PASSWORD
+            else:
+                correo, pwd = f"inexistente{i}@e2e.local", "incorrecta"
+            r = await c.post("/auth/login", json={"correo": correo, "password": pwd})
             codigos.append(r.status_code)
         assert codigos[0] == 200
         assert all(x == 401 for x in codigos[1:10]), codigos
         assert codigos[10] == 429, codigos
-        # Incluso con credenciales correctas sigue bloqueado
+        # Incluso con credenciales correctas sigue bloqueado (slowapi: 10/minute por IP)
         r = await c.post("/auth/login", json={"correo": "reportante_a@e2e.local", "password": PASSWORD})
         assert r.status_code == 429
     # Otro cliente no se ve afectado
