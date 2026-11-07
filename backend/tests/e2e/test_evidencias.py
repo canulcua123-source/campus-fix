@@ -138,11 +138,59 @@ async def test_registro_verifica_objeto_en_r2(api, monkeypatch):
     assert (await _registrar(api, inc["_id"], f["evidencia_id"])).status_code == 400
     f = (await _firma(api, inc["_id"], peso=1000)).json()
     monkeypatch.setattr(storage, "tamano_objeto", lambda clave: 1000)
+    # Sin este mock, la validación de contenido llamaría al adaptador real
+    # contra el bucket de pruebas: cabecera JPEG válida para image/jpeg.
+    monkeypatch.setattr(storage, "leer_inicio", lambda clave, n=32: b"\xff\xd8\xff\xe0" + b"\x00" * 28)
     movidos = []
     monkeypatch.setattr(storage, "promover", lambda origen, destino: movidos.append((origen, destino)))
     assert (await _registrar(api, inc["_id"], f["evidencia_id"])).status_code == 201
     # se sube a staging/ y al verificarse se copia a la ruta definitiva
     assert movidos == [(f"staging/{f['url_storage']}", f["url_storage"])]
+
+
+async def test_registro_verifica_contenido_magic_bytes(api, monkeypatch):
+    """Un texto renombrado a .jpg (o un PDF falso) pasa firma y tamaño, no el contenido."""
+    monkeypatch.setattr(settings, "r2_verificar_subida", True)
+    inc = await api.crear()
+    casos = [
+        # (mime, nombre, primeros bytes en staging, tamaño en staging, esperado)
+        ("image/jpeg", "foto.jpg", b"\xff\xd8\xff\xe0" + b"\x00" * 28, 1000, 201),
+        ("image/png", "foto.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 24, 1000, 201),
+        ("application/pdf", "doc.pdf", b"%PDF-1.7\n" + b"\x00" * 23, 1000, 201),
+        ("video/mp4", "falla.mp4", b"\x00\x00\x00\x18ftypisom" + b"\x00" * 20, 1000, 201),
+        ("image/jpeg", "foto.jpg", b"esto es solo texto plano", 1000, 400),
+        ("application/pdf", "doc.pdf", b"no es un pdf, solo texto", 1000, 400),
+        ("video/mp4", "falla.mp4", b"\x00\x00\x00\x18xxxx" + b"\x00" * 20, 1000, 400),
+        # Tamaño distinto al firmado: se rechaza aunque los magic bytes sean válidos.
+        ("image/jpeg", "foto.jpg", b"\xff\xd8\xff\xe0" + b"\x00" * 28, 999, 400),
+    ]
+    movidos = []
+    monkeypatch.setattr(storage, "promover", lambda origen, destino: movidos.append((origen, destino)))
+    for mime, nombre, inicio, tamano, esperado in casos:
+        f = (await _firma(api, inc["_id"], mime=mime, nombre=nombre, peso=1000)).json()
+        monkeypatch.setattr(storage, "tamano_objeto", lambda clave, t=tamano: t)
+        monkeypatch.setattr(storage, "leer_inicio", lambda clave, n=32, b=inicio: b)
+        antes = len(movidos)
+        r = await _registrar(api, inc["_id"], f["evidencia_id"])
+        assert r.status_code == esperado, f"{mime} {inicio[:8]!r}: {r.text}"
+        # Lo rechazado no se promueve de staging/ a la ruta definitiva.
+        assert len(movidos) - antes == (1 if esperado == 201 else 0)
+    assert len((await api.doc(inc["_id"]))["evidencias_adjuntas"]) == 4
+
+    # WebM es EBML, no MP4: no lleva 'ftyp'. Solo un video por incidencia, se usa otra.
+    inc2 = await api.crear()
+    for mime, nombre, inicio, esperado in [
+        ("video/webm", "falla.webm", b"\x1a\x45\xdf\xa3" + b"\x00" * 28, 201),
+        ("video/webm", "falla.webm", b"no es video, solo texto", 400),
+    ]:
+        f = (await _firma(api, inc2["_id"], mime=mime, nombre=nombre, peso=1000)).json()
+        monkeypatch.setattr(storage, "tamano_objeto", lambda clave: 1000)
+        monkeypatch.setattr(storage, "leer_inicio", lambda clave, n=32, b=inicio: b)
+        antes = len(movidos)
+        r = await _registrar(api, inc2["_id"], f["evidencia_id"])
+        assert r.status_code == esperado, f"{mime} {inicio[:8]!r}: {r.text}"
+        assert len(movidos) - antes == (1 if esperado == 201 else 0)
+    assert len((await api.doc(inc2["_id"]))["evidencias_adjuntas"]) == 1
 
 
 async def test_maximo_10_evidencias(api):

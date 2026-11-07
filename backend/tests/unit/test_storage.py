@@ -1,3 +1,4 @@
+import io
 from typing import Annotated, Any
 
 import pytest
@@ -16,6 +17,8 @@ class ClienteS3Falso:
         self.borrados: list[dict[str, Any]] = []
         self.consultas: list[dict[str, Any]] = []
         self.tamanos = {"staging/evidencia.pdf": 2048}
+        self.contenidos = {"staging/evidencia.pdf": b"%PDF-1.7 falso"}
+        self.rangos: list[dict[str, Any]] = []
 
     def generate_presigned_url(self, operacion, *, Params, ExpiresIn):
         self.firmas.append((operacion, Params, ExpiresIn))
@@ -31,6 +34,14 @@ class ClienteS3Falso:
         self.consultas.append({"Bucket": Bucket, "Key": Key})
         return {"ContentLength": self.tamanos[Key]}
 
+    def get_object(self, *, Bucket, Key, Range=None):
+        self.rangos.append({"Bucket": Bucket, "Key": Key, "Range": Range})
+        if Key not in self.contenidos:
+            from botocore.exceptions import ClientError
+
+            raise ClientError({"Error": {"Code": "NoSuchKey", "Message": "No existe"}}, "GetObject")
+        return {"Body": io.BytesIO(self.contenidos[Key])}
+
 
 def test_fake_implementa_puerto_y_registra_operaciones():
     almacenamiento = FakeStorage()
@@ -41,6 +52,29 @@ def test_fake_implementa_puerto_y_registra_operaciones():
     almacenamiento.promover("staging/a", "evidencias/a")
     assert almacenamiento.promociones == [("staging/a", "evidencias/a")]
     assert almacenamiento.tamano_objeto("evidencias/a") == 10
+
+
+def test_fake_leer_inicio_devuelve_prefijo():
+    falso = FakeStorage()
+    falso.contenidos["staging/a.jpg"] = b"\xff\xd8\xff\xe0" + b"\x00" * 100
+    assert falso.leer_inicio("staging/a.jpg", 4) == b"\xff\xd8\xff\xe0"
+    assert falso.leer_inicio("staging/ausente.jpg") is None
+    assert falso.llamadas[-2:] == [("leer_inicio", "staging/a.jpg", 4), ("leer_inicio", "staging/ausente.jpg", 32)]
+
+
+def test_adaptador_leer_inicio_usa_range_y_devuelve_none_si_no_existe():
+    cliente = ClienteS3Falso()
+    almacenamiento = B2Storage(
+        endpoint="https://s3.example.test",
+        access_key_id="clave-prueba",
+        secret_access_key="secreto-prueba",
+        bucket="evidencias-prueba",
+        region="auto",
+        client_factory=lambda servicio, **kwargs: cliente,
+    )
+    assert almacenamiento.leer_inicio("staging/evidencia.pdf") == b"%PDF-1.7 falso"
+    assert cliente.rangos == [{"Bucket": "evidencias-prueba", "Key": "staging/evidencia.pdf", "Range": "bytes=0-31"}]
+    assert almacenamiento.leer_inicio("staging/ausente.pdf") is None
 
 
 def test_fake_simula_almacenamiento_no_disponible():

@@ -17,6 +17,7 @@ from app.core.cache_categorias import modelo_detalle_cacheado, obtener_definicio
 from app.core.config import settings
 from app.core.db import get_db, get_redis
 from app.core.errores import cabeceras_retry_after
+from app.core.imagen import FormatoImagenNoPermitido, detectar_tipo_imagen
 from app.core.limiter import clave_usuario, limiter
 from app.core.security import filtro_alcance, filtro_visibilidad, permisos_del_usuario, require_permiso
 from app.core.serial import a_json
@@ -84,6 +85,7 @@ EXTENSIONES = {
 TIPOS_VIDEO = ["video/mp4", "video/quicktime", "video/webm"]
 MAX_VIDEOS = 1  # un video por incidencia (además del límite general de evidencias)
 MAX_EVIDENCIAS = 10
+BYTES_INICIO_EVIDENCIA = 32  # magic bytes: JPEG 3, PNG 8, WebP 12, PDF 5, video 'ftyp' en 4-8
 MAX_HISTORIAL = 200  # acota el arreglo embebido: se conservan las últimas 200 entradas ($slice)
 MAX_HORAS = 1000  # tope de horas acumuladas por incidencia (evita contaminar la analítica)
 MAX_FIRMAS_DIA = 50  # firmas de evidencia por usuario al día
@@ -972,6 +974,29 @@ def _clave(codigo: str, evidencia_id: str, tipo_mime: str) -> str:
     return f"evidencias/{codigo}/{evidencia_id}.{EXTENSIONES[tipo_mime]}"
 
 
+def _contenido_coincide_tipo(inicio: bytes, tipo_mime: str) -> bool:
+    """Comprueba los magic bytes del archivo contra el tipo declarado en la firma.
+
+    La URL firmada fija ContentType/ContentLength, pero el cliente puede subir
+    cualquier contenido con esa cabecera; solo los primeros bytes dicen la verdad.
+    Los videos solo se validan por su marca de contenedor ('ftyp' en MP4/MOV,
+    cabecera EBML en WebM), no se decodifican.
+    """
+    if tipo_mime.startswith("image/"):
+        try:
+            return detectar_tipo_imagen(inicio) == tipo_mime
+        except FormatoImagenNoPermitido:
+            return False
+    if tipo_mime == "application/pdf":
+        return inicio.startswith(b"%PDF-")
+    if tipo_mime in TIPOS_VIDEO:
+        if tipo_mime == "video/webm":
+            # WebM es EBML, no MP4: no lleva 'ftyp'.
+            return inicio.startswith(b"\x1a\x45\xdf\xa3")
+        return len(inicio) >= 8 and inicio[4:8] == b"ftyp"
+    return False
+
+
 @router.post("/{incidencia_id}/evidencias/firma")
 async def firmar_evidencia(
     incidencia_id: str,
@@ -1055,6 +1080,17 @@ async def registrar_evidencia(
             raise HTTPException(503, str(exc)) from exc
         if tamano is None or tamano != pendiente["peso_bytes"]:
             raise HTTPException(400, "El archivo no se subió o no coincide con lo firmado")
+        # Magic bytes: un texto renombrado a .jpg (o un PDF falso) pasa la firma y el
+        # tamaño, pero no el contenido. Si no coincide, no se promueve ni se registra:
+        # el objeto queda en staging/ y la regla de lifecycle de huérfanos lo borra.
+        try:
+            inicio = await asyncio.to_thread(
+                almacenamiento.leer_inicio, pendiente["clave_staging"], BYTES_INICIO_EVIDENCIA
+            )
+        except StorageNoDisponibleError as exc:
+            raise HTTPException(503, str(exc)) from exc
+        if inicio is None or not _contenido_coincide_tipo(inicio, pendiente["tipo_mime"]):
+            raise HTTPException(400, "El contenido del archivo no coincide con el tipo firmado")
         # Copia a la ruta definitiva: la URL de subida (aún vigente) ya no puede reemplazar la evidencia.
         try:
             await asyncio.to_thread(almacenamiento.promover, pendiente["clave_staging"], pendiente["clave"])
