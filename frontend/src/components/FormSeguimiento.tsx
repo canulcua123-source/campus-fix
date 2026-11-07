@@ -66,6 +66,7 @@ export function FormSeguimiento({
   onSeguimientoGuardado,
 }: FormSeguimientoProps) {
   const [abierto, setAbierto] = useState(false)
+  const [confirmarInicio, setConfirmarInicio] = useState(false)
   const [mensajeError, setMensajeError] = useState<string | null>(null)
   const seguimiento = useSeguimiento(incidenciaId)
   const transiciones = transicionesDesde(estadoActual).filter((estado) => estado !== 'cerrada' || puedeCerrar)
@@ -92,15 +93,28 @@ export function FormSeguimiento({
     setAbierto(false)
   }
 
-  const registrarSeguimiento = async () => {
+  const registrarSeguimiento = () => {
     setMensajeError(null)
     if (estadoActual !== 'abierta') {
       setAbierto(true)
       return
     }
+    // En abierta, iniciar el trabajo cambia el estado y deja registro a
+    // nombre del usuario: se pide confirmación antes de llamar a la API.
+    setConfirmarInicio(true)
+  }
 
+  const cerrarConfirmacion = () => {
+    if (seguimiento.isPending) return
+    setMensajeError(null)
+    setConfirmarInicio(false)
+  }
+
+  const iniciarTrabajo = async () => {
+    setMensajeError(null)
     try {
       await seguimiento.mutateAsync(INICIO_TRABAJO)
+      setConfirmarInicio(false)
       onSeguimientoGuardado?.('en_proceso')
     } catch (error) {
       setMensajeError(mensajeDeError(error))
@@ -135,7 +149,7 @@ export function FormSeguimiento({
           Registrar seguimiento
         </Button>
       </div>
-      {mensajeError && !abierto && <p className="m-0 ui-campo__error" role="alert">{mensajeError}</p>}
+      {mensajeError && !abierto && !confirmarInicio && <p className="m-0 ui-campo__error" role="alert">{mensajeError}</p>}
       <BottomSheet abierto={abierto} onCerrar={cerrar} titulo="Registrar seguimiento">
         <form id="form-seguimiento" className="flex flex-col gap-4" onSubmit={enviar} noValidate>
           {mensajeError && <p className="m-0 ui-campo__error" role="alert">{mensajeError}</p>}
@@ -194,6 +208,22 @@ export function FormSeguimiento({
           <Button variante="secundario" onClick={cerrar} disabled={seguimiento.isPending}>Cancelar</Button>
           <Button type="submit" form="form-seguimiento" cargando={seguimiento.isPending} textoCargando="Guardando…">
             Guardar seguimiento
+          </Button>
+        </div>
+      </BottomSheet>
+      <BottomSheet abierto={confirmarInicio} onCerrar={cerrarConfirmacion} titulo="¿Iniciar el trabajo en esta incidencia?">
+        <p className="m-0 flex items-center gap-2 text-sm text-muted">
+          Ahora <Badge tipo="estado" valor="abierta" />
+          <ArrowRight size={14} aria-hidden /> pasará a <Badge tipo="estado" valor="en_proceso" />
+        </p>
+        <p className="m-0 text-sm">
+          Se registrará «Trabajo iniciado por el técnico.» en la bitácora y el reportante verá que la incidencia ya se atiende.
+        </p>
+        {mensajeError && <p className="m-0 ui-campo__error" role="alert">{mensajeError}</p>}
+        <div className="ui-sheet__acciones">
+          <Button variante="secundario" onClick={cerrarConfirmacion} disabled={seguimiento.isPending}>Cancelar</Button>
+          <Button onClick={() => void iniciarTrabajo()} cargando={seguimiento.isPending} textoCargando="Iniciando…">
+            Iniciar trabajo
           </Button>
         </div>
       </BottomSheet>

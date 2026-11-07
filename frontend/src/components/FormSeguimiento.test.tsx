@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ApiError } from '../api/client'
 import { FormSeguimiento } from './FormSeguimiento'
 
@@ -50,7 +50,7 @@ it('no muestra acciones de seguimiento a quien no puede registrarlo', () => {
   expect(screen.queryByRole('button', { name: 'Registrar seguimiento' })).not.toBeInTheDocument()
 })
 
-it('inicia el trabajo y pasa una incidencia abierta a en proceso con un solo clic', async () => {
+it('en una incidencia abierta pide confirmar antes de iniciar el trabajo', async () => {
   seguimiento.mutateAsync.mockResolvedValue({ ok: true, estado: 'en_proceso' })
   const alGuardar = vi.fn()
   render(
@@ -65,13 +65,42 @@ it('inicia el trabajo y pasa una incidencia abierta a en proceso con un solo cli
 
   fireEvent.click(screen.getByRole('button', { name: 'Registrar seguimiento' }))
 
+  // Un clic accidental ya no cambia el estado: la API no se llama hasta confirmar.
+  expect(seguimiento.mutateAsync).not.toHaveBeenCalled()
+  expect(alGuardar).not.toHaveBeenCalled()
+  const dialogo = screen.getByRole('dialog', { name: '¿Iniciar el trabajo en esta incidencia?' })
+  expect(dialogo).toBeInTheDocument()
+  expect(within(dialogo).getByText('Abierta')).toBeInTheDocument()
+  expect(within(dialogo).getByText('En proceso')).toBeInTheDocument()
+  expect(within(dialogo).getByText(/Se registrará «Trabajo iniciado por el técnico.»/)).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Iniciar trabajo' }))
+
   await waitFor(() => expect(seguimiento.mutateAsync).toHaveBeenCalledWith({
     estado_nuevo: 'en_proceso',
     horas: 0,
     comentario: 'Trabajo iniciado por el técnico.',
   }))
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(alGuardar).toHaveBeenCalledWith('en_proceso')
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+})
+
+it('cancelar la confirmación de inicio no llama a la API', () => {
+  render(
+    <FormSeguimiento
+      incidenciaId="inc-1"
+      estadoActual="abierta"
+      puedeCerrar={false}
+      puedeRegistrar
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Registrar seguimiento' }))
+  expect(screen.getByRole('dialog', { name: '¿Iniciar el trabajo en esta incidencia?' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+  expect(seguimiento.mutateAsync).not.toHaveBeenCalled()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
 it('informa el conflicto cuando el estado cambió durante el registro', async () => {
@@ -86,6 +115,7 @@ it('informa el conflicto cuando el estado cambió durante el registro', async ()
   )
 
   fireEvent.click(screen.getByRole('button', { name: 'Registrar seguimiento' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Iniciar trabajo' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'El estado cambió mientras registrabas el seguimiento. Actualiza la incidencia e inténtalo de nuevo.',
