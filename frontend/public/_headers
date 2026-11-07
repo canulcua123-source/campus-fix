@@ -4,6 +4,36 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+  # CSP: empieza restrictiva. Si una directiva rompe algo en producción, pasarla a
+  # Content-Security-Policy-Report-Only antes de relajarla; nunca quitarla en silencio.
+  # (Estas cabeceras solo las sirve Cloudflare Pages; `npm run dev` no las aplica.)
+  # - default-src 'self': por defecto, solo mismo origen.
+  # - script-src 'self' + hash del script inline de tema (T-058, frontend/index.html):
+  #   la app no carga scripts externos ni usa eval; el hash permite solo ese script.
+  #   Si cambia el script de tema hay que actualizar el hash; lo comprueba el test
+  #   frontend/src/cabeceras-seguridad.test.ts.
+  # - style-src 'self' 'unsafe-inline': necesario, no solo concesión: el código
+  #   React usa style={{}} en decenas de sitios, así que sin 'unsafe-inline' la
+  #   app se rompería; quitarlo exigiría migrar esos estilos a clases.
+  # - img-src: 'self' para iconos/logo, data: para la máscara SVG de index.css, blob:
+  #   para la vista previa de la foto (URL.createObjectURL) y los comodines de
+  #   almacenamiento para las URLs firmadas de descarga de evidencias.
+  # - media-src: igual que img-src; sin ella el <video> de GaleriaEvidencias.tsx
+  #   caería bajo default-src 'self' y los vídeos de evidencias se bloquearían.
+  # - connect-src: 'self' cubre la API, que en producción es same-origin (/api: la Pages
+  #   Function la reenvía a Render en el servidor; el navegador nunca llama directo a
+  #   onrender.com, por eso no aparece aquí). Los comodines cubren el PUT directo de
+  #   evidencias a la URL firmada de B2/R2.
+  #   TRADE-OFF: el host concreto del bucket es variable de entorno del backend
+  #   (storage_endpoint / r2_account_id) y no está en el repo, así que no se puede fijar
+  #   sin inventarlo; en cuanto se conozca el host del despliegue, sustituir los
+  #   comodines por ese host exacto.
+  # - worker-src 'self': el service worker de la PWA (/sw.js) es del mismo origen.
+  # - object-src 'none': sin plugins ni objetos embebidos.
+  # - frame-ancestors 'none': nadie puede embeber la app (refuerza X-Frame-Options: DENY).
+  # - base-uri 'self' y form-action 'self': no se puede inyectar otra base ni enviar
+  #   formularios a otro origen.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-VtxH5zU/YADSYGY8kBHz6kzknIpIxsYS4KFn1+ILyEY='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.backblazeb2.com https://*.r2.cloudflarestorage.com; media-src 'self' https://*.backblazeb2.com https://*.r2.cloudflarestorage.com; connect-src 'self' https://*.backblazeb2.com https://*.r2.cloudflarestorage.com; worker-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 
 # El service worker y el manifest nunca se cachean: así llegan las actualizaciones de la PWA.
 /sw.js
