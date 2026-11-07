@@ -9,6 +9,7 @@ from bson import ObjectId
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import settings
+from app.core.db import get_redis
 from app.core.security import crear_access_token, crear_refresh_token, decodificar_refresh_token
 from app.main import app
 from app.routers import auth
@@ -229,6 +230,35 @@ async def test_login_rechazado(api, correo, pwd):
     async with _cliente("10.0.1.2") as c:
         r = await c.post("/auth/login", json={"correo": correo, "password": pwd})
     assert r.status_code == 401, r.text
+
+
+async def test_login_bloquea_tras_cinco_fallos(api):
+    """5 fallos -> 429 con Retry-After a más tardar en el intento 6; el bloqueo persiste hasta expirar."""
+    assert auth.MAX_FALLOS_CUENTA == 5
+    assert auth.MAX_FALLOS_IP == 5
+    usuario = await api.usuario_temporal()
+    correo = usuario["correo"]
+    ip = "10.0.3.1"
+    async with _cliente(ip) as c:
+        for _ in range(5):
+            r = await c.post("/auth/login", json={"correo": correo, "password": "incorrecta-123"})
+            assert r.status_code == 401, r.text
+            assert r.json() == {"error": "no_autenticado", "detalle": "Credenciales inválidas"}
+        bloqueado = await c.post("/auth/login", json={"correo": correo, "password": PASSWORD})
+        assert bloqueado.status_code == 429, bloqueado.text
+        # Mensaje genérico: no revela si el correo existe ni incluye el correo.
+        assert bloqueado.json() == {"error": "limite", "detalle": "Demasiados intentos fallidos; espera 15 minutos"}
+        assert correo not in bloqueado.text
+        retry_after = bloqueado.headers.get("retry-after")
+        assert retry_after is not None and retry_after.isdigit()
+        assert 1 <= int(retry_after) <= auth.VENTANA_FALLOS
+        # Un login correcto sigue bloqueado mientras dura el bloqueo.
+        assert (await c.post("/auth/login", json={"correo": correo, "password": PASSWORD})).status_code == 429
+    # Al expirar el bloqueo (claves eliminadas para simular el TTL), el login correcto vuelve a entrar.
+    await get_redis().delete(f"login:fallos:{correo}:{ip}", f"login:fallos:{correo}")
+    async with _cliente(ip) as c:
+        r = await c.post("/auth/login", json={"correo": correo, "password": PASSWORD})
+    assert r.status_code == 200, r.text
 
 
 async def test_login_inyeccion_nosql(api):

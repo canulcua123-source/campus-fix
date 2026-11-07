@@ -28,8 +28,10 @@ from slowapi.util import get_remote_address
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
-MAX_FALLOS_IP = 10  # por cuenta y por IP: un atacante no bloquea al dueño desde otra red
-MAX_FALLOS_CUENTA = 50  # por cuenta desde cualquier IP: frena fuerza bruta distribuida
+MAX_FALLOS_IP = 5  # por cuenta y por IP: frena la fuerza bruta desde una sola red
+MAX_FALLOS_CUENTA = 5  # por cuenta desde cualquier IP: frena la fuerza bruta distribuida
+# Con el umbral por cuenta en 5, cinco fallos bloquean también al dueño 15 minutos:
+# es el coste aceptado de frenar la fuerza bruta; el captcha tras 3-5 fallos queda pendiente.
 VENTANA_FALLOS = 15 * 60
 COOKIE_REFRESH = "refresh_token"
 RUTA_COOKIE_REFRESH = "/auth"
@@ -131,6 +133,18 @@ async def login(request: Request, datos: LoginIn, response: Response = None):
     if claves_bloqueadas:
         bloqueado, segundos = await _estado_bloqueo(redis, claves_bloqueadas)
         if bloqueado:
+            # Sin contraseña y sin revelar si el correo existe: solo cuenta e IP para investigar el abuso.
+            # No se registra en /admin/auditoria: registrar_auditoria solo admite recursos
+            # usuarios/roles/categorias/aulas y acciones crear/editar con un actor autenticado;
+            # un bloqueo de login no tiene actor y necesitaría un recurso/acción nuevos (pendiente).
+            logger.warning(
+                "Bloqueo de login por intentos fallidos",
+                extra={
+                    "login_correo": correo,
+                    "login_ip": get_remote_address(request),
+                    "login_reintento_segundos": segundos,
+                },
+            )
             raise HTTPException(
                 429,
                 "Demasiados intentos fallidos; espera 15 minutos",
@@ -146,7 +160,9 @@ async def login(request: Request, datos: LoginIn, response: Response = None):
             await redis.incr(clave)
             await redis.expire(clave, VENTANA_FALLOS)
         raise HTTPException(401, "Credenciales inválidas")
-    await redis.delete(clave_ip)
+    # Un login correcto limpia AMBOS contadores: con el umbral por cuenta en 5,
+    # dejar clave_cuenta dejaría al usuario a un fallo del bloqueo tras entrar.
+    await redis.delete(clave_ip, clave_cuenta)
     info = await permisos_del_usuario(usuario)
     refresh, claims = crear_refresh_token(str(usuario["_id"]))
     resultado = await iniciar_familia(

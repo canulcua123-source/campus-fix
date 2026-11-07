@@ -132,21 +132,26 @@ async def test_solo_el_tecnico_asignado_da_seguimiento(api):
 async def test_bloqueo_por_cuenta_e_ip(api, password):
     u = await api.usuario_temporal()
 
-    async def login(ip, pwd):
+    async def login(ip, pwd, correo=None):
         t = ASGITransport(app=app, raise_app_exceptions=False, client=(ip, 5000))
         async with AsyncClient(transport=t, base_url="http://test") as c:
-            return (await c.post("/auth/login", json={"correo": u["correo"], "password": pwd})).status_code
+            return (await c.post("/auth/login", json={"correo": correo or u["correo"], "password": pwd})).status_code
 
-    # 10 fallos desde una IP bloquean esa cuenta solo desde esa IP...
-    for _ in range(10):
+    # 5 fallos desde una IP bloquean la cuenta: el contador por (cuenta, IP) y el contador
+    # por cuenta llegan a 5 a la vez, así que el dueño tampoco entra desde otra red hasta
+    # que expire el bloqueo (15 minutos); el captcha tras 3-5 fallos queda pendiente.
+    for _ in range(5):
         assert await login("10.77.0.1", "incorrecta") == 401
     assert await login("10.77.0.1", password) == 429
-    # ...pero el dueño entra desde otra red (un atacante no puede bloquear cuentas ajenas)
-    assert await login("10.77.0.2", password) == 200
-    # fuerza bruta distribuida: 50 fallos en total desde muchas IP bloquean la cuenta
-    for i in range(40):
-        assert await login(f"10.78.{i // 200}.{i % 200}", "incorrecta") == 401
-    assert await login("10.79.0.1", password) == 429
+    assert await login("10.77.0.2", password) == 429
+    # ...pero otra cuenta desde la misma IP no queda bloqueada
+    otro = await api.usuario_temporal()
+    assert await login("10.77.0.1", password, correo=otro["correo"]) == 200
+    # fuerza bruta distribuida: 5 fallos en total desde distintas IP bloquean la cuenta
+    v = await api.usuario_temporal()
+    for i in range(5):
+        assert await login(f"10.78.0.{i + 1}", "incorrecta", correo=v["correo"]) == 401
+    assert await login("10.79.0.1", password, correo=v["correo"]) == 429
 
 
 async def test_seguimiento_conserva_ultimas_entradas_y_no_se_congela(api):
