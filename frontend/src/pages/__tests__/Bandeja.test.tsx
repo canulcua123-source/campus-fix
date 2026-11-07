@@ -205,6 +205,8 @@ describe('Mis incidencias del técnico (T-050)', () => {
 
     await usuario.click(await screen.findByRole('link', { name: 'Trabajo recién tomado' }))
     await usuario.click(await screen.findByRole('button', { name: 'Registrar seguimiento' }))
+    // Iniciar el trabajo en una incidencia abierta pide confirmación.
+    await usuario.click(await screen.findByRole('button', { name: 'Iniciar trabajo' }))
 
     await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent('?ver=trabajo-nuevo&estado=en_proceso'))
     expect(chip(/^En proceso/)).toHaveAttribute('aria-checked', 'true')
