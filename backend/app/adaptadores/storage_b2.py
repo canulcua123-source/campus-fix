@@ -91,3 +91,11 @@ class B2Storage:
             return self.requerir_cliente().head_object(Bucket=self._bucket, Key=clave)["ContentLength"]
         except ClientError:
             return None
+
+    def leer_inicio(self, clave: str, n: int = 32) -> bytes | None:
+        """Lee los primeros ``n`` bytes con Range GET (para validar magic bytes)."""
+        try:
+            respuesta = self.requerir_cliente().get_object(Bucket=self._bucket, Key=clave, Range=f"bytes=0-{n - 1}")
+            return respuesta["Body"].read()
+        except ClientError:
+            return None

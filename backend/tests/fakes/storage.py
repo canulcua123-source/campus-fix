@@ -8,6 +8,7 @@ class FakeStorage:
         self.no_disponible = no_disponible
         self.llamadas: list[tuple] = []
         self.tamanos: dict[str, int] = {}
+        self.contenidos: dict[str, bytes] = {}
         self.promociones: list[tuple[str, str]] = []
 
     @property
@@ -34,8 +35,17 @@ class FakeStorage:
         self.promociones.append((origen, destino))
         if origen in self.tamanos:
             self.tamanos[destino] = self.tamanos.pop(origen)
+        if origen in self.contenidos:
+            self.contenidos[destino] = self.contenidos.pop(origen)
 
     def tamano_objeto(self, clave: str) -> int | None:
         self._comprobar()
         self.llamadas.append(("tamano_objeto", clave))
         return self.tamanos.get(clave)
+
+    def leer_inicio(self, clave: str, n: int = 32) -> bytes | None:
+        self._comprobar()
+        self.llamadas.append(("leer_inicio", clave, n))
+        if clave not in self.contenidos:
+            return None
+        return self.contenidos[clave][:n]

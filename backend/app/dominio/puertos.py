@@ -21,3 +21,11 @@ class StoragePort(Protocol):
     def promover(self, origen: str, destino: str) -> None: ...
 
     def tamano_objeto(self, clave: str) -> int | None: ...
+
+    def leer_inicio(self, clave: str, n: int = 32) -> bytes | None:
+        """Lee los primeros ``n`` bytes del objeto (Range GET).
+
+        Sirve para inspeccionar los magic bytes antes de promover una evidencia
+        de staging/ a su ruta definitiva. Devuelve ``None`` si no existe.
+        """
+        ...

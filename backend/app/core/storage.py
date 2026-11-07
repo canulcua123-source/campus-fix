@@ -64,6 +64,10 @@ def tamano_objeto(clave: str) -> int | None:
     return _traducir_no_disponible(lambda: _adaptador().tamano_objeto(clave))
 
 
+def leer_inicio(clave: str, n: int = 32) -> bytes | None:
+    return _traducir_no_disponible(lambda: _adaptador().leer_inicio(clave, n))
+
+
 class _StorageCompatibilidad:
     """Puerto que conserva los puntos de monkeypatch de las pruebas existentes."""
 
@@ -82,6 +86,9 @@ class _StorageCompatibilidad:
 
     def tamano_objeto(self, clave: str) -> int | None:
         return tamano_objeto(clave)
+
+    def leer_inicio(self, clave: str, n: int = 32) -> bytes | None:
+        return leer_inicio(clave, n)
 
 
 _STORAGE: StoragePort = _StorageCompatibilidad()
